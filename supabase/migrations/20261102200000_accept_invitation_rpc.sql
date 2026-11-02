@@ -2,12 +2,17 @@
 -- El invitados no puede SELECT invitations por token (RLS solo admin).
 -- Esta función hashea el token en claro, valida un-uso/caducidad y
 -- crea membership con rol `member` usando auth.uid().
+--
+-- Nota: si el proyecto live ya tenía esta función sin pgcrypto en search_path,
+-- aplicar también `20261102210000_fix_accept_invitation_pgcrypto.sql`.
+
+create extension if not exists pgcrypto with schema extensions;
 
 create or replace function public.accept_invitation(p_token text)
 returns json
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -45,7 +50,10 @@ begin
   end if;
 
   -- Mismo algoritmo que Flutter: SHA-256 hex de UTF-8
-  v_hash := encode(digest(convert_to(v_raw, 'UTF8'), 'sha256'), 'hex');
+  v_hash := encode(
+    digest(convert_to(v_raw, 'UTF8'), 'sha256'::text),
+    'hex'
+  );
 
   select *
     into v_inv

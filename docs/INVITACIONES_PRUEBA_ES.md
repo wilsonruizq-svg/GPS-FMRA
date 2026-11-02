@@ -1,8 +1,12 @@
 # Probar invitaciones (Fase 1) — dos cuentas
 
-Requisito: aplicar en Supabase la migración
-`supabase/migrations/20261102200000_accept_invitation_rpc.sql`
+Requisito: aplicar en Supabase las migraciones de invitación
 (ver `supabase/APPLY_ES.md`).
+
+Si al aceptar ves `function digest(bytea, unknown) does not exist`, aplica
+**solo** `supabase/migrations/20261102210000_fix_accept_invitation_pgcrypto.sql`
+en SQL Editor. Los códigos ya generados siguen válidos (mismo SHA-256);
+si el código en claro ya no está a mano, regenera la invitación.
 
 ## Cuentas
 

@@ -63,8 +63,10 @@ Guía: [`supabase/APPLY_ES.md`](supabase/APPLY_ES.md).
 |---------|-----------|
 | `20261102150000_fase1_mvp_schema.sql` | Tablas + RLS |
 | `20261102200000_accept_invitation_rpc.sql` | RPC `accept_invitation` (aceptar código) |
+| `20261102210000_fix_accept_invitation_pgcrypto.sql` | Fix `digest` / pgcrypto (**APPLY** si falla aceptar) |
 
-**Importante:** sin la segunda migración, “Unirme con código” falla.
+**Importante:** sin la RPC, “Unirme con código” falla. Si el error es
+`digest(bytea, unknown)`, pega el archivo `…pgcrypto.sql` en SQL Editor.
 
 Prueba con dos cuentas: [`docs/INVITACIONES_PRUEBA_ES.md`](docs/INVITACIONES_PRUEBA_ES.md).
 

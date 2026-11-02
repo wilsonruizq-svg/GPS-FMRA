@@ -10,6 +10,9 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    de cada uno → **Run**):
    1. `supabase/migrations/20261102150000_fase1_mvp_schema.sql`
    2. `supabase/migrations/20261102200000_accept_invitation_rpc.sql`
+   3. `supabase/migrations/20261102210000_fix_accept_invitation_pgcrypto.sql`
+      (**APPLY** si ves `function digest(bytea, unknown) does not exist` —
+      este archivo solo basta para el fix; pégalo completo → Run.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`.
