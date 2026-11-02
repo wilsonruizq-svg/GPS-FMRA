@@ -58,7 +58,12 @@ abstract final class AppStrings {
 
   static const groupsTitle = 'Grupos';
   static const groupsEmpty =
-      'Aún no hay grupos. Pulsa “Crear grupo” o “Unirme con código”.';
+      'Aún no hay grupos. Crea uno para invitar a tu familia, '
+      'o únete con un código que te hayan compartido.';
+  static const groupsEmptyCreateHint =
+      'Si eres el admin: crea el grupo y genera un código.';
+  static const groupsEmptyJoinHint =
+      'Si te invitaron: pega el código en “Unirme con código”.';
   static const groupsCreateTitle = 'Nuevo grupo familiar';
   static const groupsCreateAction = 'Crear grupo';
   static const groupsJoinAction = 'Unirme con código';
@@ -68,6 +73,9 @@ abstract final class AppStrings {
   static const groupsTapMembers = 'Ver integrantes e invitar';
   static const groupsYouAreAdmin = 'Eres admin de este grupo';
   static const groupsYouAreMember = 'Eres integrante';
+  static const groupsInviteHowTo =
+      'Para invitar: toca el icono de persona (+) arriba → copia el código '
+      '→ compártelo. Tu familia abre Grupos → Unirme con código.';
 
   static const membersHeading = 'Integrantes';
   static const membersEmpty = 'Este grupo aún no tiene integrantes visibles.';
@@ -82,20 +90,27 @@ abstract final class AppStrings {
   static const memberLastUpdateUnknown = 'Última actualización: —';
 
   static const inviteAction = 'Invitar';
-  static const inviteTitle = 'Código de invitación';
+  static const inviteTitle = 'Código listo para compartir';
   static const inviteBody =
-      'Comparte este código o el enlace con quien quieras invitar. '
-      'Es de un solo uso y caduca. En la base de datos solo se guarda el hash.';
+      'Comparte este código con tu familia (WhatsApp, SMS, etc.). '
+      'Es de un solo uso y caduca en 7 días.';
+  static const inviteFamilySteps =
+      'Ellos deben: abrir la app → pestaña Grupos → '
+      '“Unirme con código” → pegar el código → Aceptar invitación.';
   static const inviteCopyToken = 'Copiar código';
   static const inviteCopyLink = 'Copiar enlace';
+  static const inviteCopied = 'Código copiado. Ya puedes compartirlo.';
+  static const inviteLinkCopied = 'Enlace copiado. Ya puedes compartirlo.';
   static const inviteExpires = 'Vence:';
+  static const inviteLastHeading = 'Código pendiente de usar';
   static const inviteLastToken = 'Último código:';
   static const inviteAdminOnly =
       'Solo un admin del grupo puede generar invitaciones.';
   static const inviteAcceptTitle = 'Unirme a un grupo';
   static const inviteAcceptHeadline = 'Pega el código o el enlace';
   static const inviteAcceptBody =
-      'Te unirás como integrante (member). El admin conserva su rol.';
+      'Pide el código al admin de la familia. '
+      'Te unirás como integrante; el admin conserva su rol.';
   static const inviteCodeLabel = 'Código o enlace';
   static const inviteCodeHint = 'Ej. AbCd… o gpsfmra://invite/…';
   static const inviteAcceptAction = 'Aceptar invitación';

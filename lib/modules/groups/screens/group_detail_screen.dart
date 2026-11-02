@@ -80,6 +80,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   String _roleLabel(GroupMember m) =>
       m.isAdmin ? AppStrings.memberRoleAdmin : AppStrings.memberRoleMember;
 
+  Future<void> _copyInvite(InviteStub invite, {required bool asLink}) async {
+    await Clipboard.setData(
+      ClipboardData(text: asLink ? invite.linkStub : invite.plainToken),
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          asLink ? AppStrings.inviteLinkCopied : AppStrings.inviteCopied,
+        ),
+      ),
+    );
+  }
+
   Future<void> _createInvite() async {
     if (!_iAmAdmin) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -96,54 +110,71 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         builder: (ctx) {
           return AlertDialog(
             title: const Text(AppStrings.inviteTitle),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(AppStrings.inviteBody),
-                const SizedBox(height: 12),
-                SelectableText(
-                  invite.plainToken,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(AppStrings.inviteBody),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(ctx)
+                          .colorScheme
+                          .surfaceContainerHighest
+                          .withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SelectableText(
+                      invite.plainToken,
+                      style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                SelectableText(
-                  invite.linkStub,
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${AppStrings.inviteExpires} ${invite.expiresAt.toLocal()}',
-                  style: Theme.of(ctx).textTheme.bodySmall,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Text(
+                    AppStrings.inviteFamilySteps,
+                    style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    invite.linkStub,
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${AppStrings.inviteExpires} ${invite.expiresAt.toLocal()}',
+                    style: Theme.of(ctx).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await _copyInvite(invite, asLink: false);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.copy),
+                    label: const Text(AppStrings.inviteCopyToken),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      await _copyInvite(invite, asLink: true);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    icon: const Icon(Icons.link),
+                    label: const Text(AppStrings.inviteCopyLink),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: invite.plainToken));
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text(AppStrings.inviteCopyToken)),
-                  );
-                },
-                child: const Text(AppStrings.inviteCopyToken),
-              ),
-              TextButton(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: invite.linkStub));
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text(AppStrings.inviteCopyLink)),
-                  );
-                },
-                child: const Text(AppStrings.inviteCopyLink),
-              ),
-              FilledButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: const Text(AppStrings.close),
               ),
@@ -157,6 +188,78 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         SnackBar(content: Text(e.toString())),
       );
     }
+  }
+
+  Widget _inviteBanner(BuildContext context) {
+    final invite = _lastInvite;
+    if (invite == null) {
+      if (!_iAmAdmin) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Text(
+          AppStrings.groupsInviteHowTo,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                AppStrings.inviteLastHeading,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              SelectableText(
+                invite.plainToken,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppStrings.inviteFamilySteps,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: () => _copyInvite(invite, asLink: false),
+                    icon: const Icon(Icons.copy, size: 18),
+                    label: const Text(AppStrings.inviteCopyToken),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _copyInvite(invite, asLink: true),
+                    icon: const Icon(Icons.link, size: 18),
+                    label: const Text(AppStrings.inviteCopyLink),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -208,6 +311,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                   ),
                         ),
                       ),
+                      _inviteBanner(context),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                         child: Text(
@@ -218,14 +322,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                   ),
                         ),
                       ),
-                      if (_lastInvite != null)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            '${AppStrings.inviteLastToken} ${_lastInvite!.plainToken}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
                       const Divider(height: 1),
                       ..._members.map(
                         (m) => Column(

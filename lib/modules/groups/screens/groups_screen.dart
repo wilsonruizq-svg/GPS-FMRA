@@ -172,9 +172,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 : _groups.isEmpty
                     ? ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(32),
+                        padding: const EdgeInsets.fromLTRB(28, 48, 28, 140),
                         children: [
-                          const SizedBox(height: 48),
                           Icon(
                             Icons.groups_outlined,
                             size: 56,
@@ -184,6 +183,30 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           Text(
                             AppStrings.groupsEmpty,
                             style: Theme.of(context).textTheme.bodyLarge,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 28),
+                          FilledButton.icon(
+                            onPressed: _createGroup,
+                            icon: const Icon(Icons.add),
+                            label: const Text(AppStrings.groupsCreateAction),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            AppStrings.groupsEmptyCreateHint,
+                            style: Theme.of(context).textTheme.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          OutlinedButton.icon(
+                            onPressed: _joinWithCode,
+                            icon: const Icon(Icons.vpn_key_outlined),
+                            label: const Text(AppStrings.groupsJoinAction),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            AppStrings.groupsEmptyJoinHint,
+                            style: Theme.of(context).textTheme.bodySmall,
                             textAlign: TextAlign.center,
                           ),
                         ],
