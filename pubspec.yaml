@@ -36,7 +36,8 @@ dependencies:
   supabase_flutter: ^2.9.1
   crypto: ^3.0.8
   permission_handler: ^13.0.2
-  google_maps_flutter: ^2.19.0
+  # Mapa MVP: MapLibre (demotiles / OpenFreeMap / MapTiler). Google Maps pausado (billing).
+  maplibre_gl: ^0.27.1
   image_picker: ^1.1.2
 
 dev_dependencies:

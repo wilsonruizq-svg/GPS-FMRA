@@ -1,6 +1,9 @@
-# Google Maps en GPS-FMRA (Android)
+# Google Maps en GPS-FMRA (Android) — PAUSADO
 
-Sin clave API el mapa es un marcador de posición. **Tú debes crear la clave** en Google Cloud; el código ya está cableado.
+> **Estado:** Google Maps está **pausado** (billing Cloud ~$30). El mapa del MVP usa **MapLibre** sin clave de pago.  
+> Guía activa: [`MAPLIBRE_ES.md`](MAPLIBRE_ES.md).
+
+Esta guía queda por si más adelante se reactiva Google. El cableado Manifest/`local.properties` sigue, pero la UI ya no monta `GoogleMap`.
 
 Paquete Android: `com.gpsfmra.gps_fmra`
 

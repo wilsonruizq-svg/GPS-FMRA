@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/l10n/app_strings.dart';
@@ -8,7 +8,8 @@ import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
 
-/// Shell del mapa: GoogleMap si hay clave; si no, placeholder + lista de integrantes.
+/// Shell del mapa: MapLibre (estilo libre / MapTiler) + lista de integrantes.
+/// Los pines de familiares quedan stub (coords en tiempo real: GPS-18).
 class MapShellScreen extends StatefulWidget {
   const MapShellScreen({super.key});
 
@@ -109,87 +110,43 @@ class _MapShellScreenState extends State<MapShellScreen> {
   }
 
   Widget _buildMapPane(BuildContext context) {
-    if (Env.hasMapsConfig) {
-      return GoogleMap(
-        initialCameraPosition: _fallbackCamera,
-        mapType: MapType.normal,
-        myLocationButtonEnabled: true,
-        zoomControlsEnabled: false,
-        compassEnabled: true,
-        // Ubicación del dispositivo: el permiso se pide en la pantalla de
-        // consentimiento; si aún no hay permiso, el SDK lo ignora.
-        myLocationEnabled: _myConsent?.isActive == true,
-      );
-    }
-
-    return ColoredBox(
-      color: AppColors.midBlue.withValues(alpha: 0.08),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxHeight < 220;
-          return DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.midBlue.withValues(alpha: 0.15),
-                  AppColors.signalCyan.withValues(alpha: 0.2),
-                ],
+    final styleUrl = Env.mapStyleUrl;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        MapLibreMap(
+          styleString: styleUrl,
+          initialCameraPosition: _fallbackCamera,
+          compassEnabled: true,
+          // Ubicación del dispositivo: el permiso se pide en consentimiento.
+          myLocationEnabled: _myConsent?.isActive == true,
+          myLocationTrackingMode: MyLocationTrackingMode.none,
+          trackCameraPosition: false,
+          onStyleLoadedCallback: () {
+            // Stub de pines: GPS-18 añadirá GeoJSON / anotaciones vía controller.
+          },
+        ),
+        Positioned(
+          left: 12,
+          bottom: 12,
+          child: Material(
+            color: Colors.white.withValues(alpha: 0.92),
+            borderRadius: BorderRadius.circular(8),
+            elevation: 1,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Text(
+                Env.hasMapTilerKey
+                    ? AppStrings.mapEngineMapTiler
+                    : AppStrings.mapEngineLibre,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AppColors.deepBlue,
+                    ),
               ),
             ),
-            child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(context).copyWith(
-                overscroll: false,
-              ),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: compact ? 12 : 20,
-                ),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minHeight: constraints.maxHeight - (compact ? 24 : 40),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.map_outlined,
-                        size: compact ? 40 : 56,
-                        color: AppColors.deepBlue.withValues(alpha: 0.7),
-                      ),
-                      SizedBox(height: compact ? 8 : 12),
-                      Text(
-                        AppStrings.mapPlaceholderTitle,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        AppStrings.mapPlaceholderBody,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        AppStrings.mapMissingKeyHint,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+          ),
+        ),
+      ],
     );
   }
 

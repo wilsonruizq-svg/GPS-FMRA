@@ -42,8 +42,8 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Google Maps SDK for Android. Valor desde manifestPlaceholders
-             (android/local.properties → GOOGLE_MAPS_API_KEY). Ver docs/GOOGLE_MAPS_ES.md -->
+        <!-- Google Maps pausado (billing). El mapa MVP usa MapLibre — docs/MAPLIBRE_ES.md.
+             Placeholder conservado por si se reactiva Google; vacío = OK. -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${GOOGLE_MAPS_API_KEY}" />

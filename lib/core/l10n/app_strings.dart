@@ -47,10 +47,11 @@ abstract final class AppStrings {
   static const mapTitle = 'Mapa';
   static const mapPlaceholderTitle = 'Mapa (marcador de posición)';
   static const mapPlaceholderBody =
-      'Para ver Google Maps, crea una clave y ponla en .env y en '
-      'android/local.properties. Guía: docs/GOOGLE_MAPS_ES.md';
+      'El mapa usa MapLibre sin clave de pago. Guía: docs/MAPLIBRE_ES.md';
   static const mapMissingKeyHint =
-      'GOOGLE_MAPS_API_KEY vacía en .env — el mapa real no se carga.';
+      'Google Maps sigue pausado; el mapa visible es MapLibre.';
+  static const mapEngineLibre = 'MapLibre · estilo libre (sin clave)';
+  static const mapEngineMapTiler = 'MapLibre · MapTiler';
   static const mapGroupSelector = 'Grupo';
   static const mapNoGroup = 'Sin grupo — créalo en Grupos';
   static const mapMembersEmpty =

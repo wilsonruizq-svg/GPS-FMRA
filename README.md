@@ -1,6 +1,6 @@
 # GPS-FMRA
 
-App Flutter (Android-first) de protección familiar y localización. UI en español. Fase 1: Auth + grupos + consentimiento + mapa (Google Maps si hay clave).
+App Flutter (Android-first) de protección familiar y localización. UI en español. Fase 1: Auth + grupos + consentimiento + mapa (**MapLibre**, sin clave de pago; Google Maps pausado).
 
 ## Requisitos
 
@@ -26,20 +26,20 @@ Edita `.env`:
 |----------|-------------|--------|
 | `SUPABASE_URL` | Sí | `https://….supabase.co` |
 | `SUPABASE_ANON_KEY` | Sí | `sb_publishable_…` o JWT anon `eyJ…` |
-| `GOOGLE_MAPS_API_KEY` | Para mapa real | Misma clave en `.env` **y** `android/local.properties` |
+| `MAP_STYLE_URL` | No | Override de estilo MapLibre (vacío = OpenFreeMap) |
+| `MAPTILER_API_KEY` | No | Opcional; mejora el estilo (plan Free $0) |
+| `GOOGLE_MAPS_API_KEY` | No (pausado) | Ya no hace falta para ver el mapa |
 
 **No subas `.env` ni pongas la clave en Git.**
 
-### Cómo añadir Google Maps (Wilson)
+### Mapa MapLibre (Wilson)
 
-Guía con clics exactos: [`docs/GOOGLE_MAPS_ES.md`](docs/GOOGLE_MAPS_ES.md).
+Guía: [`docs/MAPLIBRE_ES.md`](docs/MAPLIBRE_ES.md).
 
-Resumen:
-
-1. Google Cloud → habilitar **Maps SDK for Android** → crear clave API.
-2. Restringir a paquete `com.gpsfmra.gps_fmra` + SHA-1 debug (`cd android; .\gradlew signingReport`).
-3. Pegar la clave en `.env` y en `android/local.properties` como `GOOGLE_MAPS_API_KEY=…`.
-4. `flutter run` — con clave válida se muestra `GoogleMap`; sin clave, el placeholder.
+- Sin configurar mapa: se ve **OpenFreeMap** (calles OSM, $0).
+- Smoke demotiles: `MAP_STYLE_URL=https://demotiles.maplibre.org/style.json`
+- Opcional MapTiler Free: cuenta en cloud.maptiler.com → `MAPTILER_API_KEY` en `.env`
+- Google Maps: pausado — [`docs/GOOGLE_MAPS_ES.md`](docs/GOOGLE_MAPS_ES.md)
 
 ## Ejecutar en emulador / dispositivo
 
@@ -76,12 +76,12 @@ Prueba con dos cuentas: [`docs/INVITACIONES_PRUEBA_ES.md`](docs/INVITACIONES_PRU
 |----------|----------|
 | Auth | Registro/login email-password; perfil vía trigger + fallback |
 | Consentimiento | Explica compartir; Aceptar / Pausar; pide permiso de ubicación en contexto |
-| Mapa | Placeholder si no hay billing/clave Maps; `GoogleMap` si hay clave |
+| Mapa | `MapLibreMap` (OpenFreeMap / demotiles / MapTiler); pines stub |
 | Grupos | Crear/seleccionar grupo, invitar (hash/un uso/caducidad), unirse con código |
 | Tarjeta miembro | Nombre, rol, estado de compartir |
 | Ajustes | Perfil, privacidad, cerrar sesión |
 
-**No incluido:** chat, SOS, WebRTC, mapas offline. Maps pausado por billing.
+**No incluido:** chat, SOS, WebRTC, mapas offline, pines en vivo. Google Maps pausado por billing; mapa online = MapLibre.
 
 ## Análisis
 
