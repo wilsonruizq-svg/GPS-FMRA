@@ -20,7 +20,10 @@ class AuthService {
     required String email,
     required String password,
   }) {
-    return _sb.auth.signInWithPassword(email: email, password: password);
+    return _sb.auth.signInWithPassword(
+      email: email.trim().toLowerCase(),
+      password: password,
+    );
   }
 
   Future<AuthResponse> signUp({
@@ -29,7 +32,7 @@ class AuthService {
     String? displayName,
   }) {
     return _sb.auth.signUp(
-      email: email,
+      email: email.trim().toLowerCase(),
       password: password,
       data: {
         if (displayName != null && displayName.trim().isNotEmpty)

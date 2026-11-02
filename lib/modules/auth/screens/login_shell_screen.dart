@@ -38,7 +38,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
   }
 
   Future<void> _submit() async {
-    final email = _emailController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
     final password = _passwordController.text;
     final displayName = _nameController.text.trim();
 
