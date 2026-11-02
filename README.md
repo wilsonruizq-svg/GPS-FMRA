@@ -57,9 +57,16 @@ Flujo: **splash → login/registro Supabase → consentimiento → mapa / grupos
 
 ## Migraciones SQL
 
-Ya aplicadas en el proyecto live (`Success. No rows returned`). Guía: [`supabase/APPLY_ES.md`](supabase/APPLY_ES.md).
+Guía: [`supabase/APPLY_ES.md`](supabase/APPLY_ES.md).
 
-Archivo: `supabase/migrations/20261102150000_fase1_mvp_schema.sql`
+| Archivo | Contenido |
+|---------|-----------|
+| `20261102150000_fase1_mvp_schema.sql` | Tablas + RLS |
+| `20261102200000_accept_invitation_rpc.sql` | RPC `accept_invitation` (aceptar código) |
+
+**Importante:** sin la segunda migración, “Unirme con código” falla.
+
+Prueba con dos cuentas: [`docs/INVITACIONES_PRUEBA_ES.md`](docs/INVITACIONES_PRUEBA_ES.md).
 
 ## Pantallas MVP (esta entrega)
 
@@ -67,12 +74,12 @@ Archivo: `supabase/migrations/20261102150000_fase1_mvp_schema.sql`
 |----------|----------|
 | Auth | Registro/login email-password; perfil vía trigger + fallback |
 | Consentimiento | Explica compartir; Aceptar / Pausar; pide permiso de ubicación en contexto |
-| Mapa | `GoogleMap` si hay `GOOGLE_MAPS_API_KEY`; si no, placeholder + lista de miembros |
-| Grupos | Crear grupo, listar membresías, invitación stub (token + hash SHA-256) |
-| Tarjeta miembro | Nombre, estado de compartir, última actualización (placeholder) |
+| Mapa | Placeholder si no hay billing/clave Maps; `GoogleMap` si hay clave |
+| Grupos | Crear/seleccionar grupo, invitar (hash/un uso/caducidad), unirse con código |
+| Tarjeta miembro | Nombre, rol, estado de compartir |
 | Ajustes | Perfil, privacidad, cerrar sesión |
 
-**No incluido:** chat, SOS, WebRTC, mapas offline.
+**No incluido:** chat, SOS, WebRTC, mapas offline. Maps pausado por billing.
 
 ## Análisis
 

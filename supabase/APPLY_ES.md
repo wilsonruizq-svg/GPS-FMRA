@@ -6,14 +6,15 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
 
 1. Abre el proyecto en [Supabase Dashboard](https://supabase.com/dashboard).
 2. Ve a **SQL Editor** → **New query**.
-3. Abre el archivo local:
-   `supabase/migrations/20261102150000_fase1_mvp_schema.sql`
-4. Copia **todo** el contenido y pégalo en el editor.
-5. Pulsa **Run**.
-6. Verifica en **Table Editor** que existan:
+3. Abre y ejecuta **en orden** estos archivos locales (todo el contenido
+   de cada uno → **Run**):
+   1. `supabase/migrations/20261102150000_fase1_mvp_schema.sql`
+   2. `supabase/migrations/20261102200000_accept_invitation_rpc.sql`
+4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`.
-7. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
+5. En **Database → Functions** confirma `accept_invitation(text)`.
+6. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
 
 ## Opción B — Supabase CLI
 
@@ -74,5 +75,6 @@ Android ya declara `INTERNET`; HTTPS no necesita cleartext.
 ## Qué NO hace esta migración
 
 - Tablas de chat / SOS (Fase 2+).
-- Edge Functions de invitaciones (aceptación segura con rate-limit).
+- Edge Functions con rate-limit anti-fuerza bruta (la aceptación Fase 1
+  usa RPC `accept_invitation` security definer; rate-limit queda para endurecer).
 - Buckets de Storage para fotos.

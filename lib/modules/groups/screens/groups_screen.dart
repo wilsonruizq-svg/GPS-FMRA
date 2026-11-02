@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../groups_service.dart';
+import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
 class GroupsScreen extends StatefulWidget {
@@ -83,6 +84,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
         SnackBar(content: Text('${AppStrings.groupsCreatedPrefix} ${group.name}')),
       );
       await _refresh();
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => GroupDetailScreen(group: group),
+        ),
+      );
+      await _refresh();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -91,13 +99,46 @@ class _GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
+  Future<void> _joinWithCode() async {
+    final result = await Navigator.of(context).push<AcceptInviteResult>(
+      MaterialPageRoute(
+        builder: (_) => const AcceptInviteScreen(),
+      ),
+    );
+    if (result == null) return;
+    await _refresh();
+    if (!mounted) return;
+    final match = _groups.where((g) => g.id == result.groupId);
+    if (match.isEmpty) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GroupDetailScreen(group: match.first),
+      ),
+    );
+    await _refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createGroup,
-        icon: const Icon(Icons.add),
-        label: const Text(AppStrings.groupsCreateAction),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'join_invite',
+            onPressed: _joinWithCode,
+            icon: const Icon(Icons.vpn_key_outlined),
+            label: const Text(AppStrings.groupsJoinAction),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'create_group',
+            onPressed: _createGroup,
+            icon: const Icon(Icons.add),
+            label: const Text(AppStrings.groupsCreateAction),
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,

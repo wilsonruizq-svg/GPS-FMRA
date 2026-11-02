@@ -58,17 +58,22 @@ abstract final class AppStrings {
 
   static const groupsTitle = 'Grupos';
   static const groupsEmpty =
-      'Aún no hay grupos. Pulsa “Crear grupo” para empezar.';
+      'Aún no hay grupos. Pulsa “Crear grupo” o “Unirme con código”.';
   static const groupsCreateTitle = 'Nuevo grupo familiar';
   static const groupsCreateAction = 'Crear grupo';
+  static const groupsJoinAction = 'Unirme con código';
   static const groupsNameLabel = 'Nombre del grupo';
   static const groupsNameHint = 'Ej. Familia Ruiz';
   static const groupsCreatedPrefix = 'Grupo creado:';
   static const groupsTapMembers = 'Ver integrantes e invitar';
+  static const groupsYouAreAdmin = 'Eres admin de este grupo';
+  static const groupsYouAreMember = 'Eres integrante';
 
   static const membersHeading = 'Integrantes';
   static const membersEmpty = 'Este grupo aún no tiene integrantes visibles.';
   static const memberYouSuffix = '(tú)';
+  static const memberRoleAdmin = 'Admin del grupo';
+  static const memberRoleMember = 'Integrante';
   static const memberShareActive = 'Compartiendo ubicación';
   static const memberSharePaused = 'Ubicación en pausa';
   static const memberShareRevoked = 'Compartir revocado';
@@ -77,13 +82,27 @@ abstract final class AppStrings {
   static const memberLastUpdateUnknown = 'Última actualización: —';
 
   static const inviteAction = 'Invitar';
-  static const inviteTitle = 'Invitación (stub)';
+  static const inviteTitle = 'Código de invitación';
   static const inviteBody =
-      'Comparte este token con quien quieras invitar. '
-      'La aceptación por QR/enlace llegará después; por ahora solo se guarda el hash en Supabase.';
-  static const inviteCopyToken = 'Copiar token';
+      'Comparte este código o el enlace con quien quieras invitar. '
+      'Es de un solo uso y caduca. En la base de datos solo se guarda el hash.';
+  static const inviteCopyToken = 'Copiar código';
+  static const inviteCopyLink = 'Copiar enlace';
   static const inviteExpires = 'Vence:';
-  static const inviteLastToken = 'Último token:';
+  static const inviteLastToken = 'Último código:';
+  static const inviteAdminOnly =
+      'Solo un admin del grupo puede generar invitaciones.';
+  static const inviteAcceptTitle = 'Unirme a un grupo';
+  static const inviteAcceptHeadline = 'Pega el código o el enlace';
+  static const inviteAcceptBody =
+      'Te unirás como integrante (member). El admin conserva su rol.';
+  static const inviteCodeLabel = 'Código o enlace';
+  static const inviteCodeHint = 'Ej. AbCd… o gpsfmra://invite/…';
+  static const inviteAcceptAction = 'Aceptar invitación';
+  static const inviteAccepting = 'Uniendo…';
+  static const inviteJoinedPrefix = 'Te uniste a';
+  static const inviteAlreadyMember = 'Ya pertenecías a';
+  static const inviteRoleMember = 'rol: integrante';
 
   static const consentTitle = 'Consentimiento de ubicación';
   static const consentHeadline = 'Tú decides con quién compartir';

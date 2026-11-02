@@ -1,10 +1,9 @@
-import 'dart:convert';
 import 'dart:math';
 
-import 'package:crypto/crypto.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
+import 'invite_token.dart';
 
 class FamilyGroup {
   const FamilyGroup({
@@ -65,8 +64,34 @@ class InviteStub {
   final String plainToken;
   final DateTime expiresAt;
 
-  /// Enlace mínimo (stub): la aceptación real irá por Edge Function.
-  String get linkStub => 'gpsfmra://invite/$plainToken';
+  /// Enlace mínimo (stub): la app puede pegar el código o el enlace.
+  String get linkStub => InviteToken.linkStub(plainToken);
+}
+
+class AcceptInviteResult {
+  const AcceptInviteResult({
+    required this.groupId,
+    required this.groupName,
+    required this.role,
+    required this.alreadyMember,
+    this.membershipId,
+  });
+
+  final String groupId;
+  final String groupName;
+  final String role;
+  final bool alreadyMember;
+  final String? membershipId;
+
+  factory AcceptInviteResult.fromJson(Map<String, dynamic> json) {
+    return AcceptInviteResult(
+      groupId: json['group_id'] as String,
+      groupName: json['group_name'] as String? ?? '',
+      role: json['role'] as String? ?? 'member',
+      alreadyMember: json['already_member'] as bool? ?? false,
+      membershipId: json['membership_id'] as String?,
+    );
+  }
 }
 
 class GroupsService {
@@ -154,10 +179,20 @@ class GroupsService {
     }).toList();
   }
 
-  /// Stub de invitación: genera token en claro (solo UI), guarda SHA-256.
-  Future<InviteStub> createInviteStub(String groupId) async {
+  Future<GroupMember?> myMembership(String groupId) async {
+    final members = await listMembers(groupId);
+    try {
+      return members.firstWhere((m) => m.userId == _uid);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Genera token en claro (solo UI), guarda SHA-256. Un uso, 7 días.
+  /// Requiere rol admin del grupo (RLS `invitations_insert_admin`).
+  Future<InviteStub> createInvite(String groupId) async {
     final plain = _randomToken(24);
-    final hash = sha256.convert(utf8.encode(plain)).toString();
+    final hash = InviteToken.hashToken(plain);
     final expires = DateTime.now().toUtc().add(const Duration(days: 7));
 
     final row = await _sb
@@ -178,6 +213,65 @@ class GroupsService {
       plainToken: plain,
       expiresAt: expires,
     );
+  }
+
+  /// @Deprecated Use [createInvite].
+  Future<InviteStub> createInviteStub(String groupId) => createInvite(groupId);
+
+  /// Acepta invitación vía RPC (security definer). Rol resultante: `member`.
+  Future<AcceptInviteResult> acceptInvitation(String tokenOrLink) async {
+    final token = InviteToken.normalize(tokenOrLink);
+    if (!InviteToken.isPlausible(token)) {
+      throw ArgumentError(
+        'El código de invitación no es válido. Pega el token o el enlace.',
+      );
+    }
+
+    try {
+      final raw = await _sb.rpc(
+        'accept_invitation',
+        params: {'p_token': token},
+      );
+      if (raw is Map) {
+        return AcceptInviteResult.fromJson(Map<String, dynamic>.from(raw));
+      }
+      throw StateError('Respuesta inesperada al aceptar la invitación.');
+    } on PostgrestException catch (e) {
+      throw StateError(_mapAcceptError(e));
+    }
+  }
+
+  static String _mapAcceptError(PostgrestException e) {
+    final msg = e.message;
+    final details = '${e.details ?? ''} ${e.hint ?? ''} $msg';
+    if (details.contains('AUTH_REQUIRED')) {
+      return 'Debes iniciar sesión para aceptar una invitación.';
+    }
+    if (details.contains('TOKEN_INVALID')) {
+      return 'El código de invitación no es válido.';
+    }
+    if (details.contains('INVITE_NOT_FOUND')) {
+      return 'No existe una invitación con ese código.';
+    }
+    if (details.contains('INVITE_REVOKED')) {
+      return 'Esta invitación fue revocada.';
+    }
+    if (details.contains('INVITE_EXPIRED')) {
+      return 'Esta invitación ya venció. Pide un código nuevo al admin.';
+    }
+    if (details.contains('INVITE_USED')) {
+      return 'Esta invitación ya fue usada (un solo uso).';
+    }
+    if (details.contains('GROUP_MISSING')) {
+      return 'El grupo de la invitación ya no existe.';
+    }
+    if (msg.contains('Could not find the function') ||
+        msg.contains('function public.accept_invitation') ||
+        msg.contains('PGRST202')) {
+      return 'Falta aplicar la migración accept_invitation en Supabase. '
+          'Ver supabase/APPLY_ES.md (archivo 20261102200000_accept_invitation_rpc.sql).';
+    }
+    return msg.isNotEmpty ? msg : 'No se pudo aceptar la invitación.';
   }
 
   static String _randomToken(int length) {

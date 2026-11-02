@@ -25,6 +25,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   List<GroupMember> _members = const [];
   LocationConsent? _myConsent;
   InviteStub? _lastInvite;
+  bool _iAmAdmin = false;
 
   @override
   void initState() {
@@ -44,10 +45,16 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             (c) => c?.groupId == widget.group.id,
             orElse: () => null,
           );
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      final me = members.cast<GroupMember?>().firstWhere(
+            (m) => m?.userId == uid,
+            orElse: () => null,
+          );
       if (!mounted) return;
       setState(() {
         _members = members;
         _myConsent = mine;
+        _iAmAdmin = me?.isAdmin ?? false;
         _loading = false;
       });
     } catch (e) {
@@ -70,9 +77,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return AppStrings.memberShareUnknown;
   }
 
+  String _roleLabel(GroupMember m) =>
+      m.isAdmin ? AppStrings.memberRoleAdmin : AppStrings.memberRoleMember;
+
   Future<void> _createInvite() async {
+    if (!_iAmAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.inviteAdminOnly)),
+      );
+      return;
+    }
     try {
-      final invite = await _groups.createInviteStub(widget.group.id);
+      final invite = await _groups.createInvite(widget.group.id);
       if (!mounted) return;
       setState(() => _lastInvite = invite);
       await showDialog<void>(
@@ -111,8 +127,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: invite.plainToken));
                   Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(AppStrings.inviteCopyToken)),
+                  );
                 },
                 child: const Text(AppStrings.inviteCopyToken),
+              ),
+              TextButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: invite.linkStub));
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text(AppStrings.inviteCopyLink)),
+                  );
+                },
+                child: const Text(AppStrings.inviteCopyLink),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -138,11 +167,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       appBar: AppBar(
         title: Text(widget.group.name),
         actions: [
-          IconButton(
-            tooltip: AppStrings.inviteAction,
-            onPressed: _createInvite,
-            icon: const Icon(Icons.qr_code_2),
-          ),
+          if (_iAmAdmin)
+            IconButton(
+              tooltip: AppStrings.inviteAction,
+              onPressed: _createInvite,
+              icon: const Icon(Icons.person_add_alt_1),
+            ),
         ],
       ),
       body: _loading
@@ -167,6 +197,20 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                         child: Text(
+                          _iAmAdmin
+                              ? AppStrings.groupsYouAreAdmin
+                              : AppStrings.groupsYouAreMember,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                        child: Text(
                           AppStrings.membersHeading,
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -189,7 +233,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                             MemberCard(
                               name: m.label,
                               isSelf: m.userId == uid,
-                              shareStatusLabel: _shareLabelFor(m),
+                              shareStatusLabel:
+                                  '${_roleLabel(m)} · ${_shareLabelFor(m)}',
                               lastUpdateLabel:
                                   AppStrings.memberLastUpdateUnknown,
                             ),
