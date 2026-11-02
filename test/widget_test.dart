@@ -3,13 +3,11 @@ import 'package:gps_fmra/app.dart';
 import 'package:gps_fmra/core/l10n/app_strings.dart';
 
 void main() {
-  testWidgets('Splash muestra marca GPS-FMRA y navega al login', (tester) async {
-    await tester.pumpWidget(const GpsFmraApp());
+  testWidgets('Splash muestra marca GPS-FMRA', (tester) async {
+    await tester.pumpWidget(const GpsFmraApp(supabaseReady: false));
     expect(find.text(AppStrings.appName), findsOneWidget);
-
-    await tester.pump(const Duration(milliseconds: 1200));
+    await tester.pump(const Duration(milliseconds: 1000));
     await tester.pumpAndSettle();
-
     expect(find.text(AppStrings.loginTitle), findsOneWidget);
   });
 }

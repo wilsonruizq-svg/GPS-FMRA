@@ -1,60 +1,57 @@
 # GPS-FMRA
 
-App Flutter (Android-first) de protección familiar y localización. UI en español. Fase 1: scaffold MVP.
+App Flutter (Android-first) de protección familiar y localización. UI en español. Fase 1: Auth + esquema Supabase/RLS.
 
 ## Requisitos
 
 - Flutter **3.47+** / Dart **3.13+**
 - Android SDK (minSdk **23**)
-- Android Studio o VS Code con extensión Flutter
-
-Comprobar entorno:
+- Proyecto Supabase (URL + clave anon)
 
 ```bash
 flutter doctor
 ```
 
-## Abrir el proyecto
+## Configurar secretos (local)
 
 ```bash
 cd "D:\APPS PROYECTOS\GPS-FMRA"
+copy .env.example .env
+```
+
+Edita `.env` con `SUPABASE_URL` y `SUPABASE_ANON_KEY`. **No subas `.env`.**
+
+La app usa `publishableKey` (válido con `sb_publishable_...`). Si Auth falla, prueba el JWT **anon public** (`eyJ...`) de Project Settings → API.
+
+## Ejecutar
+
+```bash
 flutter pub get
 flutter run
 ```
 
-Flujo actual del scaffold: **splash → login (shell) → consentimiento → mapa placeholder** (pestañas Grupos / Ajustes).
+Flujo: **splash → login Supabase → consentimiento → mapa placeholder**.
 
-## Variables de entorno
+## Migraciones SQL
 
-Copia `.env.example` y completa en local (o usa `--dart-define`). **No subas secretos.**
+Ver guía en español: [`supabase/APPLY_ES.md`](supabase/APPLY_ES.md).
 
-| Variable | Uso |
-|----------|-----|
-| `SUPABASE_URL` | URL del proyecto Supabase |
-| `SUPABASE_ANON_KEY` | Clave anónima (pública) de Supabase |
-| `GOOGLE_MAPS_API_KEY` | API key de Google Maps |
+Archivo principal:
 
-Ejemplo:
+`supabase/migrations/20261102150000_fase1_mvp_schema.sql`
 
-```bash
-flutter run --dart-define=SUPABASE_URL=https://xxx.supabase.co --dart-define=SUPABASE_ANON_KEY=eyJ... --dart-define=GOOGLE_MAPS_API_KEY=AIza...
-```
+Tablas MVP: `profiles`, `family_groups`, `group_memberships`, `invitations`, `location_consents`, `location_updates`, `user_settings`. RLS default-deny; los admins **no** eluden el consentimiento de ubicación.
 
 ## Módulos (`lib/modules`)
 
-- `auth` — splash y shell de login
-- `location` — consentimiento de ubicación (placeholder)
+- `auth` — splash, login/registro Supabase
+- `location` — consentimiento (placeholder)
 - `map` — shell del mapa (sin SDK aún)
 - `groups` — lista de grupos (vacía)
 - `settings` — ajustes básicos
 
-## Próximo paso: Supabase
+## Próximos pasos
 
-1. Crear el proyecto Supabase (cuenta de Wilson).
-2. Configurar Auth + tablas/RLS según la arquitectura.
-3. Conectar el cliente Flutter con `SUPABASE_URL` / `SUPABASE_ANON_KEY`.
-4. Integrar Google Maps en el shell del mapa.
-
-## Git
-
-Repositorio local listo. **No hay remoto** hasta que Wilson proporcione la URL de GitHub.
+1. Aplicar la migración en el proyecto Supabase (SQL Editor o `npx supabase db push`).
+2. Confirmar JWT anon en `.env` si Auth falla con publishable key.
+3. Integrar Google Maps y flujos de grupos/consentimiento reales.

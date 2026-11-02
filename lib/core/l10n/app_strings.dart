@@ -13,7 +13,15 @@ abstract final class AppStrings {
   static const loginButton = 'Entrar';
   static const registerHint = '¿No tienes cuenta? Regístrate';
   static const loginShellNote =
-      'Auth con Supabase se conectará en el siguiente paso.';
+      'Usa el correo y contraseña de tu cuenta GPS-FMRA.';
+  static const loginValidationError =
+      'Ingresa un correo válido y una contraseña de al menos 6 caracteres.';
+  static const loginMissingConfig =
+      'Falta configurar SUPABASE_URL / SUPABASE_ANON_KEY en el archivo .env.';
+  static const loginJwtHint =
+      'Si Auth falla con la clave actual: en Supabase → Project Settings → API prueba el JWT anon public (eyJ…).';
+  static const loginGenericError =
+      'No se pudo autenticar. Revisa credenciales y conexión.';
 
   static const mapTitle = 'Mapa';
   static const mapPlaceholderTitle = 'Mapa (próximamente)';

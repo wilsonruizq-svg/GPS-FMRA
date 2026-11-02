@@ -5,7 +5,9 @@ import 'core/theme/app_theme.dart';
 import 'modules/auth/screens/splash_screen.dart';
 
 class GpsFmraApp extends StatelessWidget {
-  const GpsFmraApp({super.key});
+  const GpsFmraApp({super.key, this.supabaseReady = false});
+
+  final bool supabaseReady;
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +16,7 @@ class GpsFmraApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       locale: const Locale('es'),
-      home: const SplashScreen(),
+      home: SplashScreen(supabaseReady: supabaseReady),
     );
   }
 }
