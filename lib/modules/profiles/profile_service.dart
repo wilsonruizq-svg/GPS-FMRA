@@ -1,23 +1,29 @@
+import 'dart:typed_data';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
+import 'profile_validation.dart';
 
 class Profile {
   const Profile({
     required this.id,
     this.displayName,
     this.photoUrl,
+    this.phone,
   });
 
   final String id;
   final String? displayName;
   final String? photoUrl;
+  final String? phone;
 
   factory Profile.fromMap(Map<String, dynamic> map) {
     return Profile(
       id: map['id'] as String,
       displayName: map['display_name'] as String?,
       photoUrl: map['photo_url'] as String?,
+      phone: map['phone'] as String?,
     );
   }
 
@@ -34,13 +40,19 @@ class ProfileService {
   final SupabaseClient? _client;
   SupabaseClient get _sb => _client ?? supabase;
 
+  /// Bucket previsto para avatares. Si no existe en el proyecto, la UI omite foto.
+  static const avatarBucket = 'avatars';
+
+  static const _profileSelect =
+      'id, display_name, photo_url, phone';
+
   Future<Profile?> fetchOwn() async {
     final uid = _sb.auth.currentUser?.id;
     if (uid == null) return null;
 
     final row = await _sb
         .from('profiles')
-        .select('id, display_name, photo_url')
+        .select(_profileSelect)
         .eq('id', uid)
         .maybeSingle();
 
@@ -69,7 +81,7 @@ class ProfileService {
           'id': user.id,
           'display_name': name,
         })
-        .select('id, display_name, photo_url')
+        .select(_profileSelect)
         .single();
 
     // Settings también los crea el trigger; fallback idempotente.
@@ -80,13 +92,94 @@ class ProfileService {
     return Profile.fromMap(inserted);
   }
 
+  /// Actualiza el perfil propio vía RLS (`profiles_update_own`).
+  Future<Profile> updateOwn({
+    required String displayName,
+    String? phone,
+    String? photoUrl,
+    bool clearPhoto = false,
+  }) async {
+    final user = _sb.auth.currentUser;
+    if (user == null) {
+      throw StateError('No hay sesión activa.');
+    }
+
+    final nameError = ProfileValidation.validateDisplayName(displayName);
+    if (nameError != null) {
+      throw ArgumentError(nameError);
+    }
+
+    final normalizedPhone = ProfileValidation.normalizePhone(phone);
+
+    final payload = <String, dynamic>{
+      'display_name': displayName.trim(),
+      'phone': normalizedPhone,
+    };
+    if (clearPhoto) {
+      payload['photo_url'] = null;
+    } else if (photoUrl != null) {
+      payload['photo_url'] = photoUrl;
+    }
+
+    final row = await _sb
+        .from('profiles')
+        .update(payload)
+        .eq('id', user.id)
+        .select(_profileSelect)
+        .single();
+
+    return Profile.fromMap(row);
+  }
+
+  /// Comprueba si el bucket de avatares responde (Storage listo).
+  Future<bool> isAvatarStorageReady() async {
+    try {
+      await _sb.storage.from(avatarBucket).list(path: '');
+      return true;
+    } on StorageException {
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Sube bytes de imagen al bucket `avatars` y devuelve la URL pública.
+  /// Solo llamar si [isAvatarStorageReady] es true.
+  Future<String> uploadOwnAvatar({
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final user = _sb.auth.currentUser;
+    if (user == null) {
+      throw StateError('No hay sesión activa.');
+    }
+
+    final ext = contentType.contains('png')
+        ? 'png'
+        : contentType.contains('webp')
+            ? 'webp'
+            : 'jpg';
+    final path = '${user.id}/avatar.$ext';
+
+    await _sb.storage.from(avatarBucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: contentType,
+          ),
+        );
+
+    return _sb.storage.from(avatarBucket).getPublicUrl(path);
+  }
+
   Future<List<Profile>> fetchByIds(Iterable<String> ids) async {
     final list = ids.toList();
     if (list.isEmpty) return const [];
 
     final rows = await _sb
         .from('profiles')
-        .select('id, display_name, photo_url')
+        .select(_profileSelect)
         .inFilter('id', list);
 
     return (rows as List)

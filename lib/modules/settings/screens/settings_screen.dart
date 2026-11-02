@@ -5,6 +5,7 @@ import '../../auth/auth_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
 import '../../location/screens/consent_screen.dart';
 import '../../profiles/profile_service.dart';
+import '../../profiles/screens/edit_profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -44,6 +45,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _openEditProfile() async {
+    final updated = await Navigator.of(context).push<Profile>(
+      MaterialPageRoute<Profile>(
+        builder: (_) => const EditProfileScreen(),
+      ),
+    );
+    if (!mounted) return;
+    if (updated != null) {
+      setState(() => _profile = updated);
+    } else {
+      await _load();
+    }
+  }
+
   Future<void> _signOut() async {
     await _auth.signOut();
     if (!mounted) return;
@@ -58,25 +73,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final email = _auth.currentUser?.email ?? '—';
+    final subtitle = _loading
+        ? AppStrings.splashLoading
+        : (_profile?.label ?? AppStrings.settingsProfileMissing);
 
     return ListView(
       children: [
         ListTile(
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: const Icon(Icons.person_outline, size: 28),
+          leading: CircleAvatar(
+            backgroundColor:
+                Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+            backgroundImage: (_profile?.photoUrl != null &&
+                    _profile!.photoUrl!.isNotEmpty)
+                ? NetworkImage(_profile!.photoUrl!)
+                : null,
+            child: (_profile?.photoUrl == null ||
+                    _profile!.photoUrl!.isEmpty)
+                ? const Icon(Icons.person_outline, size: 28)
+                : null,
+          ),
           title: const Text(AppStrings.settingsProfile),
-          subtitle: Text(
-            _loading
-                ? AppStrings.splashLoading
-                : (_profile?.label ?? AppStrings.settingsProfileMissing),
-          ),
+          subtitle: Text('$subtitle\n${AppStrings.settingsProfileTap}'),
           isThreeLine: true,
-          trailing: Text(
-            email,
-            style: Theme.of(context).textTheme.bodySmall,
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Icon(Icons.chevron_right),
+              Text(
+                email,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ),
-          onTap: _load,
+          onTap: _openEditProfile,
         ),
         ListTile(
           contentPadding:

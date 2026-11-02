@@ -147,11 +147,31 @@ abstract final class AppStrings {
   static const settingsTitle = 'Ajustes';
   static const settingsPrivacy = 'Privacidad y consentimiento';
   static const settingsProfile = 'Perfil';
+  static const settingsProfileTap = 'Toca para editar tu perfil';
   static const settingsSignOut = 'Cerrar sesión';
   static const settingsAbout = 'Acerca de GPS-FMRA';
   static const settingsVersion = 'Versión 1.0.0 — Fase 1 (MVP pantallas)';
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
+
+  static const profileEditTitle = 'Editar perfil';
+  static const profileNameLabel = 'Nombre';
+  static const profileNameHint = 'Ej. Wilson Ruiz';
+  static const profilePhoneLabel = 'Teléfono (opcional)';
+  static const profilePhoneHint = 'Ej. +57 300 123 4567';
+  static const profilePhoneHelper = 'Solo tú lo editas; puedes dejarlo vacío.';
+  static const profileEmailReadonly = 'Correo';
+  static const profileSave = 'Guardar cambios';
+  static const profileSaved = 'Perfil actualizado.';
+  static const profileSaveError =
+      'No se pudo guardar el perfil. Revisa la conexión e inténtalo de nuevo.';
+  static const profileChangePhoto = 'Cambiar foto';
+  static const profileRemovePhoto = 'Quitar foto';
+  static const profilePhotoStorageNote =
+      'La foto de perfil aún no está disponible: falta el bucket Storage '
+      '“avatars” en Supabase. Puedes guardar nombre y teléfono ahora.';
+  static const profilePhotoUploadError =
+      'No se pudo subir la foto. Inténtalo de nuevo.';
 
   static const navMap = 'Mapa';
   static const navGroups = 'Grupos';
