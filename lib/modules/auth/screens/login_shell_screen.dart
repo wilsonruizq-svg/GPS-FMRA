@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/config/env.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../location/screens/consent_screen.dart';
 import '../../profiles/profile_service.dart';
+import '../auth_error_message.dart';
 import '../auth_service.dart';
 
 /// Login / registro email-password contra Supabase (si está configurado).
@@ -74,7 +74,9 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
         if (!mounted) return;
 
         if (res.session == null) {
+          // Signup OK pero Confirm email está activo en el proyecto live.
           setState(() {
+            _error = null;
             _info = AppStrings.loginConfirmEmail;
             _registerMode = false;
           });
@@ -95,13 +97,16 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
       }
     } on AuthException catch (e) {
       if (!mounted) return;
-      setState(() => _error = e.message);
-    } catch (_) {
+      setState(() {
+        _info = null;
+        _error = authErrorMessage(e);
+      });
+    } catch (e) {
       if (!mounted) return;
-      final hint = Env.anonKeyLooksNonJwt
-          ? AppStrings.loginJwtHint
-          : AppStrings.loginGenericError;
-      setState(() => _error = hint);
+      setState(() {
+        _info = null;
+        _error = authErrorMessage(e);
+      });
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -151,15 +156,8 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
                     ),
               ),
             ],
-            if (widget.supabaseReady && Env.anonKeyLooksNonJwt) ...[
-              const SizedBox(height: 16),
-              Text(
-                AppStrings.loginJwtHint,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.tertiary,
-                    ),
-              ),
-            ],
+            // No mostrar aviso JWT de forma permanente: sb_publishable_ es válido
+            // en SDKs recientes; Connection reset no se arregla cambiando la clave.
             const SizedBox(height: 28),
             if (_registerMode) ...[
               TextField(

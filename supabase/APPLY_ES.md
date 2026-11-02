@@ -32,9 +32,44 @@ npx supabase db push
 1. Copia `.env.example` → `.env` (ya gitignored).
 2. Pon `SUPABASE_URL` y `SUPABASE_ANON_KEY`.
 3. La app inicializa Supabase con `publishableKey` (acepta `sb_publishable_...`).
-   Si Auth falla, prueba el JWT legacy **anon public** (`eyJ...`) de
-   **Project Settings → API**.
+   Si Auth responde **401 / invalid API key**, prueba el JWT legacy **anon public**
+   (`eyJ...`) de **Project Settings → API**.
+   Un error `Connection reset by peer` / `SocketException` **no** se arregla
+   cambiando la clave: es red del dispositivo/operador.
 4. `flutter pub get` y `flutter run`.
+
+## Confirm email (recomendado OFF para pruebas Android)
+
+Con **Confirm email** activo, cada signup intenta mandar correo. En free tier
+eso dispara rápido `email rate limit exceeded` / `over_email_send_rate_limit`.
+
+Para pruebas en el dispositivo:
+
+1. Abre [Authentication → Sign In / Providers](https://supabase.com/dashboard/project/dgmzewsxbnwxjpnrtgyb/auth/providers).
+2. Expande **Email**.
+3. Desactiva el toggle **Confirm email**.
+4. **Save**.
+
+Tras eso, `signUp` no envía email y la sesión inicia al instante.
+Si dejas Confirm email ON y ves rate limit: espera unos minutos o apaga el toggle.
+
+## Red / Connection reset en el teléfono
+
+Desde un PC de desarrollo, `https://dgmzewsxbnwxjpnrtgyb.supabase.co/auth/v1/health`
+y `POST /auth/v1/signup` deben responder (TLS OK vía Cloudflare).
+
+Si en el **móvil** (p. ej. Realme) ves
+`ClientException … SocketException: Connection reset by peer` hacia
+`/auth/v1/signup`:
+
+1. Prueba otra red (Wi‑Fi vs datos, hotspot del PC).
+2. Desactiva VPN / ahorro de datos / firewall del teléfono.
+3. Abre en el navegador del teléfono:
+   `https://dgmzewsxbnwxjpnrtgyb.supabase.co/auth/v1/health`
+4. Si el navegador también falla y el PC no: causa probable = red/operador
+   hacia `*.supabase.co` (Cloudflare), no la clave ni el código Android HTTPS.
+
+Android ya declara `INTERNET`; HTTPS no necesita cleartext.
 
 ## Qué NO hace esta migración
 

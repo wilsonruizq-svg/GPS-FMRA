@@ -25,12 +25,24 @@ abstract final class AppStrings {
   static const loginMissingConfig =
       'Falta configurar SUPABASE_URL / SUPABASE_ANON_KEY en el archivo .env.';
   static const loginJwtHint =
-      'Si Auth falla con la clave actual: en Supabase → Project Settings → API prueba el JWT anon public (eyJ…).';
+      'Clave publishable detectada. Si Auth responde 401/invalid API key: '
+      'Supabase → Project Settings → API → anon public (JWT eyJ…). '
+      'Un “Connection reset” NO se arregla cambiando la clave.';
   static const loginGenericError =
       'No se pudo autenticar. Revisa credenciales y conexión.';
+  static const loginNetworkError =
+      'No hay conexión con el servidor (red o firewall). '
+      'Prueba Wi‑Fi/datos distintos, desactiva VPN/ahorro de datos o abre '
+      'https://dgmzewsxbnwxjpnrtgyb.supabase.co/auth/v1/health en el navegador del teléfono.';
   static const loginConfirmEmail =
-      'Revisa tu correo para confirmar la cuenta antes de entrar. '
-      'Si en Supabase desactivaste “Confirm email”, la sesión inicia al instante.';
+      'Cuenta creada. Revisa tu correo y confirma el enlace antes de iniciar sesión. '
+      'Para pruebas sin correo: Dashboard → Authentication → Sign In / Providers → '
+      'Email → desactiva “Confirm email” → Save.';
+  static const loginEmailRateLimit =
+      'Supabase limitó el envío de correos de confirmación (demasiados intentos). '
+      'Espera unos minutos o, para pruebas: Dashboard → Authentication → '
+      'Sign In / Providers → Email → desactiva “Confirm email” → Save '
+      '(así el registro no manda email y entra al instante).';
 
   static const mapTitle = 'Mapa';
   static const mapPlaceholderTitle = 'Mapa (marcador de posición)';
