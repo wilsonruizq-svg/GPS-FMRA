@@ -3,7 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../location/screens/consent_placeholder_screen.dart';
+import '../../../app_shell.dart';
+import '../../profiles/profile_service.dart';
 import 'login_shell_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -19,19 +20,29 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future<void>.delayed(const Duration(milliseconds: 900), _routeNext);
+    Future<void>.delayed(const Duration(milliseconds: 700), _routeNext);
   }
 
-  void _routeNext() {
+  Future<void> _routeNext() async {
     if (!mounted) return;
 
     final signedIn = widget.supabaseReady &&
         Supabase.instance.client.auth.currentSession != null;
 
+    if (signedIn) {
+      try {
+        await ProfileService().ensureOwnProfile();
+      } catch (_) {
+        // Continuar al flujo; la pantalla de ajustes mostrará el estado.
+      }
+    }
+
+    if (!mounted) return;
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => signedIn
-            ? const ConsentPlaceholderScreen(isOnboarding: false)
+            ? const AppShell()
             : LoginShellScreen(supabaseReady: widget.supabaseReady),
       ),
     );

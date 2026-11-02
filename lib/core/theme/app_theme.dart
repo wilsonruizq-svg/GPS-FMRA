@@ -35,20 +35,43 @@ abstract final class AppTheme {
         style: FilledButton.styleFrom(
           backgroundColor: AppColors.deepBlue,
           foregroundColor: AppColors.onDeep,
-          minimumSize: const Size.fromHeight(48),
+          minimumSize: const Size.fromHeight(52),
+          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: const Size.fromHeight(48),
+          textStyle: const TextStyle(fontSize: 16),
+        ),
+      ),
+      listTileTheme: const ListTileThemeData(
+        minVerticalPadding: 12,
+        iconColor: AppColors.deepBlue,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        backgroundColor: AppColors.deepBlue,
+        foregroundColor: AppColors.onDeep,
+        extendedPadding: EdgeInsets.symmetric(horizontal: 20),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: Colors.white,
         indicatorColor: AppColors.signalCyan.withValues(alpha: 0.25),
         labelTextStyle: WidgetStatePropertyAll(
-          const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
         ),
       ),
     );

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'core/l10n/app_strings.dart';
-import 'modules/groups/screens/groups_placeholder_screen.dart';
+import 'modules/groups/screens/groups_screen.dart';
 import 'modules/map/screens/map_shell_screen.dart';
 import 'modules/settings/screens/settings_screen.dart';
 
@@ -30,13 +30,14 @@ class _AppShellState extends State<AppShell> {
         index: _index,
         children: const [
           MapShellScreen(),
-          GroupsPlaceholderScreen(),
+          GroupsScreen(),
           SettingsScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
+        height: 72,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.map_outlined),

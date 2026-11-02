@@ -21,7 +21,14 @@ abstract final class Env {
   static bool get hasSupabaseConfig =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
-  static bool get hasMapsConfig => googleMapsApiKey.isNotEmpty;
+  static bool get hasMapsConfig {
+    final key = googleMapsApiKey.trim();
+    if (key.isEmpty) return false;
+    if (key.contains('your_google_maps') || key.contains('YOUR_')) {
+      return false;
+    }
+    return true;
+  }
 
   /// True si la clave no parece un JWT anon clásico (`eyJ...`).
   static bool get anonKeyLooksNonJwt {

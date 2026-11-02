@@ -1,6 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Permiso de ubicación solo en contexto (pantalla de consentimiento). Sin background silencioso en Fase 1. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+
     <application
-        android:label="gps_fmra"
+        android:label="GPS-FMRA"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
