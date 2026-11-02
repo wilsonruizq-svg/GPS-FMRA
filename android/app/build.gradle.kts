@@ -19,7 +19,9 @@ android {
         applicationId = "com.gpsfmra.gps_fmra"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23
+        // minSdk 23 is blocked by transitive plugins (app_links via supabase_flutter,
+        // permission_handler_android) which declare minSdk 24. Flutter 3.47 default is 24.
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
