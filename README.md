@@ -1,6 +1,6 @@
 # GPS-FMRA
 
-App Flutter (Android-first) de protección familiar y localización. UI en español. Fase 1: Auth + grupos + consentimiento + mapa placeholder.
+App Flutter (Android-first) de protección familiar y localización. UI en español. Fase 1: Auth + grupos + consentimiento + mapa (Google Maps si hay clave).
 
 ## Requisitos
 
@@ -26,21 +26,20 @@ Edita `.env`:
 |----------|-------------|--------|
 | `SUPABASE_URL` | Sí | `https://….supabase.co` |
 | `SUPABASE_ANON_KEY` | Sí | `sb_publishable_…` o JWT anon `eyJ…` |
-| `GOOGLE_MAPS_API_KEY` | No (Fase 1) | Si falta, la app muestra marcador de posición + lista de miembros |
+| `GOOGLE_MAPS_API_KEY` | Para mapa real | Misma clave en `.env` **y** `android/local.properties` |
 
-**No subas `.env`.**
+**No subas `.env` ni pongas la clave en Git.**
 
 ### Cómo añadir Google Maps (Wilson)
 
-1. Crea una clave en [Google Cloud Console](https://console.cloud.google.com/) con **Maps SDK for Android** (y iOS si aplica).
-2. Restringe la clave por paquete `com.gpsfmra.gps_fmra` + SHA-1 de debug/release.
-3. Ponla en `.env`:
+Guía con clics exactos: [`docs/GOOGLE_MAPS_ES.md`](docs/GOOGLE_MAPS_ES.md).
 
-```env
-GOOGLE_MAPS_API_KEY=AIza...tu_clave
-```
+Resumen:
 
-4. En un hito posterior se cableará el SDK (`google_maps_flutter`) y el meta-data en `AndroidManifest.xml`. **Hoy**, con o sin clave, el mapa es un placeholder explícito.
+1. Google Cloud → habilitar **Maps SDK for Android** → crear clave API.
+2. Restringir a paquete `com.gpsfmra.gps_fmra` + SHA-1 debug (`cd android; .\gradlew signingReport`).
+3. Pegar la clave en `.env` y en `android/local.properties` como `GOOGLE_MAPS_API_KEY=…`.
+4. `flutter run` — con clave válida se muestra `GoogleMap`; sin clave, el placeholder.
 
 ## Ejecutar en emulador / dispositivo
 
@@ -68,7 +67,7 @@ Archivo: `supabase/migrations/20261102150000_fase1_mvp_schema.sql`
 |----------|----------|
 | Auth | Registro/login email-password; perfil vía trigger + fallback |
 | Consentimiento | Explica compartir; Aceptar / Pausar; pide permiso de ubicación en contexto |
-| Mapa | Placeholder Maps + selector de grupo + lista stub de miembros |
+| Mapa | `GoogleMap` si hay `GOOGLE_MAPS_API_KEY`; si no, placeholder + lista de miembros |
 | Grupos | Crear grupo, listar membresías, invitación stub (token + hash SHA-256) |
 | Tarjeta miembro | Nombre, estado de compartir, última actualización (placeholder) |
 | Ajustes | Perfil, privacidad, cerrar sesión |

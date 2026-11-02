@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/l10n/app_strings.dart';
@@ -7,7 +8,7 @@ import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
 
-/// Shell del mapa: placeholder Google Maps + lista stub de integrantes.
+/// Shell del mapa: GoogleMap si hay clave; si no, placeholder + lista de integrantes.
 class MapShellScreen extends StatefulWidget {
   const MapShellScreen({super.key});
 
@@ -16,6 +17,12 @@ class MapShellScreen extends StatefulWidget {
 }
 
 class _MapShellScreenState extends State<MapShellScreen> {
+  /// Bogotá — centro inicial hasta que haya ubicaciones de miembros.
+  static const _fallbackCamera = CameraPosition(
+    target: LatLng(4.7110, -74.0721),
+    zoom: 11,
+  );
+
   final _groups = GroupsService();
   final _consent = ConsentService();
 
@@ -101,62 +108,26 @@ class _MapShellScreenState extends State<MapShellScreen> {
     return AppStrings.memberShareUnknown;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Material(
-          color: Colors.white,
-          elevation: 1,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              children: [
-                Text(
-                  AppStrings.mapGroupSelector,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _groupsList.isEmpty
-                      ? Text(
-                          AppStrings.mapNoGroup,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                        )
-                      : DropdownButtonHideUnderline(
-                          child: DropdownButton<FamilyGroup>(
-                            isExpanded: true,
-                            value: _selected,
-                            items: _groupsList
-                                .map(
-                                  (g) => DropdownMenuItem(
-                                    value: g,
-                                    child: Text(g.name),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: _onSelectGroup,
-                          ),
-                        ),
-                ),
-                IconButton(
-                  tooltip: AppStrings.retry,
-                  onPressed: _loading ? null : _load,
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 3,
-          child: Container(
-            width: double.infinity,
+  Widget _buildMapPane(BuildContext context) {
+    if (Env.hasMapsConfig) {
+      return GoogleMap(
+        initialCameraPosition: _fallbackCamera,
+        mapType: MapType.normal,
+        myLocationButtonEnabled: true,
+        zoomControlsEnabled: false,
+        compassEnabled: true,
+        // Ubicación del dispositivo: el permiso se pide en la pantalla de
+        // consentimiento; si aún no hay permiso, el SDK lo ignora.
+        myLocationEnabled: _myConsent?.isActive == true,
+      );
+    }
+
+    return ColoredBox(
+      color: AppColors.midBlue.withValues(alpha: 0.08),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxHeight < 220;
+          return DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
@@ -167,35 +138,43 @@ class _MapShellScreenState extends State<MapShellScreen> {
                 ],
               ),
             ),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.map_outlined,
-                      size: 64,
-                      color: AppColors.deepBlue.withValues(alpha: 0.7),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      AppStrings.mapPlaceholderTitle,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      Env.hasMapsConfig
-                          ? AppStrings.mapPlaceholderWithKey
-                          : AppStrings.mapPlaceholderBody,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    if (!Env.hasMapsConfig) ...[
-                      const SizedBox(height: 12),
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(context).copyWith(
+                overscroll: false,
+              ),
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: compact ? 12 : 20,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - (compact ? 24 : 40),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.map_outlined,
+                        size: compact ? 40 : 56,
+                        color: AppColors.deepBlue.withValues(alpha: 0.7),
+                      ),
+                      SizedBox(height: compact ? 8 : 12),
+                      Text(
+                        AppStrings.mapPlaceholderTitle,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        AppStrings.mapPlaceholderBody,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
                       Text(
                         AppStrings.mapMissingKeyHint,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -204,11 +183,76 @@ class _MapShellScreenState extends State<MapShellScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Material(
+          color: Colors.white,
+          elevation: 1,
+          child: SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    AppStrings.mapGroupSelector,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _groupsList.isEmpty
+                        ? Text(
+                            AppStrings.mapNoGroup,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                          )
+                        : DropdownButtonHideUnderline(
+                            child: DropdownButton<FamilyGroup>(
+                              isExpanded: true,
+                              value: _selected,
+                              items: _groupsList
+                                  .map(
+                                    (g) => DropdownMenuItem(
+                                      value: g,
+                                      child: Text(g.name),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: _onSelectGroup,
+                            ),
+                          ),
+                  ),
+                  IconButton(
+                    tooltip: AppStrings.retry,
+                    onPressed: _loading ? null : _load,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
+              ),
+            ),
           ),
+        ),
+        Expanded(
+          flex: 3,
+          child: _buildMapPane(context),
         ),
         Expanded(
           flex: 2,
@@ -218,7 +262,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
                     ? Center(
-                        child: Padding(
+                        child: SingleChildScrollView(
                           padding: const EdgeInsets.all(16),
                           child: Text(
                             _error!,
@@ -231,10 +275,13 @@ class _MapShellScreenState extends State<MapShellScreen> {
                       )
                     : _members.isEmpty
                         ? Center(
-                            child: Text(
-                              AppStrings.mapMembersEmpty,
-                              style: Theme.of(context).textTheme.bodyMedium,
-                              textAlign: TextAlign.center,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                AppStrings.mapMembersEmpty,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                textAlign: TextAlign.center,
+                              ),
                             ),
                           )
                         : ListView.separated(
