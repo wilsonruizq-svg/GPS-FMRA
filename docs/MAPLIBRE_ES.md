@@ -13,8 +13,11 @@ Google Maps queda **pausado** (billing Cloud). Guía antigua: [`GOOGLE_MAPS_ES.m
 5. Etiqueta inferior: «MapLibre · estilo libre (sin clave)».
 6. Pines de familiares: círculos MapLibre + etiqueta con nombre para
    integrantes con consentimiento activo y fila en `location_updates`
-   (publicación ~20 s; Realtime + poll ~25 s). Sin consentimiento, RLS
-   oculta la ubicación.
+   (publicación ~20 s; Realtime + poll ~25 s). Cian = tú, rojo = otro.
+   Con 2+ fixes el mapa encuadra a todos. Si solo ves 1 pin con 2
+   miembros: APPLY `20261102240000_fix_peer_location_visibility.sql`
+   (ver `supabase/APPLY_ES.md`) y vuelve a abrir Mapa en ambos teléfonos.
+   Sin consentimiento, RLS oculta la ubicación.
 
 ## Estilos (elige uno)
 
