@@ -81,7 +81,9 @@ Prueba con dos cuentas: [`docs/INVITACIONES_PRUEBA_ES.md`](docs/INVITACIONES_PRU
 | Tarjeta miembro | Nombre, rol, estado de compartir |
 | Ajustes | Perfil, privacidad, cerrar sesión |
 
-**No incluido:** chat, SOS, WebRTC, mapas offline. Google Maps pausado por billing; mapa online = MapLibre.
+**Incluido (perfil/SOS):** editar perfil + foto (bucket `avatars`), botón SOS en el mapa (`sos_events` + banner), cableado FCM (`device_push_tokens` + Edge Function `notify-sos`). Ver `supabase/APPLY_ES.md` y `docs/FCM_SOS_ES.md`.
+
+**No incluido:** chat, WebRTC, mapas offline. Google Maps pausado por billing; mapa online = MapLibre. Push FCM requiere `google-services.json` + secret Firebase (opcional).
 
 ## APK de prueba (entrega local)
 

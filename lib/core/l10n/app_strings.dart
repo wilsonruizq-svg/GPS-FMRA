@@ -216,13 +216,50 @@ abstract final class AppStrings {
   static const profileSaved = 'Perfil actualizado.';
   static const profileSaveError =
       'No se pudo guardar el perfil. Revisa la conexión e inténtalo de nuevo.';
+  static const profileAddPhoto = 'Añadir foto';
   static const profileChangePhoto = 'Cambiar foto';
   static const profileRemovePhoto = 'Quitar foto';
+  static const profilePhotoFromGallery = 'Elegir de la galería';
+  static const profilePhotoFromCamera = 'Tomar foto';
+  static const profilePhotoUploaded = 'Foto de perfil actualizada.';
   static const profilePhotoStorageNote =
       'La foto de perfil aún no está disponible: falta el bucket Storage '
-      '“avatars” en Supabase. Puedes guardar nombre y teléfono ahora.';
+      '“avatars” en Supabase. Ejecuta la migración '
+      '20261102250000_avatars_storage.sql (APPLY_ES.md). '
+      'Puedes guardar nombre y teléfono ahora.';
   static const profilePhotoUploadError =
-      'No se pudo subir la foto. Inténtalo de nuevo.';
+      'No se pudo subir la foto. Revisa la conexión o el bucket avatars.';
+
+  static const sosButtonTooltip = 'Emergencia SOS';
+  static const sosButtonLabel = 'SOS';
+  static const sosConfirmTitle = '¿Enviar alerta de emergencia?';
+  static String sosConfirmBody(String groupName) =>
+      'Se avisará a los integrantes de “$groupName”. '
+      'Verán una alerta en la app con tu ubicación si el GPS está disponible. '
+      'No se llama a servicios de emergencia externos.';
+  static const sosConfirmAction = 'Enviar SOS';
+  static const sosCancelAction = 'No enviar';
+  static const sosSent = 'Alerta SOS enviada al grupo.';
+  static const sosSendError =
+      'No se pudo enviar el SOS. Revisa la conexión e inténtalo de nuevo.';
+  static const sosNeedGroup =
+      'Elige o crea un grupo antes de enviar un SOS.';
+  static const sosNeedMigration =
+      'Falta aplicar la tabla sos_events en Supabase '
+      '(migración 20261102260000_sos_events.sql).';
+  static String sosBannerPeer(String name) =>
+      '¡SOS! $name necesita ayuda.';
+  static const sosBannerSelf = 'Tu alerta SOS está activa.';
+  static const sosBannerDismissOwn = 'Cancelar alerta';
+  static const sosBannerAck = 'Entendido';
+  static const sosCancelled = 'Alerta SOS cancelada.';
+  static const sosSending = 'Enviando alerta…';
+  static const sosPushTitle = 'SOS — GPS-FMRA';
+  static const sosPushBodyFallback = 'Un integrante del grupo necesita ayuda.';
+  static const sosPushNotConfigured =
+      'Alerta guardada. Push FCM aún no está activo en este teléfono '
+      '(falta google-services.json / Firebase). Los compañeros la verán '
+      'en la app si la tienen abierta.';
 
   static const navMap = 'Mapa';
   static const navGroups = 'Grupos';

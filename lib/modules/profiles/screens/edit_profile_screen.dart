@@ -4,10 +4,11 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_service.dart';
+import '../avatar_compress.dart';
 import '../profile_service.dart';
 import '../profile_validation.dart';
 
-/// Editar nombre, teléfono opcional y foto (si Storage `avatars` existe).
+/// Editar nombre, teléfono opcional y foto (Storage `avatars`).
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
 
@@ -21,6 +22,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final _picker = ImagePicker();
 
   bool _loading = true;
   bool _saving = false;
@@ -70,37 +72,93 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  Future<void> _pickPhoto() async {
+  Future<void> _choosePhotoSource() async {
     if (!_storageReady || _saving) return;
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text(AppStrings.profilePhotoFromGallery),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text(AppStrings.profilePhotoFromCamera),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (source == null || !mounted) return;
+    await _pickAndUpload(source);
+  }
+
+  Future<void> _pickAndUpload(ImageSource source) async {
     try {
-      final picker = ImagePicker();
-      final file = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
+      final file = await _picker.pickImage(
+        source: source,
+        // Pre-redimensionado del picker; AvatarCompress afina a ≤768px JPEG.
+        maxWidth: AvatarCompress.maxEdge.toDouble(),
+        maxHeight: AvatarCompress.maxEdge.toDouble(),
+        imageQuality: AvatarCompress.jpegQuality,
       );
       if (file == null || !mounted) return;
 
-      setState(() => _saving = true);
-      final bytes = await file.readAsBytes();
-      final mime = file.mimeType ?? 'image/jpeg';
-      final url = await _profiles.uploadOwnAvatar(
-        bytes: bytes,
-        contentType: mime,
-      );
+      setState(() {
+        _saving = true;
+        _error = null;
+      });
+
+      final raw = await file.readAsBytes();
+      final compressed = AvatarCompress.compress(raw);
+      final url = await _profiles.uploadOwnAvatar(bytes: compressed);
       if (!mounted) return;
       setState(() {
         _photoUrl = url;
         _clearPhoto = false;
         _saving = false;
       });
-    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.profilePhotoUploaded)),
+      );
+    } on FormatException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = e.message;
+      });
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _saving = false;
         _error = AppStrings.profilePhotoUploadError;
       });
+    }
+  }
+
+  Future<void> _removePhoto() async {
+    if (_saving) return;
+    setState(() {
+      _clearPhoto = true;
+      _photoUrl = null;
+      _error = null;
+    });
+  }
+
+  String? _validatePhone(String? raw) {
+    try {
+      ProfileValidation.normalizePhone(raw);
+      return null;
+    } on FormatException catch (e) {
+      return e.message;
     }
   }
 
@@ -113,6 +171,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
 
     try {
+      if (_clearPhoto) {
+        await _profiles.clearOwnAvatar();
+      }
       final updated = await _profiles.updateOwn(
         displayName: _nameController.text,
         phone: _phoneController.text,
@@ -136,7 +197,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _error = e.message;
         _saving = false;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _error = AppStrings.profileSaveError;
@@ -180,6 +241,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     validator: ProfileValidation.validateDisplayName,
                     enabled: !_saving,
+                    onChanged: (_) => setState(() {}),
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
@@ -191,6 +253,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       hintText: AppStrings.profilePhoneHint,
                       helperText: AppStrings.profilePhoneHelper,
                     ),
+                    validator: _validatePhone,
                     enabled: !_saving,
                     onFieldSubmitted: (_) => _save(),
                   ),
@@ -233,41 +296,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final url = _clearPhoto ? null : _photoUrl;
     return Column(
       children: [
-        CircleAvatar(
-          radius: 48,
-          backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
-          backgroundImage: (url != null && url.isNotEmpty)
-              ? NetworkImage(url)
-              : null,
-          child: (url == null || url.isEmpty)
-              ? Text(
-                  _initials(),
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.deepBlue,
-                  ),
-                )
-              : null,
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            CircleAvatar(
+              radius: 52,
+              backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+              backgroundImage: (url != null && url.isNotEmpty)
+                  ? NetworkImage(url)
+                  : null,
+              child: (url == null || url.isEmpty)
+                  ? Text(
+                      _initials(),
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.deepBlue,
+                      ),
+                    )
+                  : null,
+            ),
+            if (_saving)
+              const SizedBox(
+                width: 104,
+                height: 104,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+          ],
         ),
         const SizedBox(height: 12),
         if (_storageReady)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
             children: [
               TextButton.icon(
-                onPressed: _saving ? null : _pickPhoto,
-                icon: const Icon(Icons.photo_library_outlined),
-                label: const Text(AppStrings.profileChangePhoto),
+                onPressed: _saving ? null : _choosePhotoSource,
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: Text(
+                  (url != null && url.isNotEmpty)
+                      ? AppStrings.profileChangePhoto
+                      : AppStrings.profileAddPhoto,
+                ),
               ),
               if (url != null && url.isNotEmpty)
                 TextButton(
-                  onPressed: _saving
-                      ? null
-                      : () => setState(() {
-                            _clearPhoto = true;
-                            _photoUrl = null;
-                          }),
+                  onPressed: _saving ? null : _removePhoto,
                   child: const Text(AppStrings.profileRemovePhoto),
                 ),
             ],
@@ -280,7 +354,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final name = _nameController.text.trim();
     if (name.isEmpty) return '?';
     final parts = name.split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return name[0].toUpperCase();

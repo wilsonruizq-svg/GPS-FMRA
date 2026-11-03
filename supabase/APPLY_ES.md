@@ -24,16 +24,29 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY obligatorio si solo ves 1 pin** con 2 miembros + consentimiento:
       endurece `can_view_location` / helpers con `row_security=off` y añade
       RPC `list_group_locations` para que ambos pines sean visibles.)
+   7. `supabase/migrations/20261102250000_avatars_storage.sql`
+      (**APPLY para foto de perfil:** crea bucket público `avatars` + RLS
+      Storage. Éxito esperado en SQL Editor: **Success. No rows returned**
+      — o “Success” con filas del upsert del bucket.)
+   8. `supabase/migrations/20261102260000_sos_events.sql`
+      (**APPLY para botón SOS:** tabla `sos_events` + RLS + Realtime.
+      Éxito esperado: **Success. No rows returned**.)
+   9. `supabase/migrations/20261102270000_device_push_tokens.sql`
+      (**APPLY para push FCM:** tabla `device_push_tokens` + RPC
+      `list_group_push_tokens`. Éxito esperado: **Success. No rows returned**.
+      Guía Firebase: `docs/FCM_SOS_ES.md`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
-   `location_consents`, `location_updates`, `user_settings`.
-5. En **Database → Functions** confirma `accept_invitation(text)`,
+   `location_consents`, `location_updates`, `user_settings`, `sos_events`,
+   `device_push_tokens`.
+5. En **Storage → Buckets** confirma el bucket **`avatars`** (público).
+6. En **Database → Functions** confirma `accept_invitation(text)`,
    `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,
    `exit_pin_is_required`, `verify_exit_pin`, `list_group_locations`,
-   `can_view_location`.
-6. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
-7. En **Database → Replication** (o Publication) confirma que
-   `location_updates` está en `supabase_realtime`.
+   `can_view_location`, `list_group_push_tokens`.
+7. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
+8. En **Database → Replication** (o Publication) confirma que
+   `location_updates` y `sos_events` están en `supabase_realtime`.
 
 ## Diagnóstico rápido — solo 1 pin (2 miembros, 1 grupo)
 
@@ -120,7 +133,9 @@ Android ya declara `INTERNET`; HTTPS no necesita cleartext.
 
 ## Qué NO hace esta migración
 
-- Tablas de chat / SOS (Fase 2+).
+- Chat / mensajería (sigue fuera de v1; SOS es alerta corta + push, sin chat).
 - Edge Functions con rate-limit anti-fuerza bruta (la aceptación Fase 1
   usa RPC `accept_invitation` security definer; rate-limit queda para endurecer).
-- Buckets de Storage para fotos.
+- Push FCM queda **preparado** (`notify-sos` + tokens); requiere que Wilson
+  complete Firebase + secret (ver `docs/FCM_SOS_ES.md`). Sin eso, SOS in-app
+  (banner/Realtime) sigue operativo.

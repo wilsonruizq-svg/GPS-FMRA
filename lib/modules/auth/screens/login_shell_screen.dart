@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../location/screens/consent_screen.dart';
 import '../../profiles/profile_service.dart';
+import '../../push/push_service.dart';
 import '../auth_error_message.dart';
 import '../auth_service.dart';
 
@@ -87,12 +88,14 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
         await _profiles.ensureOwnProfile(
           displayName: displayName.isEmpty ? null : displayName,
         );
+        await PushService().syncTokenAfterLogin();
         if (!mounted) return;
         _goConsent();
       } else {
         await _auth.signIn(email: email, password: password);
         if (!mounted) return;
         await _profiles.ensureOwnProfile();
+        await PushService().syncTokenAfterLogin();
         if (!mounted) return;
         _goConsent();
       }

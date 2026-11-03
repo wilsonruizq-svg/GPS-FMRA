@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'app.dart';
 import 'core/supabase/supabase_bootstrap.dart';
+import 'modules/push/push_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,10 @@ Future<void> main() async {
   }
 
   final supabaseReady = await bootstrapSupabase();
+
+  // FCM opcional: sin google-services.json no bloquea el arranque.
+  final push = PushService();
+  await push.ensureInitialized();
 
   runApp(GpsFmraApp(supabaseReady: supabaseReady));
 }

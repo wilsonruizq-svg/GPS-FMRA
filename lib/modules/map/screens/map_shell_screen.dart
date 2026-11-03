@@ -16,6 +16,7 @@ import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
 import '../../location/location_fix_filter.dart';
 import '../../location/location_share_service.dart';
+import '../../sos/sos_service.dart';
 
 /// Shell del mapa: MapLibre + pines de integrantes con consentimiento activo.
 class MapShellScreen extends StatefulWidget {
@@ -45,6 +46,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   final _groups = GroupsService();
   final _consent = ConsentService();
   final _locationShare = LocationShareService();
+  final _sos = SosService();
   final _fixFilter = const LocationFixFilter();
 
   MapLibreMapController? _mapController;
@@ -75,10 +77,13 @@ class _MapShellScreenState extends State<MapShellScreen>
   Timer? _pollTimer;
   StreamSubscription<Position>? _positionSub;
   RealtimeChannel? _realtimeChannel;
+  RealtimeChannel? _sosChannel;
   bool _publishing = false;
   bool _syncingMarkers = false;
   bool _markersDirty = false;
   bool _didFitMembers = false;
+  bool _sosSending = false;
+  List<SosEvent> _activeSos = const [];
 
   Position? _lastAcceptedFix;
   Position? _lastPublishedFix;
@@ -443,6 +448,11 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (ch != null) {
       unawaited(supabase.removeChannel(ch));
     }
+    final sos = _sosChannel;
+    _sosChannel = null;
+    if (sos != null) {
+      unawaited(_sos.unsubscribe(sos));
+    }
   }
 
   void _restartSharingLoop() {
@@ -606,46 +616,182 @@ class _MapShellScreenState extends State<MapShellScreen>
     _pollTimer = null;
     _unsubscribeRealtime();
 
-    if (_selected == null || _members.isEmpty) return;
+    if (_selected == null) {
+      if (_activeSos.isNotEmpty && mounted) {
+        setState(() => _activeSos = const []);
+      }
+      return;
+    }
 
-    try {
-      _realtimeChannel = _locationShare.subscribeLocationUpdates(
-        onChange: (loc) {
-          if (!mounted) return;
-          final memberIds = _members.map((m) => m.userId).toSet();
-          if (!memberIds.contains(loc.userId)) return;
-          final existing = _locationsByUser[loc.userId];
-          if (existing != null &&
-              loc.recordedAt.isBefore(existing.recordedAt)) {
-            return;
-          }
-          setState(() {
-            _locationsByUser =
-                Map<String, MemberLocation>.from(_locationsByUser)
-                  ..[loc.userId] = loc;
-          });
-          unawaited(_syncMarkers());
-        },
-        onDelete: (userId) {
-          if (!mounted) return;
-          // No borrar el pin propio local por un DELETE remoto obsoleto.
-          if (userId == _myUid && _lastAcceptedFix != null) return;
-          setState(() {
-            _locationsByUser =
-                Map<String, MemberLocation>.from(_locationsByUser)
-                  ..remove(userId);
-          });
-          unawaited(_syncMarkers());
-        },
-      );
-    } catch (_) {
-      // Fallback: solo polling.
+    if (_members.isNotEmpty) {
+      try {
+        _realtimeChannel = _locationShare.subscribeLocationUpdates(
+          onChange: (loc) {
+            if (!mounted) return;
+            final memberIds = _members.map((m) => m.userId).toSet();
+            if (!memberIds.contains(loc.userId)) return;
+            final existing = _locationsByUser[loc.userId];
+            if (existing != null &&
+                loc.recordedAt.isBefore(existing.recordedAt)) {
+              return;
+            }
+            setState(() {
+              _locationsByUser =
+                  Map<String, MemberLocation>.from(_locationsByUser)
+                    ..[loc.userId] = loc;
+            });
+            unawaited(_syncMarkers());
+          },
+          onDelete: (userId) {
+            if (!mounted) return;
+            // No borrar el pin propio local por un DELETE remoto obsoleto.
+            if (userId == _myUid && _lastAcceptedFix != null) return;
+            setState(() {
+              _locationsByUser =
+                  Map<String, MemberLocation>.from(_locationsByUser)
+                    ..remove(userId);
+            });
+            unawaited(_syncMarkers());
+          },
+        );
+      } catch (_) {
+        // Fallback: solo polling.
+      }
     }
 
     unawaited(_refreshMemberLocations());
+    unawaited(_refreshActiveSos());
+    _subscribeSosRealtime();
     _pollTimer = Timer.periodic(_pollInterval, (_) {
       unawaited(_refreshMemberLocations());
+      unawaited(_refreshActiveSos());
     });
+  }
+
+  void _subscribeSosRealtime() {
+    final group = _selected;
+    if (group == null) return;
+    try {
+      _sosChannel = _sos.subscribeGroup(
+        groupId: group.id,
+        onChange: () {
+          if (!mounted) return;
+          unawaited(_refreshActiveSos());
+        },
+      );
+    } catch (_) {
+      // Polling cubre el fallback.
+    }
+  }
+
+  Future<void> _refreshActiveSos() async {
+    final group = _selected;
+    if (group == null) {
+      if (mounted && _activeSos.isNotEmpty) {
+        setState(() => _activeSos = const []);
+      }
+      return;
+    }
+    try {
+      final list = await _sos.listActiveForGroup(group.id);
+      if (!mounted) return;
+      setState(() => _activeSos = list);
+    } catch (_) {
+      // Tabla aún no aplicada o red: no tumbar el mapa.
+    }
+  }
+
+  Future<void> _onSosPressed() async {
+    final group = _selected;
+    if (group == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosNeedGroup)),
+      );
+      return;
+    }
+    if (_sosSending) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.sosConfirmTitle),
+        content: Text(AppStrings.sosConfirmBody(group.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(AppStrings.sosCancelAction),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accentRed,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(AppStrings.sosConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _sosSending = true);
+    try {
+      double? lat;
+      double? lon;
+      try {
+        final granted = await _ensureOsPermission(
+          requestIfNeeded: true,
+          showFeedback: false,
+        );
+        if (granted && await Geolocator.isLocationServiceEnabled()) {
+          final pos = _lastAcceptedFix ??
+              await Geolocator.getCurrentPosition(
+                locationSettings: const LocationSettings(
+                  accuracy: LocationAccuracy.high,
+                  timeLimit: Duration(seconds: 8),
+                ),
+              );
+          lat = pos.latitude;
+          lon = pos.longitude;
+        }
+      } catch (_) {
+        // SOS sin coords sigue siendo válido.
+      }
+
+      await _sos.raise(groupId: group.id, lat: lat, lon: lon);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosSent)),
+      );
+      await _refreshActiveSos();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().contains('sos_events') ||
+              e.toString().contains('relation') ||
+              e.toString().contains('PGRST')
+          ? AppStrings.sosNeedMigration
+          : AppStrings.sosSendError;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    } finally {
+      if (mounted) setState(() => _sosSending = false);
+    }
+  }
+
+  Future<void> _cancelOwnSos(SosEvent event) async {
+    try {
+      await _sos.cancel(event.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosCancelled)),
+      );
+      await _refreshActiveSos();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosSendError)),
+      );
+    }
   }
 
   Future<void> _refreshMemberLocations() async {
@@ -899,21 +1045,51 @@ class _MapShellScreenState extends State<MapShellScreen>
         Positioned(
           right: 12,
           bottom: 56,
-          child: FloatingActionButton.small(
-            heroTag: 'map_my_location',
-            tooltip: AppStrings.mapMyLocationTooltip,
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.deepBlue,
-            onPressed: _locating
-                ? null
-                : () => _centerOnMyLocation(fromUser: true),
-            child: _locating
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.my_location),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton(
+                heroTag: 'map_sos',
+                tooltip: AppStrings.sosButtonTooltip,
+                backgroundColor: AppColors.accentRed,
+                foregroundColor: Colors.white,
+                onPressed: _sosSending ? null : _onSosPressed,
+                child: _sosSending
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        AppStrings.sosButtonLabel,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              FloatingActionButton.small(
+                heroTag: 'map_my_location',
+                tooltip: AppStrings.mapMyLocationTooltip,
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.deepBlue,
+                onPressed: _locating
+                    ? null
+                    : () => _centerOnMyLocation(fromUser: true),
+                child: _locating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+              ),
+            ],
           ),
         ),
         Positioned(
@@ -940,10 +1116,70 @@ class _MapShellScreenState extends State<MapShellScreen>
     );
   }
 
+  Widget? _buildSosBanner() {
+    if (_activeSos.isEmpty) return null;
+    final event = _activeSos.first;
+    final isSelf = event.userId == _myUid;
+    return Material(
+      color: AppColors.accentRed,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.white),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isSelf
+                    ? AppStrings.sosBannerSelf
+                    : AppStrings.sosBannerPeer(event.label),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            if (isSelf)
+              TextButton(
+                onPressed: () => _cancelOwnSos(event),
+                child: const Text(
+                  AppStrings.sosBannerDismissOwn,
+                  style: TextStyle(color: Colors.white),
+                ),
+              )
+            else
+              TextButton(
+                onPressed: () {
+                  final lat = event.lat;
+                  final lon = event.lon;
+                  final c = _mapController;
+                  if (lat == null || lon == null || c == null) return;
+                  unawaited(
+                    c.animateCamera(
+                      CameraUpdate.newLatLngZoom(
+                        LatLng(lat, lon),
+                        _myLocationZoom,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text(
+                  AppStrings.sosBannerAck,
+                  style: TextStyle(color: Colors.white),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final sosBanner = _buildSosBanner();
     return Column(
       children: [
+        ?sosBanner,
         Material(
           color: Colors.white,
           elevation: 1,
