@@ -19,7 +19,7 @@ class MapShellScreen extends StatefulWidget {
 }
 
 class _MapShellScreenState extends State<MapShellScreen> {
-  /// Bogotá — centro inicial hasta obtener la ubicación del dispositivo.
+  /// Bogotá — solo si no hay GPS disponible al abrir el mapa.
   static const _fallbackCamera = CameraPosition(
     target: LatLng(4.7110, -74.0721),
     zoom: 11,
@@ -36,6 +36,10 @@ class _MapShellScreenState extends State<MapShellScreen> {
   bool _locating = false;
   bool _osLocationGranted = false;
 
+  /// Cámara inicial resuelta (GPS o fallback). Null = aún obteniendo ubicación.
+  CameraPosition? _initialCamera;
+  bool _cameraResolved = false;
+
   bool _loading = true;
   String? _error;
   List<FamilyGroup> _groupsList = const [];
@@ -46,6 +50,8 @@ class _MapShellScreenState extends State<MapShellScreen> {
   @override
   void initState() {
     super.initState();
+    // Permiso + GPS en paralelo al cargar grupos; el mapa espera la cámara.
+    _resolveInitialCamera();
     _load();
   }
 
@@ -53,6 +59,43 @@ class _MapShellScreenState extends State<MapShellScreen> {
   void dispose() {
     _mapController = null;
     super.dispose();
+  }
+
+  /// Pide permiso OS al abrir el mapa y fija [initialCameraPosition] con GPS
+  /// si está disponible (sin esperar al FAB).
+  Future<void> _resolveInitialCamera() async {
+    CameraPosition camera = _fallbackCamera;
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        final granted = await _ensureOsPermission(
+          requestIfNeeded: true,
+          showFeedback: false,
+        );
+        if (granted) {
+          // lastKnown es inmediato; currentPosition refuerza si hace falta.
+          Position? pos = await Geolocator.getLastKnownPosition();
+          pos ??= await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+              timeLimit: Duration(seconds: 12),
+            ),
+          );
+          camera = CameraPosition(
+            target: LatLng(pos.latitude, pos.longitude),
+            zoom: _myLocationZoom,
+          );
+          _didAutoCenter = true;
+        }
+      }
+    } catch (_) {
+      camera = _fallbackCamera;
+    }
+    if (!mounted || _cameraResolved) return;
+    setState(() {
+      _initialCamera = camera;
+      _cameraResolved = true;
+    });
   }
 
   Future<void> _load() async {
@@ -92,7 +135,6 @@ class _MapShellScreenState extends State<MapShellScreen> {
         _myConsent = mine;
         _loading = false;
       });
-      // Tras cargar consentimiento: auto-centrar si ya aceptó compartir.
       _maybeAutoCenter();
     } catch (e) {
       if (!mounted) return;
@@ -145,16 +187,18 @@ class _MapShellScreenState extends State<MapShellScreen> {
     _maybeAutoCenter();
   }
 
-  /// Auto-centra solo si el usuario ya aceptó consentimiento (permiso se pidió ahí).
+  /// Si el mapa ya montó con fallback (o GPS llegó tarde), anima a la posición.
   void _maybeAutoCenter() {
     if (_didAutoCenter) return;
     if (!_styleReady || _mapController == null) return;
-    if (_myConsent?.isActive != true) return;
     _didAutoCenter = true;
     _centerOnMyLocation(fromUser: false);
   }
 
-  Future<bool> _ensureOsPermission({required bool requestIfNeeded}) async {
+  Future<bool> _ensureOsPermission({
+    required bool requestIfNeeded,
+    bool showFeedback = false,
+  }) async {
     var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied && requestIfNeeded) {
       permission = await Geolocator.requestPermission();
@@ -164,7 +208,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
     if (mounted && granted != _osLocationGranted) {
       setState(() => _osLocationGranted = granted);
     }
-    if (!granted && mounted && requestIfNeeded) {
+    if (!granted && mounted && showFeedback) {
       final forever = permission == LocationPermission.deniedForever;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -202,9 +246,10 @@ class _MapShellScreenState extends State<MapShellScreen> {
         return;
       }
 
-      // Auto: no vuelve a pedir el diálogo si el usuario saltó consentimiento.
-      // FAB: sí puede pedir permiso OS (centrar cámara local; no activa compartir).
-      final granted = await _ensureOsPermission(requestIfNeeded: fromUser);
+      final granted = await _ensureOsPermission(
+        requestIfNeeded: true,
+        showFeedback: fromUser,
+      );
       if (!granted) return;
 
       final pos = await Geolocator.getCurrentPosition(
@@ -233,6 +278,13 @@ class _MapShellScreenState extends State<MapShellScreen> {
   }
 
   Widget _buildMapPane(BuildContext context) {
+    if (!_cameraResolved || _initialCamera == null) {
+      return const ColoredBox(
+        color: Color(0xFFE8EEF4),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final styleUrl = Env.mapStyleUrl;
     final showMyLocation =
         _myConsent?.isActive == true || _osLocationGranted;
@@ -241,10 +293,9 @@ class _MapShellScreenState extends State<MapShellScreen> {
       children: [
         MapLibreMap(
           styleString: styleUrl,
-          initialCameraPosition: _fallbackCamera,
+          initialCameraPosition: _initialCamera!,
           compassEnabled: true,
-          // Punto azul: con consentimiento activo o tras usar «Mi ubicación».
-          // El permiso OS se pide en consentimiento (auto) o al pulsar el FAB.
+          // Punto azul: con consentimiento activo o permiso OS concedido.
           myLocationEnabled: showMyLocation,
           myLocationTrackingMode: MyLocationTrackingMode.none,
           trackCameraPosition: false,

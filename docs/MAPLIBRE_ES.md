@@ -8,8 +8,8 @@ Google Maps queda **pausado** (billing Cloud). Guía antigua: [`GOOGLE_MAPS_ES.m
 
 1. Copia `.env.example` → `.env` y rellena solo Supabase.
 2. `flutter pub get` → `flutter run` (o instala el APK debug).
-3. Tras login/consentimiento, la pestaña **Mapa** muestra un mapa real. Si aceptaste compartir, se centra en tu GPS; si no, arranca en Bogotá hasta que pulses **Mi ubicación**.
-4. FAB **Mi ubicación**: pide permiso OS si hace falta, obtiene coords con `geolocator` y anima la cámara.
+3. Tras login, la pestaña **Mapa** pide permiso de ubicación al abrir y arranca centrada en tu GPS (`initialCameraPosition`). Solo usa Bogotá si no hay GPS/permiso.
+4. FAB **Mi ubicación**: vuelve a centrar (pide permiso OS si hace falta) y anima la cámara.
 5. Etiqueta inferior: «MapLibre · estilo libre (sin clave)».
 6. Pines de familiares: **stub** (lista de integrantes debajo; coords en vivo más adelante).
 
