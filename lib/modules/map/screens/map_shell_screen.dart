@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -65,6 +66,8 @@ class _MapShellScreenState extends State<MapShellScreen> {
   RealtimeChannel? _realtimeChannel;
   bool _publishing = false;
   bool _syncingMarkers = false;
+  bool _markersDirty = false;
+  bool _didFitMembers = false;
 
   @override
   void initState() {
@@ -150,7 +153,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
         consentsBySharer = {
           for (final c in groupConsents) c.sharerId: c,
         };
-        locations = await _fetchLocationsMap(members);
+        locations = await _fetchLocationsMap(members, groupId: selected.id);
       }
       if (!mounted) return;
       setState(() {
@@ -161,6 +164,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
         _consentsBySharer = consentsBySharer;
         _locationsByUser = locations;
         _loading = false;
+        _didFitMembers = false;
       });
       _maybeAutoCenter();
       await _syncMarkers();
@@ -189,13 +193,15 @@ class _MapShellScreenState extends State<MapShellScreen> {
       final consentsBySharer = {
         for (final c in groupConsents) c.sharerId: c,
       };
-      final locations = await _fetchLocationsMap(members);
+      final locations =
+          await _fetchLocationsMap(members, groupId: group.id);
       if (!mounted) return;
       setState(() {
         _members = members;
         _myConsent = mine;
         _consentsBySharer = consentsBySharer;
         _locationsByUser = locations;
+        _didFitMembers = false;
       });
       _maybeAutoCenter();
       await _syncMarkers();
@@ -208,10 +214,17 @@ class _MapShellScreenState extends State<MapShellScreen> {
   }
 
   Future<Map<String, MemberLocation>> _fetchLocationsMap(
-    List<GroupMember> members,
-  ) async {
+    List<GroupMember> members, {
+    String? groupId,
+  }) async {
     final ids = members.map((m) => m.userId).toList();
-    final list = await _locationShare.fetchVisibleLocations(ids);
+    final gid = groupId ?? _selected?.id;
+    final list = gid == null
+        ? await _locationShare.fetchVisibleLocations(ids)
+        : await _locationShare.fetchGroupLocations(
+            groupId: gid,
+            memberIds: ids,
+          );
     return {for (final loc in list) loc.userId: loc};
   }
 
@@ -487,14 +500,94 @@ class _MapShellScreenState extends State<MapShellScreen> {
     }
   }
 
+  /// Separa pines casi coincidentes (~misma habitación) para que no se vean
+  /// como un solo punto.
+  Map<String, LatLng> _displayPositions(Map<String, MemberLocation> desired) {
+    final entries = desired.entries.toList();
+    final out = <String, LatLng>{
+      for (final e in entries) e.key: LatLng(e.value.lat, e.value.lon),
+    };
+    const mergeMeters = 25.0;
+    for (var i = 0; i < entries.length; i++) {
+      for (var j = i + 1; j < entries.length; j++) {
+        final a = entries[i].value;
+        final b = entries[j].value;
+        final dist = Geolocator.distanceBetween(a.lat, a.lon, b.lat, b.lon);
+        if (dist >= mergeMeters) continue;
+        // Desplaza el segundo ~35 m al NE en grados aprox.
+        final angle = (j * 2.2) % (2 * math.pi);
+        final dLat = (35 / 111320) * math.cos(angle);
+        final dLon =
+            (35 / (111320 * math.cos(b.lat * math.pi / 180).clamp(0.2, 1.0))) *
+                math.sin(angle);
+        out[entries[j].key] = LatLng(b.lat + dLat, b.lon + dLon);
+      }
+    }
+    return out;
+  }
+
+  Future<void> _fitToMemberLocations(Map<String, LatLng> positions) async {
+    final controller = _mapController;
+    if (controller == null || !_styleReady || positions.isEmpty) return;
+    if (positions.length == 1) {
+      final only = positions.values.first;
+      try {
+        await controller.animateCamera(
+          CameraUpdate.newLatLngZoom(only, _myLocationZoom),
+        );
+      } catch (_) {}
+      return;
+    }
+    var minLat = positions.values.first.latitude;
+    var maxLat = minLat;
+    var minLon = positions.values.first.longitude;
+    var maxLon = minLon;
+    for (final p in positions.values) {
+      minLat = math.min(minLat, p.latitude);
+      maxLat = math.max(maxLat, p.latitude);
+      minLon = math.min(minLon, p.longitude);
+      maxLon = math.max(maxLon, p.longitude);
+    }
+    // Padding mínimo si están muy juntos.
+    if ((maxLat - minLat).abs() < 0.0004) {
+      minLat -= 0.0005;
+      maxLat += 0.0005;
+    }
+    if ((maxLon - minLon).abs() < 0.0004) {
+      minLon -= 0.0005;
+      maxLon += 0.0005;
+    }
+    try {
+      await controller.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(minLat, minLon),
+            northeast: LatLng(maxLat, maxLon),
+          ),
+          left: 56,
+          top: 56,
+          right: 56,
+          bottom: 56,
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> _syncMarkers() async {
     final controller = _mapController;
-    if (controller == null || !_styleReady || _syncingMarkers) return;
+    if (controller == null || !_styleReady) return;
+    if (_syncingMarkers) {
+      _markersDirty = true;
+      return;
+    }
     if (!_markerImageReady) await _ensureMarkerImages();
 
     _syncingMarkers = true;
+    _markersDirty = false;
     try {
       final desired = Map<String, MemberLocation>.from(_locationsByUser);
+      final display = _displayPositions(desired);
+
       // Quitar marcadores obsoletos.
       final stale = _circlesByUser.keys
           .where((id) => !desired.containsKey(id))
@@ -518,8 +611,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
 
       for (final entry in desired.entries) {
         final userId = entry.key;
-        final loc = entry.value;
-        final geometry = LatLng(loc.lat, loc.lon);
+        final geometry = display[userId]!;
         final isSelf = userId == _myUid;
         final color = isSelf ? '#4DB6D4' : '#C62828';
         final label = nameById[userId] ??
@@ -531,9 +623,9 @@ class _MapShellScreenState extends State<MapShellScreen> {
             final circle = await controller.addCircle(
               CircleOptions(
                 geometry: geometry,
-                circleRadius: 10,
+                circleRadius: isSelf ? 10 : 12,
                 circleColor: color,
-                circleOpacity: 0.9,
+                circleOpacity: 0.92,
                 circleStrokeWidth: 2.5,
                 circleStrokeColor: '#FFFFFF',
               ),
@@ -544,7 +636,11 @@ class _MapShellScreenState extends State<MapShellScreen> {
           try {
             await controller.updateCircle(
               existingCircle,
-              CircleOptions(geometry: geometry, circleColor: color),
+              CircleOptions(
+                geometry: geometry,
+                circleColor: color,
+                circleRadius: isSelf ? 10 : 12,
+              ),
             );
           } catch (_) {}
         }
@@ -575,8 +671,16 @@ class _MapShellScreenState extends State<MapShellScreen> {
           } catch (_) {}
         }
       }
+
+      if (!_didFitMembers && display.length >= 2) {
+        _didFitMembers = true;
+        await _fitToMemberLocations(display);
+      }
     } finally {
       _syncingMarkers = false;
+      if (_markersDirty && mounted) {
+        unawaited(_syncMarkers());
+      }
     }
   }
 

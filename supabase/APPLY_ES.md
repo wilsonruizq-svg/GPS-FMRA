@@ -20,15 +20,47 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY** para pines en vivo: `REPLICA IDENTITY FULL` + publicación
       Realtime de `location_updates`. Sin esto el mapa puede seguir
       refrescando por polling, pero Realtime no entrega DELETE/UPDATE bien.)
+   6. `supabase/migrations/20261102240000_fix_peer_location_visibility.sql`
+      (**APPLY obligatorio si solo ves 1 pin** con 2 miembros + consentimiento:
+      endurece `can_view_location` / helpers con `row_security=off` y añade
+      RPC `list_group_locations` para que ambos pines sean visibles.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`.
 5. En **Database → Functions** confirma `accept_invitation(text)`,
    `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,
-   `exit_pin_is_required`, `verify_exit_pin`.
+   `exit_pin_is_required`, `verify_exit_pin`, `list_group_locations`,
+   `can_view_location`.
 6. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
 7. En **Database → Replication** (o Publication) confirma que
    `location_updates` está en `supabase_realtime`.
+
+## Diagnóstico rápido — solo 1 pin (2 miembros, 1 grupo)
+
+Con sesión de servicio / SQL Editor (como postgres), pega:
+
+```sql
+-- Cuenta membresías, consentimientos y fixes por grupo
+select
+  g.id as group_id,
+  g.name,
+  (select count(*) from group_memberships gm
+    where gm.group_id = g.id and gm.status = 'active') as members,
+  (select count(*) from location_consents lc
+    where lc.group_id = g.id and lc.scope = 'group' and lc.status = 'active') as active_consents,
+  (select count(*) from location_updates lu
+    join group_memberships gm on gm.user_id = lu.user_id
+     and gm.group_id = g.id and gm.status = 'active') as location_rows
+from family_groups g
+where g.status = 'active'
+order by g.created_at desc
+limit 10;
+```
+
+Esperado con 2 teléfonos compartiendo: `members >= 2`, `active_consents >= 2`,
+`location_rows >= 2`. Si `location_rows = 1`, el segundo teléfono aún no
+publicó GPS (abrir Mapa + permiso OS + consentimiento activo).
+Si `active_consents = 1`, el segundo debe ir a Consentimiento → Aceptar.
 
 ## Opción B — Supabase CLI
 
