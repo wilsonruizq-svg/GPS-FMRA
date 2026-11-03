@@ -7,6 +7,7 @@ import '../../auth/screens/login_shell_screen.dart';
 import '../../groups/exit_pin_service.dart';
 import '../../groups/widgets/exit_pin_dialog.dart';
 import '../../location/screens/consent_screen.dart';
+import '../../location/screens/location_history_screen.dart';
 import '../../profiles/profile_service.dart';
 import '../../profiles/screens/edit_profile_screen.dart';
 
@@ -138,6 +139,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const ConsentScreen(),
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.deepBlue.withValues(alpha: 0.1),
+                child: const Icon(
+                  Icons.timeline_outlined,
+                  color: AppColors.deepBlue,
+                ),
+              ),
+              title: const Text(AppStrings.settingsHistory),
+              subtitle: const Text(AppStrings.settingsHistorySubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const LocationHistoryScreen(),
                   ),
                 );
               },

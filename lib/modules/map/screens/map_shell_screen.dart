@@ -41,6 +41,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   /// ≥8 m, con piso de 5 s entre upserts.
   static const _publishHeartbeat = Duration(seconds: 8);
   static const _pollInterval = Duration(seconds: 15);
+  static const _sosPollInterval = Duration(seconds: 5);
   static const _consentCacheTtl = Duration(seconds: 45);
 
   final _groups = GroupsService();
@@ -75,6 +76,7 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   Timer? _publishTimer;
   Timer? _pollTimer;
+  Timer? _sosPollTimer;
   StreamSubscription<Position>? _positionSub;
   RealtimeChannel? _realtimeChannel;
   RealtimeChannel? _sosChannel;
@@ -438,6 +440,8 @@ class _MapShellScreenState extends State<MapShellScreen>
     _publishTimer = null;
     _pollTimer?.cancel();
     _pollTimer = null;
+    _sosPollTimer?.cancel();
+    _sosPollTimer = null;
     unawaited(_positionSub?.cancel());
     _positionSub = null;
   }
@@ -614,6 +618,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   void _restartRealtimeAndPoll() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _sosPollTimer?.cancel();
+    _sosPollTimer = null;
     _unsubscribeRealtime();
 
     if (_selected == null) {
@@ -664,6 +670,9 @@ class _MapShellScreenState extends State<MapShellScreen>
     _subscribeSosRealtime();
     _pollTimer = Timer.periodic(_pollInterval, (_) {
       unawaited(_refreshMemberLocations());
+    });
+    // SOS: poll corto para que el compañero vea el banner aunque Realtime falle.
+    _sosPollTimer = Timer.periodic(_sosPollInterval, (_) {
       unawaited(_refreshActiveSos());
     });
   }
@@ -757,21 +766,24 @@ class _MapShellScreenState extends State<MapShellScreen>
         // SOS sin coords sigue siendo válido.
       }
 
-      await _sos.raise(groupId: group.id, lat: lat, lon: lon);
+      final event = await _sos.raise(groupId: group.id, lat: lat, lon: lon);
       if (!mounted) return;
+      // Banner inmediato en este teléfono (sin esperar poll/Realtime).
+      setState(() {
+        _activeSos = [
+          event,
+          ..._activeSos.where((e) => e.id != event.id),
+        ];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.sosSent)),
+        SnackBar(
+          content: Text('${AppStrings.sosSent} ${AppStrings.sosPeerHint}'),
+        ),
       );
-      await _refreshActiveSos();
+      unawaited(_refreshActiveSos());
     } catch (e) {
       if (!mounted) return;
-      final raw = e.toString().toLowerCase();
-      final needsMigration = raw.contains('sos_events') ||
-          raw.contains('relation') ||
-          raw.contains('does not exist') ||
-          raw.contains('schema cache') ||
-          raw.contains('pgrst');
-      if (needsMigration) {
+      if (SosService.isMissingApiObject(e)) {
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
@@ -788,8 +800,15 @@ class _MapShellScreenState extends State<MapShellScreen>
           ),
         );
       } else {
+        final short = e.toString();
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text(AppStrings.sosSendError)),
+          SnackBar(
+            content: Text(
+              short.length > 160
+                  ? '${AppStrings.sosSendError} (${short.substring(0, 160)}…)'
+                  : '${AppStrings.sosSendError} ($short)',
+            ),
+          ),
         );
       }
     } finally {

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
@@ -49,6 +50,20 @@ class SosEvent {
     );
   }
 
+  SosEvent copyWith({String? displayName}) {
+    return SosEvent(
+      id: id,
+      groupId: groupId,
+      userId: userId,
+      status: status,
+      createdAt: createdAt,
+      lat: lat,
+      lon: lon,
+      note: note,
+      displayName: displayName ?? this.displayName,
+    );
+  }
+
   String get label {
     final n = displayName?.trim();
     if (n != null && n.isNotEmpty) return n;
@@ -63,7 +78,9 @@ class SosService {
   final SupabaseClient? _client;
   SupabaseClient get _sb => _client ?? supabase;
 
-  static const _select =
+  static const _selectPlain =
+      'id, group_id, user_id, lat, lon, note, status, created_at';
+  static const _selectWithProfile =
       'id, group_id, user_id, lat, lon, note, status, created_at, profiles(display_name)';
 
   String get _uid {
@@ -72,29 +89,118 @@ class SosService {
     return id;
   }
 
+  /// True si el error indica tabla/RPC ausente en el API (404 / schema cache).
+  static bool isMissingApiObject(Object error) {
+    final raw = error.toString().toLowerCase();
+    return raw.contains('could not find the table') ||
+        raw.contains('could not find the function') ||
+        raw.contains('schema cache') ||
+        raw.contains('pgrst205') ||
+        raw.contains('pgrst202') ||
+        (raw.contains('404') && raw.contains('sos')) ||
+        (raw.contains('relation') &&
+            raw.contains('sos_events') &&
+            raw.contains('does not exist'));
+  }
+
   /// Alertas activas del grupo (más recientes primero).
   Future<List<SosEvent>> listActiveForGroup(String groupId) async {
-    final rows = await _sb
-        .from('sos_events')
-        .select(_select)
-        .eq('group_id', groupId)
-        .eq('status', 'active')
-        .order('created_at', ascending: false)
-        .limit(20);
+    List rows;
+    try {
+      rows = await _sb
+          .from('sos_events')
+          .select(_selectWithProfile)
+          .eq('group_id', groupId)
+          .eq('status', 'active')
+          .order('created_at', ascending: false)
+          .limit(20) as List;
+    } catch (_) {
+      rows = await _sb
+          .from('sos_events')
+          .select(_selectPlain)
+          .eq('group_id', groupId)
+          .eq('status', 'active')
+          .order('created_at', ascending: false)
+          .limit(20) as List;
+    }
 
-    return (rows as List)
+    return rows
         .map((e) => SosEvent.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
   }
 
-  /// Registra SOS. [lat]/[lon] opcionales (si hay GPS).
-  /// Tras el insert intenta invocar Edge Function `notify-sos` (FCM).
+  /// Registra SOS. Prefiere RPC `raise_sos`; fallback INSERT directo.
   Future<SosEvent> raise({
     required String groupId,
     double? lat,
     double? lon,
     String? note,
   }) async {
+    SosEvent event;
+    try {
+      event = await _raiseViaRpc(
+        groupId: groupId,
+        lat: lat,
+        lon: lon,
+        note: note,
+      );
+    } catch (e) {
+      if (isMissingApiObject(e)) {
+        // Tabla/RPC no visibles en API → el caller muestra SQL de fix.
+        rethrow;
+      }
+      debugPrint('SosService.raise RPC falló, intento INSERT: $e');
+      event = await _raiseViaInsert(
+        groupId: groupId,
+        lat: lat,
+        lon: lon,
+        note: note,
+      );
+    }
+
+    // Nombre propio para el banner local.
+    final myName = _sb.auth.currentUser?.userMetadata?['display_name'] as String?;
+    if ((event.displayName == null || event.displayName!.isEmpty) &&
+        myName != null &&
+        myName.trim().isNotEmpty) {
+      event = event.copyWith(displayName: myName.trim());
+    }
+
+    unawaited(_notifyPeersBestEffort(event));
+    return event;
+  }
+
+  Future<SosEvent> _raiseViaRpc({
+    required String groupId,
+    double? lat,
+    double? lon,
+    String? note,
+  }) async {
+    final row = await _sb.rpc(
+      'raise_sos',
+      params: {
+        'p_group_id': groupId,
+        'p_lat': lat,
+        'p_lon': lon,
+        'p_note': note,
+      },
+    );
+    if (row is Map) {
+      return SosEvent.fromMap(Map<String, dynamic>.from(row));
+    }
+    if (row is List && row.isNotEmpty && row.first is Map) {
+      return SosEvent.fromMap(Map<String, dynamic>.from(row.first as Map));
+    }
+    throw StateError('raise_sos no devolvió fila.');
+  }
+
+  Future<SosEvent> _raiseViaInsert({
+    required String groupId,
+    double? lat,
+    double? lon,
+    String? note,
+  }) async {
+    // Sin embed profiles: evita fallos de FK/embed tras INSERT.
     final row = await _sb
         .from('sos_events')
         .insert({
@@ -105,11 +211,13 @@ class SosService {
           'note': note,
           'status': 'active',
         })
-        .select(_select)
+        .select(_selectPlain)
         .single();
 
-    final event = SosEvent.fromMap(row);
-    // Best-effort: push a compañeros. Si la función no está desplegada, no falla.
+    return SosEvent.fromMap(row);
+  }
+
+  Future<void> _notifyPeersBestEffort(SosEvent event) async {
     try {
       await _sb.functions.invoke(
         'notify-sos',
@@ -120,10 +228,9 @@ class SosService {
           'display_name': event.displayName,
         },
       );
-    } catch (_) {
-      // In-app banner / Realtime cubren el caso sin FCM.
+    } catch (e) {
+      debugPrint('SosService.notifyPeersBestEffort: $e');
     }
-    return event;
   }
 
   /// Cancela o resuelve una alerta propia (o admin vía RLS).
@@ -140,7 +247,9 @@ class SosService {
     required String groupId,
     required void Function() onChange,
   }) {
-    final channel = _sb.channel('sos_events:$groupId');
+    final channel = _sb.channel(
+      'sos_events_${groupId}_${DateTime.now().millisecondsSinceEpoch}',
+    );
     channel
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,

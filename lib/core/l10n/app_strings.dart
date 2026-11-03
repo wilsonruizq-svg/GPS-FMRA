@@ -178,8 +178,21 @@ abstract final class AppStrings {
   static const settingsSectionPrivacy = 'Privacidad';
   static const settingsSectionSession = 'Sesión';
   static const settingsSectionAbout = 'Información';
+  static const settingsHistory = 'Historial de ubicaciones';
+  static const settingsHistorySubtitle =
+      'Puntos recientes del grupo (con consentimiento)';
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
+
+  static const historyTitle = 'Historial';
+  static const historyConsentNote =
+      'Solo ves historial de quienes comparten contigo (consentimiento activo). '
+      'Tus puntos se guardan al compartir en el mapa. '
+      'SQL: 20261102272000_location_history.sql';
+  static const historyEmpty =
+      'Aún no hay puntos de historial visibles. '
+      'Comparte ubicación en el mapa unos minutos y aplica el SQL de historial '
+      'si aún no lo corriste.';
 
   static const exitPinTitle = 'PIN de salida';
   static const exitPinSetAction = 'Configurar PIN de salida';
@@ -229,6 +242,10 @@ abstract final class AppStrings {
   static const profileRemovePhoto = 'Quitar foto';
   static const profilePhotoFromGallery = 'Elegir de la galería';
   static const profilePhotoFromCamera = 'Tomar foto';
+  static const profilePhotoCropTitle = 'Ajustar foto';
+  static const profilePhotoCropHint =
+      'Mueve y recorta en cuadrado para que el rostro quede centrado.';
+  static const profilePhotoCropCancel = 'Foto cancelada.';
   static const profilePhotoUploaded = 'Foto de perfil actualizada.';
   static const profilePhotoStorageNote =
       'La foto aún no está activa en el servidor. En Supabase → SQL Editor '
@@ -267,20 +284,22 @@ abstract final class AppStrings {
   static const sosNeedGroup =
       'Elige o crea un grupo antes de enviar un SOS.';
   static const sosNeedMigration =
-      'El SOS aún no está activo en el servidor. Aplica la migración '
-      '20261102260000_sos_events.sql (SQL Editor → Success. No rows returned) '
-      'y vuelve a intentar.';
-  static const sosNeedMigrationTitle = 'Falta preparar SOS en Supabase';
+      'El API no ve la tabla sos_events (404). Aplica '
+      '20261102261000_sos_events_api_fix.sql en SQL Editor y reintenta.';
+  static const sosNeedMigrationTitle = 'SOS: falta activar en el API';
   static const sosNeedMigrationBody =
-      'El botón SOS ya está en la app, pero falta la tabla en la base de datos.\n\n'
+      'El botón SOS está en la app, pero el servidor responde 404 '
+      '(tabla no visible al API). Arreglo:\n\n'
       '1. Abre Supabase → SQL Editor → New query.\n'
-      '2. Pega todo el archivo '
-      'supabase/migrations/20261102260000_sos_events.sql\n'
-      '3. Run. Éxito esperado: Success. No rows returned.\n'
-      '4. (Opcional push) también '
-      '20261102270000_device_push_tokens.sql\n'
-      '5. Vuelve a pulsar SOS.\n\n'
-      'Guía: supabase/APPLY_ES.md';
+      '2. Pega TODO el archivo:\n'
+      '   supabase/migrations/20261102261000_sos_events_api_fix.sql\n'
+      '3. Run. Al final debes ver sos_events_ok = true.\n'
+      '4. Cierra sesión en la app o reiníciala y pulsa SOS otra vez.\n\n'
+      'Ese script crea la tabla si falta, da permisos GRANT y recarga '
+      'el schema cache (NOTIFY pgrst). No hace falta chat/FCM para el banner.';
+  static const sosPeerHint =
+      'Los compañeros verán un banner rojo en el mapa (app abierta). '
+      'Push FCM es opcional.';
   static String sosBannerPeer(String name) =>
       '¡SOS! $name necesita ayuda.';
   static const sosBannerSelf = 'Tu alerta SOS está activa.';

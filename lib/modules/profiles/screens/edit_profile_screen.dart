@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/l10n/app_strings.dart';
@@ -103,21 +106,54 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _pickAndUpload(ImageSource source) async {
     try {
+      // Captura a buena resolución; el recorte + AvatarCompress fijan ≤768.
       final file = await _picker.pickImage(
         source: source,
-        // Pre-redimensionado del picker; AvatarCompress afina a ≤768px JPEG.
-        maxWidth: AvatarCompress.maxEdge.toDouble(),
-        maxHeight: AvatarCompress.maxEdge.toDouble(),
-        imageQuality: AvatarCompress.jpegQuality,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 95,
       );
       if (file == null || !mounted) return;
+
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: file.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 92,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: AppStrings.profilePhotoCropTitle,
+            toolbarColor: AppColors.deepBlue,
+            toolbarWidgetColor: Colors.white,
+            activeControlsWidgetColor: AppColors.signalCyan,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+            cropStyle: CropStyle.circle,
+          ),
+          IOSUiSettings(
+            title: AppStrings.profilePhotoCropTitle,
+            aspectRatioLockEnabled: true,
+            resetAspectRatioEnabled: false,
+            aspectRatioPickerButtonHidden: true,
+            cropStyle: CropStyle.circle,
+          ),
+        ],
+      );
+      if (!mounted) return;
+      if (cropped == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStrings.profilePhotoCropCancel)),
+        );
+        return;
+      }
 
       setState(() {
         _saving = true;
         _error = null;
       });
 
-      final raw = await file.readAsBytes();
+      final raw = await File(cropped.path).readAsBytes();
       final compressed = AvatarCompress.compress(raw);
       final url = await _profiles.uploadOwnAvatar(bytes: compressed);
       if (!mounted) return;

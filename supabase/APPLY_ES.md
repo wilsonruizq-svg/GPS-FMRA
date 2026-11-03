@@ -38,6 +38,14 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY para push FCM:** tabla `device_push_tokens` + RPC
       `list_group_push_tokens`. Éxito esperado: **Success. No rows returned**.
       Guía Firebase: `docs/FCM_SOS_ES.md`.)
+   10. `supabase/migrations/20261102261000_sos_events_api_fix.sql`
+      (**APPLY si SOS da 404 / “tabla no visible”:** GRANT + RPC `raise_sos`
+      + `NOTIFY pgrst, 'reload schema'`. Al final debe verse
+      `sos_events_ok = true`. Guía: `docs/SOS_RETEST_ES.md`.)
+   11. `supabase/migrations/20261102272000_location_history.sql`
+      (**APPLY para historial GPS:** tabla `location_history` + RPC
+      `list_group_location_history`. Éxito: `location_history_ok = true`.
+      Guía: `docs/HISTORIAL_ES.md`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,
