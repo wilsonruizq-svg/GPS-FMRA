@@ -2,7 +2,7 @@
 //
 // Uso:
 //   dart run tool/generate_launcher_icons.dart
-//   dart run tool/generate_launcher_icons.dart --option a|b|c|d|b-rounded
+//   dart run tool/generate_launcher_icons.dart --option a|b|c|d|b-rounded|e|f|g
 //   dart run tool/generate_launcher_icons.dart --source path/to/logo.jpg
 //
 // NO finalizar launcher hasta confirmación de Wilson (ver docs/ICONO_OPCIONES_ES.md).
@@ -15,9 +15,8 @@ void main(List<String> args) {
   if (!logoPath.existsSync()) {
     stderr.writeln('Falta ${logoPath.path}');
     stderr.writeln(
-      'Opciones: --option a|b|c|d  o  --source <archivo>  '
-      '(default: assets/branding/logo-gps-fmra-v2.jpg — provisional; '
-      'opciones: a|b|c|d|b-rounded)',
+      'Opciones: --option a|b|b-rounded|c|d|e|f|g  o  --source <archivo>  '
+      '(default: assets/branding/logo-gps-fmra-v2.jpg — provisional)',
     );
     exit(1);
   }
@@ -157,7 +156,7 @@ String _resolveSource(List<String> args) {
       return _optionPath(a.substring('--option='.length));
     }
   }
-  // Provisional hasta que Wilson elija A/B/C/D.
+  // Provisional hasta que Wilson elija (E/F/G preferidos: squircle).
   return 'assets/branding/logo-gps-fmra-v2.jpg';
 }
 
@@ -169,17 +168,23 @@ String _optionPath(String raw) {
   // Alias: b_rounded / brownded → b-rounded
   key = key.replaceAll('_', '-');
   if (key == 'brounded') key = 'b-rounded';
+  if (key == 'pin') key = 'e';
+  if (key == 'radar') key = 'f';
+  if (key == 'monogram' || key == 'g-monogram') key = 'g';
   const map = {
     'a': 'assets/branding/icon-opciones/icon-opcion-a.jpg',
     'b': 'assets/branding/icon-opciones/icon-opcion-b.jpg',
     'b-rounded': 'assets/branding/icon-opciones/icon-opcion-b-rounded.jpg',
     'c': 'assets/branding/icon-opciones/icon-opcion-c.jpg',
     'd': 'assets/branding/icon-opciones/icon-opcion-d.jpg',
+    'e': 'assets/branding/icon-opciones/icon-e-pin.jpg',
+    'f': 'assets/branding/icon-opciones/icon-f-radar.jpg',
+    'g': 'assets/branding/icon-opciones/icon-g-monogram.jpg',
   };
   final path = map[key];
   if (path == null) {
     stderr.writeln(
-      'Opción no válida: $raw (usa a, b, b-rounded, c o d)',
+      'Opción no válida: $raw (usa a, b, b-rounded, c, d, e, f o g)',
     );
     exit(1);
   }

@@ -72,3 +72,8 @@ secrets/
 *.p12
 supabase/.temp/
 supabase/.branches/
+
+# Firebase service account (never commit)
+android/app/FIREBASE_SERVICE_ACCOUNT_JSON.json
+*-firebase-adminsdk-*.json
+
