@@ -2,10 +2,10 @@
 //
 // Uso:
 //   dart run tool/generate_launcher_icons.dart
-//   dart run tool/generate_launcher_icons.dart --option a|b|c|d
+//   dart run tool/generate_launcher_icons.dart --option a|b|c|d|b-rounded
 //   dart run tool/generate_launcher_icons.dart --source path/to/logo.jpg
 //
-// NO finalizar launcher hasta que Wilson elija A/B/C/D (ver docs/ICONO_OPCIONES_ES.md).
+// NO finalizar launcher hasta confirmación de Wilson (ver docs/ICONO_OPCIONES_ES.md).
 import 'dart:io';
 
 import 'package:image/image.dart' as img;
@@ -16,7 +16,8 @@ void main(List<String> args) {
     stderr.writeln('Falta ${logoPath.path}');
     stderr.writeln(
       'Opciones: --option a|b|c|d  o  --source <archivo>  '
-      '(default: assets/branding/logo-gps-fmra-v2.jpg — provisional)',
+      '(default: assets/branding/logo-gps-fmra-v2.jpg — provisional; '
+      'opciones: a|b|c|d|b-rounded)',
     );
     exit(1);
   }
@@ -161,19 +162,25 @@ String _resolveSource(List<String> args) {
 }
 
 String _optionPath(String raw) {
-  final key = raw.trim().toLowerCase();
-  final letter = key.length == 1
-      ? key
-      : key.replaceFirst(RegExp(r'^opcion[-_]?'), '').replaceFirst('option', '');
+  var key = raw.trim().toLowerCase();
+  key = key
+      .replaceFirst(RegExp(r'^opcion[-_]?'), '')
+      .replaceFirst(RegExp(r'^option[-_]?'), '');
+  // Alias: b_rounded / brownded → b-rounded
+  key = key.replaceAll('_', '-');
+  if (key == 'brounded') key = 'b-rounded';
   const map = {
     'a': 'assets/branding/icon-opciones/icon-opcion-a.jpg',
     'b': 'assets/branding/icon-opciones/icon-opcion-b.jpg',
+    'b-rounded': 'assets/branding/icon-opciones/icon-opcion-b-rounded.jpg',
     'c': 'assets/branding/icon-opciones/icon-opcion-c.jpg',
     'd': 'assets/branding/icon-opciones/icon-opcion-d.jpg',
   };
-  final path = map[letter];
+  final path = map[key];
   if (path == null) {
-    stderr.writeln('Opción no válida: $raw (usa a, b, c o d)');
+    stderr.writeln(
+      'Opción no válida: $raw (usa a, b, b-rounded, c o d)',
+    );
     exit(1);
   }
   return path;
