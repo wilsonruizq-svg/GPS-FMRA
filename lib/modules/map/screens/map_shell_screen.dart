@@ -86,10 +86,9 @@ class _MapShellScreenState extends State<MapShellScreen>
   bool _didFitMembers = false;
   bool _sosSending = false;
   List<SosEvent> _activeSos = const [];
-  /// SOS aceptados/ocultos solo en este dispositivo (no cancela al emisor).
-  /// Estático: sobrevive recreaciones del State en la misma sesión.
+  SosAckProgress? _sosAckProgress;
+  /// Receptores: ocultar tras Aceptar en este dispositivo (además del ack en servidor).
   static final Set<String> _sosDismissedLocally = <String>{};
-  /// Emisor oculto hasta un createdAt mayor (nuevo SOS del mismo user sí se muestra).
   static final Map<String, DateTime> _sosDismissedSenderAt = <String, DateTime>{};
   /// Invalida refrescos in-flight para que un poll viejo no resuscite el banner.
   int _sosRefreshEpoch = 0;
@@ -726,8 +725,11 @@ class _MapShellScreenState extends State<MapShellScreen>
   Future<void> _refreshActiveSos() async {
     final group = _selected;
     if (group == null) {
-      if (mounted && _activeSos.isNotEmpty) {
-        setState(() => _activeSos = const []);
+      if (mounted && (_activeSos.isNotEmpty || _sosAckProgress != null)) {
+        setState(() {
+          _activeSos = const [];
+          _sosAckProgress = null;
+        });
       }
       return;
     }
@@ -736,8 +738,53 @@ class _MapShellScreenState extends State<MapShellScreen>
       final list = await _sos.listActiveForGroup(group.id);
       if (!mounted || epoch != _sosRefreshEpoch) return;
       final named = _withMemberNames(list);
+      final myUid = _myUid;
+      final myAcked = await _sos.listMyAckedSosIds(named.map((e) => e.id));
+      if (!mounted || epoch != _sosRefreshEpoch) return;
+
+      // Emisor: siempre ve su SOS activo hasta que todos acepten (resolved).
+      // Receptor: oculta si ya dio Aceptar (servidor o local).
+      final visible = named.where((e) {
+        if (e.userId == myUid) return true;
+        if (_isSosHiddenLocally(e)) return false;
+        if (myAcked.contains(e.id.trim().toLowerCase())) return false;
+        return true;
+      }).toList();
+
+      SosAckProgress? progress;
+      final own = visible.where((e) => e.userId == myUid).toList();
+      if (own.isNotEmpty) {
+        try {
+          progress = await _sos.listAckProgress(own.first.id);
+          if (!mounted || epoch != _sosRefreshEpoch) return;
+          if (progress.allPeersAcked) {
+            await _sos.tryResolveIfAllAcked(own.first.id);
+            if (!mounted || epoch != _sosRefreshEpoch) return;
+            // Re-lista: debería desaparecer si quedó resolved.
+            final again = await _sos.listActiveForGroup(group.id);
+            if (!mounted || epoch != _sosRefreshEpoch) return;
+            final namedAgain = _withMemberNames(again);
+            setState(() {
+              _activeSos = namedAgain.where((e) {
+                if (e.userId == myUid) return true;
+                if (_isSosHiddenLocally(e)) return false;
+                if (myAcked.contains(e.id.trim().toLowerCase())) return false;
+                return true;
+              }).toList();
+              _sosAckProgress = _activeSos.any((e) => e.userId == myUid)
+                  ? progress
+                  : null;
+            });
+            return;
+          }
+        } catch (_) {
+          progress = null;
+        }
+      }
+
       setState(() {
-        _activeSos = named.where((e) => !_isSosHiddenLocally(e)).toList();
+        _activeSos = visible;
+        _sosAckProgress = progress;
       });
     } catch (_) {
       // Tabla aún no aplicada o red: no tumbar el mapa.
@@ -835,12 +882,15 @@ class _MapShellScreenState extends State<MapShellScreen>
       var event = await _sos.raise(groupId: group.id, lat: lat, lon: lon);
       if (!mounted) return;
       event = _withMemberNames([event]).first;
+      // Si no hay otros miembros, resuelve de inmediato.
+      unawaited(_sos.tryResolveIfAllAcked(event.id));
       // Banner inmediato en este teléfono (sin esperar poll/Realtime).
       setState(() {
         _activeSos = [
           event,
           ..._activeSos.where((e) => e.id != event.id),
         ];
+        _sosAckProgress = null;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -885,9 +935,9 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   Future<void> _cancelOwnSos(SosEvent event) async {
     _sosRefreshEpoch++;
-    _markSosDismissedLocally(event);
     setState(() {
-      _activeSos = _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
+      _activeSos = _activeSos.where((e) => e.id != event.id).toList();
+      if (_sosAckProgress?.sosId == event.id) _sosAckProgress = null;
     });
     try {
       await _sos.cancel(event.id);
@@ -1226,8 +1276,8 @@ class _MapShellScreenState extends State<MapShellScreen>
     );
   }
 
-  void _acceptSosLocally(SosEvent event) {
-    // Invalida poll/realtime in-flight para que no vuelvan a pintar este SOS.
+  Future<void> _acceptSosPeer(SosEvent event) async {
+    // Receptor: registra ack en servidor y oculta banner localmente.
     _sosRefreshEpoch++;
     _markSosDismissedLocally(event);
     setState(() {
@@ -1243,18 +1293,42 @@ class _MapShellScreenState extends State<MapShellScreen>
         ),
       );
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text(AppStrings.sosAcknowledged)),
-    );
+    try {
+      final allAcked = await _sos.acknowledge(event.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            allAcked
+                ? AppStrings.sosAcknowledgedAllDone
+                : AppStrings.sosAcknowledged,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosAckError)),
+      );
+    }
   }
 
   Widget? _buildSosBanner() {
-    final visible =
-        _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
+    final visible = _activeSos.where((e) {
+      if (e.userId == _myUid) return true;
+      return !_isSosHiddenLocally(e);
+    }).toList();
     if (visible.isEmpty) return null;
     final event = visible.first;
     final isSelf = event.userId == _myUid;
     final senderName = _sosSenderLabel(event);
+    final progress =
+        isSelf && _sosAckProgress?.sosId == event.id ? _sosAckProgress : null;
+    final pendingNames =
+        progress?.pendingPeers.map((m) => m.displayName).toList() ?? const [];
+    final acked = progress?.ackedCount ?? 0;
+    final expected = progress?.expectedCount ?? 0;
+
     return Material(
       color: AppColors.accentRed,
       child: Padding(
@@ -1281,35 +1355,50 @@ class _MapShellScreenState extends State<MapShellScreen>
                 ),
               ],
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: AppColors.accentRed,
-                      minimumSize: const Size.fromHeight(44),
-                    ),
-                    onPressed: () => _acceptSosLocally(event),
-                    child: const Text(
-                      AppStrings.sosBannerAck,
-                      style: TextStyle(fontWeight: FontWeight.w800),
-                    ),
+            if (isSelf) ...[
+              const SizedBox(height: 6),
+              Text(
+                expected == 0
+                    ? AppStrings.sosAckNoPeers
+                    : pendingNames.isEmpty
+                        ? AppStrings.sosAckWaitingResolve
+                        : AppStrings.sosAckPendingList(
+                            acked,
+                            expected,
+                            pendingNames,
+                          ),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => unawaited(_cancelOwnSos(event)),
+                  child: const Text(
+                    AppStrings.sosBannerDismissOwn,
+                    style: TextStyle(color: Colors.white),
                   ),
                 ),
-                if (isSelf) ...[
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () => _cancelOwnSos(event),
-                    child: const Text(
-                      AppStrings.sosBannerDismissOwn,
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ] else ...[
+              const SizedBox(height: 10),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppColors.accentRed,
+                  minimumSize: const Size.fromHeight(44),
+                ),
+                onPressed: () => unawaited(_acceptSosPeer(event)),
+                child: const Text(
+                  AppStrings.sosBannerAck,
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -297,17 +297,34 @@ abstract final class AppStrings {
       '4. Cierra sesión en la app o reiníciala y pulsa SOS otra vez.\n\n'
       'Ese script crea la tabla si falta, da permisos GRANT y recarga '
       'el schema cache (NOTIFY pgrst). No hace falta chat/FCM para el banner.';
-  static const sosPeerHint =
-      'Los compañeros verán un banner rojo en el mapa (app abierta). '
-      'Push FCM es opcional.';
   /// Exact banner title for peer SOS, e.g. "SOS de Wilson C".
   static String sosBannerPeer(String name) => 'SOS de $name';
   static String sosBannerSelfNamed(String name) => 'SOS de $name';
   static const sosBannerSelf = 'Tu alerta SOS está activa.';
   static const sosBannerDismissOwn = 'Cancelar alerta';
   static const sosBannerAck = 'Aceptar';
-  static const sosBannerAckHint = 'Oculta la alerta en este teléfono.';
-  static const sosAcknowledged = 'Alerta aceptada.';
+  static const sosBannerAckHint =
+      'Confirma que viste el SOS. El emisor espera a todo el grupo.';
+  static const sosAcknowledged = 'Alerta aceptada. El emisor verá tu confirmación.';
+  static const sosAcknowledgedAllDone =
+      'Alerta aceptada. Todos confirmaron: SOS cerrado.';
+  static const sosAckError =
+      'No se pudo registrar Aceptar. Revisa la conexión o aplica '
+      '20261102273000_sos_acks.sql.';
+  static const sosAckNoPeers =
+      'No hay otros integrantes en el grupo para confirmar.';
+  static const sosAckWaitingResolve = 'Todos aceptaron. Cerrando alerta…';
+  static String sosAckPendingList(
+    int acked,
+    int expected,
+    List<String> pendingNames,
+  ) {
+    final names = pendingNames.take(4).join(', ');
+    final more = pendingNames.length > 4
+        ? ' +${pendingNames.length - 4}'
+        : '';
+    return 'Confirmaciones $acked/$expected. Pendiente: $names$more';
+  }
   static const sosCancelled = 'Alerta SOS cancelada.';
   static const sosSending = 'Enviando alerta…';
   static const sosPushTitle = 'SOS — GPS-FMRA';
@@ -316,6 +333,8 @@ abstract final class AppStrings {
       'Alerta guardada. Push FCM aún no está activo en este teléfono '
       '(falta google-services.json / Firebase). Los compañeros la verán '
       'en la app si la tienen abierta.';
+  static const sosPeerHint =
+      'Los compañeros deben pulsar Aceptar. Tu alerta sigue hasta que todos confirmen.';
 
   static const navMap = 'Mapa';
   static const navGroups = 'Grupos';

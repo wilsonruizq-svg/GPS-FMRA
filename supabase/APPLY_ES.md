@@ -46,10 +46,15 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY para historial GPS:** tabla `location_history` + RPC
       `list_group_location_history`. Éxito: `location_history_ok = true`.
       Guía: `docs/HISTORIAL_ES.md`.)
+   12. `supabase/migrations/20261102273000_sos_acks.sql`
+      (**APPLY para Aceptar grupal:** tabla `sos_acks` + RPC `ack_sos` /
+      `list_sos_ack_progress`. El emisor ve pendientes; el SOS se resuelve
+      cuando todos los compañeros aceptan. Éxito: `sos_acks_ok = true`.
+      Guía: `docs/SOS_ACKS_ES.md`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,
-   `device_push_tokens`.
+   `device_push_tokens`, `sos_acks`.
 5. En **Storage → Buckets** confirma el bucket **`avatars`** (público).
 6. En **Database → Functions** confirma `accept_invitation(text)`,
    `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,

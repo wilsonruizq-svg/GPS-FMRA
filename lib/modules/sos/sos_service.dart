@@ -78,6 +78,48 @@ class SosEvent {
   }
 }
 
+/// Progreso de acuses Aceptar para un SOS (vista del emisor).
+class SosAckProgress {
+  const SosAckProgress({
+    required this.sosId,
+    required this.members,
+  });
+
+  final String sosId;
+  final List<SosAckMember> members;
+
+  /// Compañeros que deben aceptar (todos excepto el emisor).
+  List<SosAckMember> get expectedPeers =>
+      members.where((m) => !m.isSender).toList();
+
+  List<SosAckMember> get pendingPeers =>
+      expectedPeers.where((m) => !m.acked).toList();
+
+  List<SosAckMember> get ackedPeers =>
+      expectedPeers.where((m) => m.acked).toList();
+
+  int get expectedCount => expectedPeers.length;
+  int get ackedCount => ackedPeers.length;
+  bool get allPeersAcked =>
+      expectedCount == 0 || ackedCount >= expectedCount;
+}
+
+class SosAckMember {
+  const SosAckMember({
+    required this.userId,
+    required this.displayName,
+    required this.isSender,
+    required this.acked,
+    this.ackedAt,
+  });
+
+  final String userId;
+  final String displayName;
+  final bool isSender;
+  final bool acked;
+  final DateTime? ackedAt;
+}
+
 /// Crea y observa alertas SOS vía Supabase + push FCM (Edge Function).
 class SosService {
   SosService({this._client});
@@ -295,7 +337,84 @@ class SosService {
     }).eq('id', eventId);
   }
 
-  /// Canal Realtime de INSERT/UPDATE del grupo. Caller debe [unsubscribe].
+  /// Compañero pulsa Aceptar → registra ack; si todos aceptaron, resuelve el SOS.
+  Future<bool> acknowledge(String sosId) async {
+    final raw = await _sb.rpc('ack_sos', params: {'p_sos_id': sosId});
+    if (raw is Map) {
+      return raw['all_acked'] == true;
+    }
+    return false;
+  }
+
+  /// Si no hay otros miembros, resuelve de inmediato (todos = vacío).
+  Future<void> tryResolveIfAllAcked(String sosId) async {
+    try {
+      await _sb.rpc(
+        'try_resolve_sos_if_all_acked',
+        params: {'p_sos_id': sosId},
+      );
+    } catch (e) {
+      debugPrint('SosService.tryResolveIfAllAcked: $e');
+    }
+  }
+
+  /// Emisor: quién aceptó / quién falta.
+  Future<SosAckProgress> listAckProgress(String sosId) async {
+    final rows = await _sb.rpc(
+      'list_sos_ack_progress',
+      params: {'p_sos_id': sosId},
+    );
+    final members = <SosAckMember>[];
+    if (rows is List) {
+      for (final row in rows) {
+        if (row is! Map) continue;
+        final map = Map<String, dynamic>.from(row);
+        final ackedAtRaw = map['acked_at'] as String?;
+        members.add(
+          SosAckMember(
+            userId: '${map['user_id']}'.trim(),
+            displayName:
+                ((map['display_name'] as String?)?.trim().isNotEmpty == true)
+                    ? (map['display_name'] as String).trim()
+                    : 'Integrante',
+            isSender: map['is_sender'] == true,
+            acked: map['acked'] == true,
+            ackedAt: ackedAtRaw != null
+                ? DateTime.tryParse(ackedAtRaw)?.toUtc()
+                : null,
+          ),
+        );
+      }
+    }
+    return SosAckProgress(sosId: sosId, members: members);
+  }
+
+  /// Ids de SOS (de [sosIds]) que el usuario actual ya aceptó.
+  Future<Set<String>> listMyAckedSosIds(Iterable<String> sosIds) async {
+    final ids = sosIds
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    if (ids.isEmpty) return {};
+    try {
+      final rows = await _sb
+          .from('sos_acks')
+          .select('sos_id')
+          .eq('user_id', _uid)
+          .inFilter('sos_id', ids);
+      final out = <String>{};
+      for (final row in (rows as List)) {
+        final id = '${(row as Map)['sos_id']}'.trim().toLowerCase();
+        if (id.isNotEmpty && id != 'null') out.add(id);
+      }
+      return out;
+    } catch (e) {
+      debugPrint('SosService.listMyAckedSosIds: $e');
+      return {};
+    }
+  }
+
+  /// Canal Realtime de INSERT/UPDATE del grupo (+ acks). Caller debe [unsubscribe].
   RealtimeChannel subscribeGroup({
     required String groupId,
     required void Function() onChange,
@@ -324,6 +443,12 @@ class SosService {
             column: 'group_id',
             value: groupId,
           ),
+          callback: (_) => onChange(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'sos_acks',
           callback: (_) => onChange(),
         )
         .subscribe();
