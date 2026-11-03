@@ -86,6 +86,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   bool _didFitMembers = false;
   bool _sosSending = false;
   List<SosEvent> _activeSos = const [];
+  /// SOS aceptados/ocultos solo en este dispositivo (no cancela al emisor).
+  final Set<String> _sosDismissedLocally = {};
 
   Position? _lastAcceptedFix;
   Position? _lastPublishedFix;
@@ -704,7 +706,12 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       final list = await _sos.listActiveForGroup(group.id);
       if (!mounted) return;
-      setState(() => _activeSos = _withMemberNames(list));
+      final named = _withMemberNames(list);
+      setState(() {
+        _activeSos = named
+            .where((e) => !_sosDismissedLocally.contains(e.id))
+            .toList();
+      });
     } catch (_) {
       // Tabla aún no aplicada o red: no tumbar el mapa.
     }
@@ -1187,59 +1194,88 @@ class _MapShellScreenState extends State<MapShellScreen>
     );
   }
 
+  void _acceptSosLocally(SosEvent event) {
+    _sosDismissedLocally.add(event.id);
+    setState(() {
+      _activeSos = _activeSos.where((e) => e.id != event.id).toList();
+    });
+    final lat = event.lat;
+    final lon = event.lon;
+    final c = _mapController;
+    if (lat != null && lon != null && c != null) {
+      unawaited(
+        c.animateCamera(
+          CameraUpdate.newLatLngZoom(LatLng(lat, lon), _myLocationZoom),
+        ),
+      );
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(AppStrings.sosAcknowledged)),
+    );
+  }
+
   Widget? _buildSosBanner() {
-    if (_activeSos.isEmpty) return null;
-    final event = _activeSos.first;
+    final visible =
+        _activeSos.where((e) => !_sosDismissedLocally.contains(e.id)).toList();
+    if (visible.isEmpty) return null;
+    final event = visible.first;
     final isSelf = event.userId == _myUid;
     final senderName = _sosSenderLabel(event);
     return Material(
       color: AppColors.accentRed,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: Row(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.white),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                isSelf
-                    ? AppStrings.sosBannerSelfNamed(senderName)
-                    : AppStrings.sosBannerPeer(senderName),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            if (isSelf)
-              TextButton(
-                onPressed: () => _cancelOwnSos(event),
-                child: const Text(
-                  AppStrings.sosBannerDismissOwn,
-                  style: TextStyle(color: Colors.white),
-                ),
-              )
-            else
-              TextButton(
-                onPressed: () {
-                  final lat = event.lat;
-                  final lon = event.lon;
-                  final c = _mapController;
-                  if (lat == null || lon == null || c == null) return;
-                  unawaited(
-                    c.animateCamera(
-                      CameraUpdate.newLatLngZoom(
-                        LatLng(lat, lon),
-                        _myLocationZoom,
-                      ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isSelf
+                        ? AppStrings.sosBannerSelfNamed(senderName)
+                        : AppStrings.sosBannerPeer(senderName),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
                     ),
-                  );
-                },
-                child: const Text(
-                  AppStrings.sosBannerAck,
-                  style: TextStyle(color: Colors.white),
+                  ),
                 ),
-              ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.accentRed,
+                      minimumSize: const Size.fromHeight(44),
+                    ),
+                    onPressed: () => _acceptSosLocally(event),
+                    child: const Text(
+                      AppStrings.sosBannerAck,
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                ),
+                if (isSelf) ...[
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => _cancelOwnSos(event),
+                    child: const Text(
+                      AppStrings.sosBannerDismissOwn,
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),

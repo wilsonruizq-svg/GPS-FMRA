@@ -306,7 +306,9 @@ abstract final class AppStrings {
       'Tu alerta SOS está activa ($name).';
   static const sosBannerSelf = 'Tu alerta SOS está activa.';
   static const sosBannerDismissOwn = 'Cancelar alerta';
-  static const sosBannerAck = 'Entendido';
+  static const sosBannerAck = 'Aceptar';
+  static const sosBannerAckHint = 'Oculta la alerta en este teléfono.';
+  static const sosAcknowledged = 'Alerta aceptada.';
   static const sosCancelled = 'Alerta SOS cancelada.';
   static const sosSending = 'Enviando alerta…';
   static const sosPushTitle = 'SOS — GPS-FMRA';
