@@ -76,12 +76,12 @@ Prueba con dos cuentas: [`docs/INVITACIONES_PRUEBA_ES.md`](docs/INVITACIONES_PRU
 |----------|----------|
 | Auth | Registro/login email-password; perfil vía trigger + fallback |
 | Consentimiento | Explica compartir; Aceptar / Pausar; pide permiso de ubicación en contexto |
-| Mapa | `MapLibreMap` (OpenFreeMap / demotiles / MapTiler); pines stub |
+| Mapa | `MapLibreMap` + pines de miembros con consentimiento (`location_updates`) |
 | Grupos | Crear/seleccionar grupo, invitar (hash/un uso/caducidad), unirse con código |
 | Tarjeta miembro | Nombre, rol, estado de compartir |
 | Ajustes | Perfil, privacidad, cerrar sesión |
 
-**No incluido:** chat, SOS, WebRTC, mapas offline, pines en vivo. Google Maps pausado por billing; mapa online = MapLibre.
+**No incluido:** chat, SOS, WebRTC, mapas offline. Google Maps pausado por billing; mapa online = MapLibre.
 
 ## Análisis
 

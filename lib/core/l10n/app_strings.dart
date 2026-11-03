@@ -68,6 +68,12 @@ abstract final class AppStrings {
   static const mapLocationError =
       'No se pudo obtener tu ubicación. Inténtalo de nuevo.';
   static const mapOpenSettings = 'Abrir ajustes';
+  static const mapMarkerYou = 'Tú';
+  static const mapMarkerMember = 'Integrante';
+  static const memberShareActiveNoFix =
+      'Compartiendo (sin señal reciente)';
+  static String memberLastUpdateAt(String time) =>
+      'Última actualización: $time';
 
   static const groupsTitle = 'Grupos';
   static const groupsEmpty =

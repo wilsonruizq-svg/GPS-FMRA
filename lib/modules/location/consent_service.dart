@@ -77,6 +77,21 @@ class ConsentService {
         .toList();
   }
 
+  /// Consentimientos de alcance grupo visibles para el miembro (RLS de grupo).
+  Future<List<LocationConsent>> listGroupConsents(String groupId) async {
+    final rows = await _sb
+        .from('location_consents')
+        .select('id, sharer_id, scope, status, group_id, viewer_id')
+        .eq('group_id', groupId)
+        .eq('scope', 'group');
+
+    return (rows as List)
+        .map(
+          (e) => LocationConsent.fromMap(Map<String, dynamic>.from(e as Map)),
+        )
+        .toList();
+  }
+
   /// Activa consentimiento de alcance grupo (upsert por índice único).
   Future<void> acceptShareWithGroup(String groupId) async {
     final existing = await _sb

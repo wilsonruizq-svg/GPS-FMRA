@@ -1,16 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/config/env.dart';
 import '../../../core/l10n/app_strings.dart';
+import '../../../core/supabase/supabase_bootstrap.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
+import '../../location/location_share_service.dart';
 
-/// Shell del mapa: MapLibre (estilo libre / MapTiler) + lista de integrantes.
-/// Los pines de familiares quedan stub (coords en tiempo real: GPS-18).
+/// Shell del mapa: MapLibre + pines de integrantes con consentimiento activo.
 class MapShellScreen extends StatefulWidget {
   const MapShellScreen({super.key});
 
@@ -26,15 +30,19 @@ class _MapShellScreenState extends State<MapShellScreen> {
   );
 
   static const _myLocationZoom = 15.0;
+  static const _publishInterval = Duration(seconds: 20);
+  static const _pollInterval = Duration(seconds: 25);
 
   final _groups = GroupsService();
   final _consent = ConsentService();
+  final _locationShare = LocationShareService();
 
   MapLibreMapController? _mapController;
   bool _styleReady = false;
   bool _didAutoCenter = false;
   bool _locating = false;
   bool _osLocationGranted = false;
+  bool _markerImageReady = false;
 
   /// Cámara inicial resuelta (GPS o fallback). Null = aún obteniendo ubicación.
   CameraPosition? _initialCamera;
@@ -46,17 +54,29 @@ class _MapShellScreenState extends State<MapShellScreen> {
   FamilyGroup? _selected;
   List<GroupMember> _members = const [];
   LocationConsent? _myConsent;
+  Map<String, LocationConsent> _consentsBySharer = {};
+  Map<String, MemberLocation> _locationsByUser = {};
+
+  final Map<String, Circle> _circlesByUser = {};
+  final Map<String, Symbol> _labelsByUser = {};
+
+  Timer? _publishTimer;
+  Timer? _pollTimer;
+  RealtimeChannel? _realtimeChannel;
+  bool _publishing = false;
+  bool _syncingMarkers = false;
 
   @override
   void initState() {
     super.initState();
-    // Permiso + GPS en paralelo al cargar grupos; el mapa espera la cámara.
     _resolveInitialCamera();
     _load();
   }
 
   @override
   void dispose() {
+    _stopSharingLoop();
+    _unsubscribeRealtime();
     _mapController = null;
     super.dispose();
   }
@@ -73,7 +93,6 @@ class _MapShellScreenState extends State<MapShellScreen> {
           showFeedback: false,
         );
         if (granted) {
-          // lastKnown es inmediato; currentPosition refuerza si hace falta.
           Position? pos = await Geolocator.getLastKnownPosition();
           pos ??= await Geolocator.getCurrentPosition(
             locationSettings: const LocationSettings(
@@ -105,7 +124,6 @@ class _MapShellScreenState extends State<MapShellScreen> {
     });
     try {
       final groups = await _groups.listMyGroups();
-      // Reselect by id from the fresh list so DropdownButton value ∈ items.
       final previousId = _selected?.id;
       FamilyGroup? selected;
       if (previousId != null) {
@@ -119,13 +137,20 @@ class _MapShellScreenState extends State<MapShellScreen> {
       selected ??= groups.isNotEmpty ? groups.first : null;
       List<GroupMember> members = const [];
       LocationConsent? mine;
+      Map<String, LocationConsent> consentsBySharer = {};
+      Map<String, MemberLocation> locations = {};
       if (selected != null) {
         members = await _groups.listMembers(selected.id);
-        final consents = await _consent.listOwnGroupConsents();
-        mine = consents.cast<LocationConsent?>().firstWhere(
+        final ownConsents = await _consent.listOwnGroupConsents();
+        mine = ownConsents.cast<LocationConsent?>().firstWhere(
               (c) => c?.groupId == selected!.id,
               orElse: () => null,
             );
+        final groupConsents = await _consent.listGroupConsents(selected.id);
+        consentsBySharer = {
+          for (final c in groupConsents) c.sharerId: c,
+        };
+        locations = await _fetchLocationsMap(members);
       }
       if (!mounted) return;
       setState(() {
@@ -133,9 +158,14 @@ class _MapShellScreenState extends State<MapShellScreen> {
         _selected = selected;
         _members = members;
         _myConsent = mine;
+        _consentsBySharer = consentsBySharer;
+        _locationsByUser = locations;
         _loading = false;
       });
       _maybeAutoCenter();
+      await _syncMarkers();
+      _restartSharingLoop();
+      _restartRealtimeAndPoll();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -150,41 +180,96 @@ class _MapShellScreenState extends State<MapShellScreen> {
     setState(() => _selected = group);
     try {
       final members = await _groups.listMembers(group.id);
-      final consents = await _consent.listOwnGroupConsents();
-      final mine = consents.cast<LocationConsent?>().firstWhere(
+      final ownConsents = await _consent.listOwnGroupConsents();
+      final mine = ownConsents.cast<LocationConsent?>().firstWhere(
             (c) => c?.groupId == group.id,
             orElse: () => null,
           );
+      final groupConsents = await _consent.listGroupConsents(group.id);
+      final consentsBySharer = {
+        for (final c in groupConsents) c.sharerId: c,
+      };
+      final locations = await _fetchLocationsMap(members);
       if (!mounted) return;
       setState(() {
         _members = members;
         _myConsent = mine;
+        _consentsBySharer = consentsBySharer;
+        _locationsByUser = locations;
       });
       _maybeAutoCenter();
+      await _syncMarkers();
+      _restartSharingLoop();
+      _restartRealtimeAndPoll();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
     }
   }
 
+  Future<Map<String, MemberLocation>> _fetchLocationsMap(
+    List<GroupMember> members,
+  ) async {
+    final ids = members.map((m) => m.userId).toList();
+    final list = await _locationShare.fetchVisibleLocations(ids);
+    return {for (final loc in list) loc.userId: loc};
+  }
+
+  String get _myUid => supabase.auth.currentUser?.id ?? '';
+
   String _shareFor(GroupMember m) {
-    // Stub: solo sabemos el consentimiento propio con detalle.
-    if (_myConsent != null &&
-        _myConsent!.isActive &&
-        m.userId == _myConsent!.sharerId) {
-      return AppStrings.memberShareActive;
+    final c = _consentsBySharer[m.userId];
+    if (m.userId == _myUid) {
+      if (_myConsent?.isActive == true) return AppStrings.memberShareActive;
+      if (_myConsent?.isPaused == true) return AppStrings.memberSharePaused;
+      if (_myConsent?.status == 'revoked') return AppStrings.memberShareRevoked;
+      return AppStrings.memberShareNone;
     }
+    if (c == null) return AppStrings.memberShareUnknown;
+    if (c.isActive) {
+      return _locationsByUser.containsKey(m.userId)
+          ? AppStrings.memberShareActive
+          : AppStrings.memberShareActiveNoFix;
+    }
+    if (c.isPaused) return AppStrings.memberSharePaused;
+    if (c.status == 'revoked') return AppStrings.memberShareRevoked;
     return AppStrings.memberShareUnknown;
+  }
+
+  String _lastUpdateFor(GroupMember m) {
+    final loc = _locationsByUser[m.userId];
+    if (loc == null) return AppStrings.memberLastUpdateUnknown;
+    return AppStrings.memberLastUpdateAt(_formatClock(loc.recordedAt.toLocal()));
+  }
+
+  String _formatClock(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$h:$min';
   }
 
   void _onMapCreated(MapLibreMapController controller) {
     _mapController = controller;
   }
 
-  void _onStyleLoaded() {
+  Future<void> _onStyleLoaded() async {
     _styleReady = true;
-    // Stub de pines: GPS-18 añadirá GeoJSON / anotaciones vía controller.
+    _markerImageReady = false;
+    await _ensureMarkerImages();
     _maybeAutoCenter();
+    await _syncMarkers();
+  }
+
+  Future<void> _ensureMarkerImages() async {
+    final controller = _mapController;
+    if (controller == null || !_styleReady) return;
+    try {
+      await controller.setSymbolIconAllowOverlap(true);
+      await controller.setSymbolTextAllowOverlap(true);
+      _markerImageReady = true;
+    } catch (_) {
+      _markerImageReady = true;
+    }
   }
 
   /// Si el mapa ya montó con fallback (o GPS llegó tarde), anima a la posición.
@@ -277,6 +362,224 @@ class _MapShellScreenState extends State<MapShellScreen> {
     }
   }
 
+  // --- Publicar / refrescar / Realtime ------------------------------------
+
+  void _stopSharingLoop() {
+    _publishTimer?.cancel();
+    _publishTimer = null;
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  void _unsubscribeRealtime() {
+    final ch = _realtimeChannel;
+    _realtimeChannel = null;
+    if (ch != null) {
+      unawaited(supabase.removeChannel(ch));
+    }
+  }
+
+  void _restartSharingLoop() {
+    _publishTimer?.cancel();
+    _publishTimer = null;
+    final group = _selected;
+    if (group == null || _myConsent?.isActive != true) return;
+
+    unawaited(_publishOnce());
+    _publishTimer = Timer.periodic(_publishInterval, (_) {
+      unawaited(_publishOnce());
+    });
+  }
+
+  void _restartRealtimeAndPoll() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _unsubscribeRealtime();
+
+    if (_selected == null || _members.isEmpty) return;
+
+    try {
+      _realtimeChannel = _locationShare.subscribeLocationUpdates(
+        onChange: (loc) {
+          if (!mounted) return;
+          final memberIds = _members.map((m) => m.userId).toSet();
+          if (!memberIds.contains(loc.userId)) return;
+          setState(() {
+            _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
+              ..[loc.userId] = loc;
+          });
+          unawaited(_syncMarkers());
+        },
+        onDelete: (userId) {
+          if (!mounted) return;
+          setState(() {
+            _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
+              ..remove(userId);
+          });
+          unawaited(_syncMarkers());
+        },
+      );
+    } catch (_) {
+      // Fallback: solo polling.
+    }
+
+    unawaited(_refreshMemberLocations());
+    _pollTimer = Timer.periodic(_pollInterval, (_) {
+      unawaited(_refreshMemberLocations());
+    });
+  }
+
+  Future<void> _publishOnce() async {
+    if (_publishing) return;
+    final group = _selected;
+    if (group == null) return;
+    _publishing = true;
+    try {
+      final allowed = await _locationShare.canPublishForGroup(group.id);
+      if (!allowed) return;
+
+      final granted = await _ensureOsPermission(
+        requestIfNeeded: false,
+        showFeedback: false,
+      );
+      if (!granted) return;
+
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      await _locationShare.publishPosition(pos);
+
+      if (!mounted) return;
+      final self = MemberLocation(
+        userId: _myUid,
+        lat: pos.latitude,
+        lon: pos.longitude,
+        recordedAt: DateTime.now().toUtc(),
+        accuracyM: pos.accuracy.isFinite ? pos.accuracy : null,
+      );
+      setState(() {
+        _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
+          ..[self.userId] = self;
+      });
+      await _syncMarkers();
+    } catch (_) {
+      // Silencioso: no romper UI si falla un ciclo de publicación.
+    } finally {
+      _publishing = false;
+    }
+  }
+
+  Future<void> _refreshMemberLocations() async {
+    if (_members.isEmpty) return;
+    try {
+      final locations = await _fetchLocationsMap(_members);
+      if (!mounted) return;
+      setState(() => _locationsByUser = locations);
+      await _syncMarkers();
+    } catch (_) {
+      // Silencioso en poll.
+    }
+  }
+
+  Future<void> _syncMarkers() async {
+    final controller = _mapController;
+    if (controller == null || !_styleReady || _syncingMarkers) return;
+    if (!_markerImageReady) await _ensureMarkerImages();
+
+    _syncingMarkers = true;
+    try {
+      final desired = Map<String, MemberLocation>.from(_locationsByUser);
+      // Quitar marcadores obsoletos.
+      final stale = _circlesByUser.keys
+          .where((id) => !desired.containsKey(id))
+          .toList();
+      for (final id in stale) {
+        final circle = _circlesByUser.remove(id);
+        final label = _labelsByUser.remove(id);
+        if (circle != null) {
+          try {
+            await controller.removeCircle(circle);
+          } catch (_) {}
+        }
+        if (label != null) {
+          try {
+            await controller.removeSymbol(label);
+          } catch (_) {}
+        }
+      }
+
+      final nameById = {for (final m in _members) m.userId: m.label};
+
+      for (final entry in desired.entries) {
+        final userId = entry.key;
+        final loc = entry.value;
+        final geometry = LatLng(loc.lat, loc.lon);
+        final isSelf = userId == _myUid;
+        final color = isSelf ? '#4DB6D4' : '#C62828';
+        final label = nameById[userId] ??
+            (isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember);
+
+        final existingCircle = _circlesByUser[userId];
+        if (existingCircle == null) {
+          try {
+            final circle = await controller.addCircle(
+              CircleOptions(
+                geometry: geometry,
+                circleRadius: 10,
+                circleColor: color,
+                circleOpacity: 0.9,
+                circleStrokeWidth: 2.5,
+                circleStrokeColor: '#FFFFFF',
+              ),
+            );
+            _circlesByUser[userId] = circle;
+          } catch (_) {}
+        } else {
+          try {
+            await controller.updateCircle(
+              existingCircle,
+              CircleOptions(geometry: geometry, circleColor: color),
+            );
+          } catch (_) {}
+        }
+
+        final existingLabel = _labelsByUser[userId];
+        if (existingLabel == null) {
+          try {
+            final symbol = await controller.addSymbol(
+              SymbolOptions(
+                geometry: geometry,
+                textField: label,
+                textSize: 12,
+                textColor: '#0B2A4A',
+                textHaloColor: '#FFFFFF',
+                textHaloWidth: 1.4,
+                textOffset: const Offset(0, 1.4),
+                textAnchor: 'top',
+              ),
+            );
+            _labelsByUser[userId] = symbol;
+          } catch (_) {}
+        } else {
+          try {
+            await controller.updateSymbol(
+              existingLabel,
+              SymbolOptions(geometry: geometry, textField: label),
+            );
+          } catch (_) {}
+        }
+      }
+    } finally {
+      _syncingMarkers = false;
+    }
+  }
+
   Widget _buildMapPane(BuildContext context) {
     if (!_cameraResolved || _initialCamera == null) {
       return const ColoredBox(
@@ -295,12 +598,13 @@ class _MapShellScreenState extends State<MapShellScreen> {
           styleString: styleUrl,
           initialCameraPosition: _initialCamera!,
           compassEnabled: true,
-          // Punto azul: con consentimiento activo o permiso OS concedido.
           myLocationEnabled: showMyLocation,
           myLocationTrackingMode: MyLocationTrackingMode.none,
           trackCameraPosition: false,
           onMapCreated: _onMapCreated,
-          onStyleLoadedCallback: _onStyleLoaded,
+          onStyleLoadedCallback: () {
+            unawaited(_onStyleLoaded());
+          },
         ),
         Positioned(
           right: 12,
@@ -445,9 +749,22 @@ class _MapShellScreenState extends State<MapShellScreen> {
                               final m = _members[i];
                               return MemberCard(
                                 name: m.label,
+                                isSelf: m.userId == _myUid,
                                 shareStatusLabel: _shareFor(m),
-                                lastUpdateLabel:
-                                    AppStrings.memberLastUpdateUnknown,
+                                lastUpdateLabel: _lastUpdateFor(m),
+                                onTap: () {
+                                  final loc = _locationsByUser[m.userId];
+                                  final c = _mapController;
+                                  if (loc == null || c == null) return;
+                                  unawaited(
+                                    c.animateCamera(
+                                      CameraUpdate.newLatLngZoom(
+                                        LatLng(loc.lat, loc.lon),
+                                        _myLocationZoom,
+                                      ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),

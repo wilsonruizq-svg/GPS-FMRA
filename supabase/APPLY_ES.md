@@ -16,6 +16,10 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    4. `supabase/migrations/20261102220000_group_exit_pin.sql`
       (PIN de salida del grupo: columnas + RPCs bcrypt. Obligatorio para
       que “Cerrar sesión” / Atrás pidan PIN.)
+   5. `supabase/migrations/20261102230000_location_share_realtime.sql`
+      (**APPLY** para pines en vivo: `REPLICA IDENTITY FULL` + publicación
+      Realtime de `location_updates`. Sin esto el mapa puede seguir
+      refrescando por polling, pero Realtime no entrega DELETE/UPDATE bien.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`.
@@ -23,6 +27,8 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,
    `exit_pin_is_required`, `verify_exit_pin`.
 6. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
+7. En **Database → Replication** (o Publication) confirma que
+   `location_updates` está en `supabase_realtime`.
 
 ## Opción B — Supabase CLI
 
