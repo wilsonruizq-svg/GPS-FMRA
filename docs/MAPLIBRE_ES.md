@@ -7,7 +7,7 @@ Google Maps queda **pausado** (billing Cloud). Guía antigua: [`GOOGLE_MAPS_ES.m
 ## Qué verás sin configurar nada
 
 1. Copia `.env.example` → `.env` y rellena solo Supabase.
-2. `flutter pub get` → `flutter run` (o instala el APK debug).
+2. `flutter pub get` → `flutter run` (o instala el APK debug desde `APK\gps-fmra-debug.apk`).
 3. Tras login, la pestaña **Mapa** pide permiso de ubicación al abrir y arranca centrada en tu GPS (`initialCameraPosition`). Solo usa Bogotá si no hay GPS/permiso.
 4. FAB **Mi ubicación**: vuelve a centrar (pide permiso OS si hace falta) y anima la cámara.
 5. Etiqueta inferior: «MapLibre · estilo libre (sin clave)».
@@ -41,7 +41,7 @@ Orden de resolución en código (`Env.mapStyleUrl`):
 MAPTILER_API_KEY=tu_clave_maptiler
 ```
 
-Luego reinicia la app (`flutter run` o reinstala el APK).
+Luego reinicia la app (`flutter run` o reinstala el APK de `APK\`).
 
 ## Requisitos de build
 
