@@ -135,12 +135,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _saving = false;
         _error = e.message;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
+      final raw = e.toString().toLowerCase();
+      final needsApply = raw.contains('bucket') ||
+          raw.contains('avatars') ||
+          raw.contains('storage') ||
+          raw.contains('404') ||
+          raw.contains('not found') ||
+          raw.contains('row-level security') ||
+          raw.contains('policy') ||
+          raw.contains('permission');
       setState(() {
         _saving = false;
         _error = AppStrings.profilePhotoUploadError;
+        if (needsApply) {
+          _storageReady = false;
+        }
       });
+      if (needsApply) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text(AppStrings.profilePhotoApplyTitle),
+            content: const SingleChildScrollView(
+              child: Text(AppStrings.profilePhotoApplyBody),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(AppStrings.close),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 

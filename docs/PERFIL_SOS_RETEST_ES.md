@@ -3,19 +3,23 @@
 Tras APPLY de migraciones (ver `supabase/APPLY_ES.md` ítems 7–9) e instalar
 `APK\gps-fmra-debug-01.apk` / `02`.
 
-## SQL (Dashboard → SQL Editor)
+## SQL exacto para Wilson (Dashboard → SQL Editor)
 
-Ejecutar si aún no:
+Pegar **todo el contenido** de cada archivo → **Run**, en este orden:
 
 1. `supabase/migrations/20261102250000_avatars_storage.sql`  
+   → foto de perfil (bucket `avatars`)  
    Éxito: **Success. No rows returned** (o Success con filas del bucket).
 2. `supabase/migrations/20261102260000_sos_events.sql`  
+   → botón SOS  
    Éxito: **Success. No rows returned**.
 3. `supabase/migrations/20261102270000_device_push_tokens.sql`  
+   → tokens FCM (opcional para push)  
    Éxito: **Success. No rows returned**.
 
 Confirmar: Storage → bucket **avatars**; Table Editor → **sos_events**,
-**device_push_tokens**.
+**device_push_tokens**. Sin (1) la foto falla; sin (2) el SOS muestra
+pasos en diálogo (el botón sigue visible).
 
 ## Perfil
 

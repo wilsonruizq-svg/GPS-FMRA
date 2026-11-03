@@ -120,26 +120,31 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Ya en ≥1 grupo: ocultar Crear / Unirme (invitar desde el detalle).
+    final showCreateJoinFab = !_loading && _error == null && _groups.isEmpty;
+
     return Scaffold(
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'join_invite',
-            onPressed: _joinWithCode,
-            icon: const Icon(Icons.vpn_key_outlined),
-            label: const Text(AppStrings.groupsJoinAction),
-          ),
-          const SizedBox(height: 12),
-          FloatingActionButton.extended(
-            heroTag: 'create_group',
-            onPressed: _createGroup,
-            icon: const Icon(Icons.add),
-            label: const Text(AppStrings.groupsCreateAction),
-          ),
-        ],
-      ),
+      floatingActionButton: showCreateJoinFab
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'join_invite',
+                  onPressed: _joinWithCode,
+                  icon: const Icon(Icons.vpn_key_outlined),
+                  label: const Text(AppStrings.groupsJoinAction),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'create_group',
+                  onPressed: _createGroup,
+                  icon: const Icon(Icons.add),
+                  label: const Text(AppStrings.groupsCreateAction),
+                ),
+              ],
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: _loading
@@ -211,46 +216,68 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           ),
                         ],
                       )
-                    : ListView.separated(
+                    : ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        itemCount: _groups.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final g = _groups[index];
-                          return ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 10,
-                            ),
-                            leading: CircleAvatar(
-                              backgroundColor: Theme.of(context)
-                                  .colorScheme
-                                  .primary
-                                  .withValues(alpha: 0.12),
-                              child: Icon(
-                                Icons.family_restroom,
-                                color: Theme.of(context).colorScheme.primary,
+                        padding: const EdgeInsets.only(bottom: 24),
+                        children: [
+                          for (var i = 0; i < _groups.length; i++) ...[
+                            if (i > 0) const Divider(height: 1),
+                            ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
                               ),
-                            ),
-                            title: Text(
-                              g.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 17,
-                              ),
-                            ),
-                            subtitle: const Text(AppStrings.groupsTapMembers),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () async {
-                              await Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => GroupDetailScreen(group: g),
+                              leading: CircleAvatar(
+                                backgroundColor: Theme.of(context)
+                                    .colorScheme
+                                    .primary
+                                    .withValues(alpha: 0.12),
+                                child: Icon(
+                                  Icons.family_restroom,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
-                              );
-                              await _refresh();
-                            },
-                          );
-                        },
+                              ),
+                              title: Text(
+                                _groups[i].name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 17,
+                                ),
+                              ),
+                              subtitle:
+                                  const Text(AppStrings.groupsTapMembers),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => GroupDetailScreen(
+                                      group: _groups[i],
+                                    ),
+                                  ),
+                                );
+                                await _refresh();
+                              },
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
+                            child: Text(
+                              AppStrings.groupsAlreadyMemberHint,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
       ),
     );

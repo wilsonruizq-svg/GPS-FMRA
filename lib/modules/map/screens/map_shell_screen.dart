@@ -765,14 +765,33 @@ class _MapShellScreenState extends State<MapShellScreen>
       await _refreshActiveSos();
     } catch (e) {
       if (!mounted) return;
-      final msg = e.toString().contains('sos_events') ||
-              e.toString().contains('relation') ||
-              e.toString().contains('PGRST')
-          ? AppStrings.sosNeedMigration
-          : AppStrings.sosSendError;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+      final raw = e.toString().toLowerCase();
+      final needsMigration = raw.contains('sos_events') ||
+          raw.contains('relation') ||
+          raw.contains('does not exist') ||
+          raw.contains('schema cache') ||
+          raw.contains('pgrst');
+      if (needsMigration) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text(AppStrings.sosNeedMigrationTitle),
+            content: const SingleChildScrollView(
+              child: Text(AppStrings.sosNeedMigrationBody),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(AppStrings.close),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStrings.sosSendError)),
+        );
+      }
     } finally {
       if (mounted) setState(() => _sosSending = false);
     }

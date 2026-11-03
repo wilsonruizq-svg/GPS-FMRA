@@ -83,6 +83,8 @@ abstract final class AppStrings {
       'Si eres el admin: crea el grupo y genera un código.';
   static const groupsEmptyJoinHint =
       'Si te invitaron: pega el código en “Unirme con código”.';
+  static const groupsAlreadyMemberHint =
+      'Ya perteneces a un grupo. Para invitar, abre el grupo → Invitar.';
   static const groupsCreateTitle = 'Nuevo grupo familiar';
   static const groupsCreateAction = 'Crear grupo';
   static const groupsJoinAction = 'Unirme con código';
@@ -165,11 +167,17 @@ abstract final class AppStrings {
 
   static const settingsTitle = 'Ajustes';
   static const settingsPrivacy = 'Privacidad y consentimiento';
+  static const settingsPrivacySubtitle =
+      'Quién puede ver tu ubicación en el mapa';
   static const settingsProfile = 'Perfil';
-  static const settingsProfileTap = 'Toca para editar tu perfil';
+  static const settingsProfileTap = 'Editar nombre, teléfono y foto';
   static const settingsSignOut = 'Cerrar sesión';
   static const settingsAbout = 'Acerca de GPS-FMRA';
-  static const settingsVersion = 'Versión 1.0.0 — Fase 1 (MVP pantallas)';
+  static const settingsVersion = 'Versión 1.0.0 — Fase 1';
+  static const settingsSectionAccount = 'Tu cuenta';
+  static const settingsSectionPrivacy = 'Privacidad';
+  static const settingsSectionSession = 'Sesión';
+  static const settingsSectionAbout = 'Información';
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
 
@@ -223,12 +231,25 @@ abstract final class AppStrings {
   static const profilePhotoFromCamera = 'Tomar foto';
   static const profilePhotoUploaded = 'Foto de perfil actualizada.';
   static const profilePhotoStorageNote =
-      'La foto de perfil aún no está disponible: falta el bucket Storage '
-      '“avatars” en Supabase. Ejecuta la migración '
-      '20261102250000_avatars_storage.sql (APPLY_ES.md). '
-      'Puedes guardar nombre y teléfono ahora.';
+      'La foto aún no está activa en el servidor. En Supabase → SQL Editor '
+      'ejecuta el archivo 20261102250000_avatars_storage.sql '
+      '(éxito esperado: Success. No rows returned). '
+      'Luego vuelve a abrir esta pantalla. Puedes guardar nombre y teléfono ahora.';
   static const profilePhotoUploadError =
-      'No se pudo subir la foto. Revisa la conexión o el bucket avatars.';
+      'No se pudo subir la foto. Si acabas de crear el bucket, cierra y '
+      'vuelve a entrar a Editar perfil. Si el error sigue: aplica '
+      '20261102250000_avatars_storage.sql en el SQL Editor '
+      '(Success. No rows returned) y revisa la conexión.';
+  static const profilePhotoApplyTitle = 'Falta preparar Storage (avatars)';
+  static const profilePhotoApplyBody =
+      'Para fotos de perfil:\n'
+      '1. Abre Supabase → SQL Editor → New query.\n'
+      '2. Pega todo el archivo '
+      'supabase/migrations/20261102250000_avatars_storage.sql\n'
+      '3. Run. Éxito esperado: Success. No rows returned.\n'
+      '4. Confirma en Storage → Buckets que exista “avatars”.\n'
+      '5. Vuelve a intentar Añadir foto.\n\n'
+      'Nombre y teléfono sí se pueden guardar sin el bucket.';
 
   static const sosButtonTooltip = 'Emergencia SOS';
   static const sosButtonLabel = 'SOS';
@@ -245,8 +266,20 @@ abstract final class AppStrings {
   static const sosNeedGroup =
       'Elige o crea un grupo antes de enviar un SOS.';
   static const sosNeedMigration =
-      'Falta aplicar la tabla sos_events en Supabase '
-      '(migración 20261102260000_sos_events.sql).';
+      'El SOS aún no está activo en el servidor. Aplica la migración '
+      '20261102260000_sos_events.sql (SQL Editor → Success. No rows returned) '
+      'y vuelve a intentar.';
+  static const sosNeedMigrationTitle = 'Falta preparar SOS en Supabase';
+  static const sosNeedMigrationBody =
+      'El botón SOS ya está en la app, pero falta la tabla en la base de datos.\n\n'
+      '1. Abre Supabase → SQL Editor → New query.\n'
+      '2. Pega todo el archivo '
+      'supabase/migrations/20261102260000_sos_events.sql\n'
+      '3. Run. Éxito esperado: Success. No rows returned.\n'
+      '4. (Opcional push) también '
+      '20261102270000_device_push_tokens.sql\n'
+      '5. Vuelve a pulsar SOS.\n\n'
+      'Guía: supabase/APPLY_ES.md';
   static String sosBannerPeer(String name) =>
       '¡SOS! $name necesita ayuda.';
   static const sosBannerSelf = 'Tu alerta SOS está activa.';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
 import '../../groups/exit_pin_service.dart';
@@ -97,89 +98,237 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  String get _displayName {
+    if (_loading) return AppStrings.splashLoading;
+    return _profile?.label ?? AppStrings.settingsProfileMissing;
+  }
+
+  String get _email => _auth.currentUser?.email ?? '—';
+
+  bool get _hasPhoto =>
+      _profile?.photoUrl != null && _profile!.photoUrl!.isNotEmpty;
+
   @override
   Widget build(BuildContext context) {
-    final email = _auth.currentUser?.email ?? '—';
-    final subtitle = _loading
-        ? AppStrings.splashLoading
-        : (_profile?.label ?? AppStrings.settingsProfileMissing);
+    final theme = Theme.of(context);
 
     return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: [
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: CircleAvatar(
-            backgroundColor:
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-            backgroundImage: (_profile?.photoUrl != null &&
-                    _profile!.photoUrl!.isNotEmpty)
-                ? NetworkImage(_profile!.photoUrl!)
-                : null,
-            child: (_profile?.photoUrl == null ||
-                    _profile!.photoUrl!.isEmpty)
-                ? const Icon(Icons.person_outline, size: 28)
-                : null,
-          ),
-          title: const Text(AppStrings.settingsProfile),
-          subtitle: Text('$subtitle\n${AppStrings.settingsProfileTap}'),
-          isThreeLine: true,
-          trailing: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              const Icon(Icons.chevron_right),
-              Text(
-                email,
-                style: Theme.of(context).textTheme.bodySmall,
+        _buildProfileCard(theme),
+        const SizedBox(height: 28),
+        _sectionLabel(AppStrings.settingsSectionPrivacy),
+        const SizedBox(height: 8),
+        _settingsCard(
+          children: [
+            ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.deepBlue.withValues(alpha: 0.1),
+                child: const Icon(
+                  Icons.privacy_tip_outlined,
+                  color: AppColors.deepBlue,
+                ),
               ),
-            ],
-          ),
-          onTap: _openEditProfile,
+              title: const Text(AppStrings.settingsPrivacy),
+              subtitle: const Text(AppStrings.settingsPrivacySubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ConsentScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
         ),
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: const Icon(Icons.privacy_tip_outlined, size: 28),
-          title: const Text(AppStrings.settingsPrivacy),
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ConsentScreen(),
+        const SizedBox(height: 24),
+        _sectionLabel(AppStrings.settingsSectionSession),
+        const SizedBox(height: 8),
+        _settingsCard(
+          children: [
+            ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                backgroundColor:
+                    theme.colorScheme.error.withValues(alpha: 0.12),
+                child: Icon(
+                  Icons.logout,
+                  color: theme.colorScheme.error,
+                ),
               ),
-            );
-          },
+              title: Text(
+                AppStrings.settingsSignOut,
+                style: TextStyle(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              trailing: _signingOut
+                  ? SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: theme.colorScheme.error,
+                      ),
+                    )
+                  : null,
+              onTap: _signingOut ? null : _signOut,
+            ),
+          ],
         ),
-        const Divider(),
-        ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: Icon(
-            Icons.logout,
-            size: 28,
-            color: Theme.of(context).colorScheme.error,
-          ),
-          title: Text(
-            AppStrings.settingsSignOut,
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
-          trailing: _signingOut
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : null,
-          onTap: _signingOut ? null : _signOut,
-        ),
-        const Divider(),
-        const ListTile(
-          contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          leading: Icon(Icons.info_outline, size: 28),
-          title: Text(AppStrings.settingsAbout),
-          subtitle: Text(AppStrings.settingsVersion),
+        const SizedBox(height: 24),
+        _sectionLabel(AppStrings.settingsSectionAbout),
+        const SizedBox(height: 8),
+        _settingsCard(
+          children: [
+            const ListTile(
+              contentPadding:
+                  EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                backgroundColor: Color(0x1A0B2A4A),
+                child: Icon(Icons.info_outline, color: AppColors.deepBlue),
+              ),
+              title: Text(AppStrings.settingsAbout),
+              subtitle: Text(AppStrings.settingsVersion),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text.toUpperCase(),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: AppColors.midBlue,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+            ),
+      ),
+    );
+  }
+
+  Widget _settingsCard({required List<Widget> children}) {
+    return Material(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: AppColors.deepBlue.withValues(alpha: 0.08)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildProfileCard(ThemeData theme) {
+    return Material(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: AppColors.deepBlue.withValues(alpha: 0.1)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _openEditProfile,
+        child: Ink(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFFE8F1F8),
+                Color(0xFFF5F8FB),
+              ],
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 22, 16, 22),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+                  backgroundImage:
+                      _hasPhoto ? NetworkImage(_profile!.photoUrl!) : null,
+                  child: _hasPhoto
+                      ? null
+                      : Text(
+                          _initials(),
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.deepBlue,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        AppStrings.settingsSectionAccount,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: AppColors.midBlue,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _displayName,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.deepBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _email,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: AppColors.midBlue,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        AppStrings.settingsProfileTap,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: AppColors.signalCyan.withValues(alpha: 0.95),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.edit_outlined,
+                  color: AppColors.deepBlue.withValues(alpha: 0.55),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _initials() {
+    final name = (_profile?.displayName ?? '').trim();
+    if (name.isEmpty) return '?';
+    final parts = name.split(RegExp(r'\s+'));
+    if (parts.length >= 2 && parts[0].isNotEmpty && parts[1].isNotEmpty) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name[0].toUpperCase();
   }
 }
