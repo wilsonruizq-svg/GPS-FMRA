@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../../../core/config/env.dart';
@@ -18,14 +19,22 @@ class MapShellScreen extends StatefulWidget {
 }
 
 class _MapShellScreenState extends State<MapShellScreen> {
-  /// Bogotá — centro inicial hasta que haya ubicaciones de miembros.
+  /// Bogotá — centro inicial hasta obtener la ubicación del dispositivo.
   static const _fallbackCamera = CameraPosition(
     target: LatLng(4.7110, -74.0721),
     zoom: 11,
   );
 
+  static const _myLocationZoom = 15.0;
+
   final _groups = GroupsService();
   final _consent = ConsentService();
+
+  MapLibreMapController? _mapController;
+  bool _styleReady = false;
+  bool _didAutoCenter = false;
+  bool _locating = false;
+  bool _osLocationGranted = false;
 
   bool _loading = true;
   String? _error;
@@ -38,6 +47,12 @@ class _MapShellScreenState extends State<MapShellScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _mapController = null;
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -69,6 +84,8 @@ class _MapShellScreenState extends State<MapShellScreen> {
         _myConsent = mine;
         _loading = false;
       });
+      // Tras cargar consentimiento: auto-centrar si ya aceptó compartir.
+      _maybeAutoCenter();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -93,6 +110,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
         _members = members;
         _myConsent = mine;
       });
+      _maybeAutoCenter();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
@@ -109,8 +127,107 @@ class _MapShellScreenState extends State<MapShellScreen> {
     return AppStrings.memberShareUnknown;
   }
 
+  void _onMapCreated(MapLibreMapController controller) {
+    _mapController = controller;
+  }
+
+  void _onStyleLoaded() {
+    _styleReady = true;
+    // Stub de pines: GPS-18 añadirá GeoJSON / anotaciones vía controller.
+    _maybeAutoCenter();
+  }
+
+  /// Auto-centra solo si el usuario ya aceptó consentimiento (permiso se pidió ahí).
+  void _maybeAutoCenter() {
+    if (_didAutoCenter) return;
+    if (!_styleReady || _mapController == null) return;
+    if (_myConsent?.isActive != true) return;
+    _didAutoCenter = true;
+    _centerOnMyLocation(fromUser: false);
+  }
+
+  Future<bool> _ensureOsPermission({required bool requestIfNeeded}) async {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied && requestIfNeeded) {
+      permission = await Geolocator.requestPermission();
+    }
+    final granted = permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+    if (mounted && granted != _osLocationGranted) {
+      setState(() => _osLocationGranted = granted);
+    }
+    if (!granted && mounted && requestIfNeeded) {
+      final forever = permission == LocationPermission.deniedForever;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            forever
+                ? AppStrings.mapLocationDeniedForever
+                : AppStrings.mapLocationDenied,
+          ),
+          action: forever
+              ? SnackBarAction(
+                  label: AppStrings.mapOpenSettings,
+                  onPressed: Geolocator.openAppSettings,
+                )
+              : null,
+        ),
+      );
+    }
+    return granted;
+  }
+
+  Future<void> _centerOnMyLocation({required bool fromUser}) async {
+    if (_locating) return;
+    final controller = _mapController;
+    if (controller == null) return;
+
+    setState(() => _locating = true);
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted && fromUser) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text(AppStrings.mapLocationDisabled)),
+          );
+        }
+        return;
+      }
+
+      // Auto: no vuelve a pedir el diálogo si el usuario saltó consentimiento.
+      // FAB: sí puede pedir permiso OS (centrar cámara local; no activa compartir).
+      final granted = await _ensureOsPermission(requestIfNeeded: fromUser);
+      if (!granted) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+      if (!mounted) return;
+
+      await controller.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(pos.latitude, pos.longitude),
+          _myLocationZoom,
+        ),
+      );
+    } catch (_) {
+      if (mounted && fromUser) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStrings.mapLocationError)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
   Widget _buildMapPane(BuildContext context) {
     final styleUrl = Env.mapStyleUrl;
+    final showMyLocation =
+        _myConsent?.isActive == true || _osLocationGranted;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -118,13 +235,33 @@ class _MapShellScreenState extends State<MapShellScreen> {
           styleString: styleUrl,
           initialCameraPosition: _fallbackCamera,
           compassEnabled: true,
-          // Ubicación del dispositivo: el permiso se pide en consentimiento.
-          myLocationEnabled: _myConsent?.isActive == true,
+          // Punto azul: con consentimiento activo o tras usar «Mi ubicación».
+          // El permiso OS se pide en consentimiento (auto) o al pulsar el FAB.
+          myLocationEnabled: showMyLocation,
           myLocationTrackingMode: MyLocationTrackingMode.none,
           trackCameraPosition: false,
-          onStyleLoadedCallback: () {
-            // Stub de pines: GPS-18 añadirá GeoJSON / anotaciones vía controller.
-          },
+          onMapCreated: _onMapCreated,
+          onStyleLoadedCallback: _onStyleLoaded,
+        ),
+        Positioned(
+          right: 12,
+          bottom: 56,
+          child: FloatingActionButton.small(
+            heroTag: 'map_my_location',
+            tooltip: AppStrings.mapMyLocationTooltip,
+            backgroundColor: Colors.white,
+            foregroundColor: AppColors.deepBlue,
+            onPressed: _locating
+                ? null
+                : () => _centerOnMyLocation(fromUser: true),
+            child: _locating
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.my_location),
+          ),
         ),
         Positioned(
           left: 12,

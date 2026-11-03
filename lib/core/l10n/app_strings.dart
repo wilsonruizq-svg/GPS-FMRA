@@ -56,6 +56,16 @@ abstract final class AppStrings {
   static const mapNoGroup = 'Sin grupo — créalo en Grupos';
   static const mapMembersEmpty =
       'No hay integrantes. Crea un grupo en la pestaña Grupos.';
+  static const mapMyLocationTooltip = 'Mi ubicación';
+  static const mapLocationDenied =
+      'Necesitamos el permiso de ubicación para centrar el mapa.';
+  static const mapLocationDeniedForever =
+      'El permiso de ubicación está bloqueado. Actívalo en Ajustes del sistema.';
+  static const mapLocationDisabled =
+      'Activa el GPS / ubicación del dispositivo e inténtalo de nuevo.';
+  static const mapLocationError =
+      'No se pudo obtener tu ubicación. Inténtalo de nuevo.';
+  static const mapOpenSettings = 'Abrir ajustes';
 
   static const groupsTitle = 'Grupos';
   static const groupsEmpty =

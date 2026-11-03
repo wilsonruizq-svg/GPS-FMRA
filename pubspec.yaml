@@ -39,6 +39,7 @@ dependencies:
   # Mapa MVP: MapLibre (demotiles / OpenFreeMap / MapTiler). Google Maps pausado (billing).
   maplibre_gl: ^0.27.1
   image_picker: ^1.1.2
+  geolocator: ^14.1.2
 
 dev_dependencies:
   flutter_test:
