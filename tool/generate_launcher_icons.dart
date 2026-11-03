@@ -1,15 +1,26 @@
-// Genera mipmaps + adaptive icon Android desde assets/branding/logo-gps-fmra-v2.jpg
-// Uso: dart run tool/generate_launcher_icons.dart
+// Genera mipmaps + adaptive icon Android.
+//
+// Uso:
+//   dart run tool/generate_launcher_icons.dart
+//   dart run tool/generate_launcher_icons.dart --option a|b|c|d
+//   dart run tool/generate_launcher_icons.dart --source path/to/logo.jpg
+//
+// NO finalizar launcher hasta que Wilson elija A/B/C/D (ver docs/ICONO_OPCIONES_ES.md).
 import 'dart:io';
 
 import 'package:image/image.dart' as img;
 
-void main() {
-  final logoPath = File('assets/branding/logo-gps-fmra-v2.jpg');
+void main(List<String> args) {
+  final logoPath = File(_resolveSource(args));
   if (!logoPath.existsSync()) {
     stderr.writeln('Falta ${logoPath.path}');
+    stderr.writeln(
+      'Opciones: --option a|b|c|d  o  --source <archivo>  '
+      '(default: assets/branding/logo-gps-fmra-v2.jpg — provisional)',
+    );
     exit(1);
   }
+  stdout.writeln('Fuente: ${logoPath.path}');
 
   final decoded = img.decodeImage(logoPath.readAsBytesSync());
   if (decoded == null) {
@@ -127,6 +138,45 @@ void main() {
 '''.trimLeft());
 
   stdout.writeln('Adaptive XML + colors listos. Fondo $hex');
+}
+
+String _resolveSource(List<String> args) {
+  for (var i = 0; i < args.length; i++) {
+    final a = args[i];
+    if (a == '--source' && i + 1 < args.length) {
+      return args[i + 1];
+    }
+    if (a.startsWith('--source=')) {
+      return a.substring('--source='.length);
+    }
+    if (a == '--option' && i + 1 < args.length) {
+      return _optionPath(args[i + 1]);
+    }
+    if (a.startsWith('--option=')) {
+      return _optionPath(a.substring('--option='.length));
+    }
+  }
+  // Provisional hasta que Wilson elija A/B/C/D.
+  return 'assets/branding/logo-gps-fmra-v2.jpg';
+}
+
+String _optionPath(String raw) {
+  final key = raw.trim().toLowerCase();
+  final letter = key.length == 1
+      ? key
+      : key.replaceFirst(RegExp(r'^opcion[-_]?'), '').replaceFirst('option', '');
+  const map = {
+    'a': 'assets/branding/icon-opciones/icon-opcion-a.jpg',
+    'b': 'assets/branding/icon-opciones/icon-opcion-b.jpg',
+    'c': 'assets/branding/icon-opciones/icon-opcion-c.jpg',
+    'd': 'assets/branding/icon-opciones/icon-opcion-d.jpg',
+  };
+  final path = map[letter];
+  if (path == null) {
+    stderr.writeln('Opción no válida: $raw (usa a, b, c o d)');
+    exit(1);
+  }
+  return path;
 }
 
 img.Image _fitContain(img.Image src, int maxW, int maxH) {
