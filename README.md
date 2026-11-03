@@ -83,6 +83,25 @@ Prueba con dos cuentas: [`docs/INVITACIONES_PRUEBA_ES.md`](docs/INVITACIONES_PRU
 
 **No incluido:** chat, SOS, WebRTC, mapas offline. Google Maps pausado por billing; mapa online = MapLibre.
 
+## APK de prueba (entrega local)
+
+Los APK generados van **solo** a la carpeta `APK\` (no a `dist\` ni a rutas sueltas):
+
+```text
+D:\APPS PROYECTOS\GPS-FMRA\APK\gps-fmra-debug.apk
+```
+
+Tras un build debug:
+
+```bash
+cd "D:\APPS PROYECTOS\GPS-FMRA"
+flutter build apk --debug
+copy /Y "build\app\outputs\flutter-apk\app-debug.apk" "APK\gps-fmra-debug.apk"
+```
+
+Opcional: copia fechada `APK\gps-fmra-debug-AAAA-MM-DD.apk`.  
+`APK\` y `*.apk` están en `.gitignore` — no subir binarios a Git.
+
 ## Análisis
 
 ```bash

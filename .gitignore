@@ -44,6 +44,11 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Deliverable APKs (local only — never commit binaries)
+/APK/
+/dist/
+*.apk
+
 # Widget Preview related
 .widget_preview/
 
