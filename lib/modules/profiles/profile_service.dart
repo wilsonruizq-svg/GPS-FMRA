@@ -143,23 +143,19 @@ class ProfileService {
     }
   }
 
-  /// Sube bytes de imagen al bucket `avatars` y devuelve la URL pública.
-  /// Solo llamar si [isAvatarStorageReady] es true.
+  /// Sube JPEG ya comprimido al bucket `avatars` y devuelve URL pública
+  /// con cache-bust. Solo llamar si [isAvatarStorageReady] es true.
   Future<String> uploadOwnAvatar({
     required Uint8List bytes,
-    required String contentType,
+    String contentType = 'image/jpeg',
   }) async {
     final user = _sb.auth.currentUser;
     if (user == null) {
       throw StateError('No hay sesión activa.');
     }
 
-    final ext = contentType.contains('png')
-        ? 'png'
-        : contentType.contains('webp')
-            ? 'webp'
-            : 'jpg';
-    final path = '${user.id}/avatar.$ext';
+    // Siempre JPEG tras AvatarCompress — path estable + upsert.
+    final path = '${user.id}/avatar.jpg';
 
     await _sb.storage.from(avatarBucket).uploadBinary(
           path,
@@ -170,7 +166,33 @@ class ProfileService {
           ),
         );
 
-    return _sb.storage.from(avatarBucket).getPublicUrl(path);
+    final publicUrl = _sb.storage.from(avatarBucket).getPublicUrl(path);
+    final bust = DateTime.now().millisecondsSinceEpoch;
+    final withBust = '$publicUrl${publicUrl.contains('?') ? '&' : '?'}v=$bust';
+
+    await _sb.from('profiles').update({
+      'photo_url': withBust,
+    }).eq('id', user.id);
+
+    return withBust;
+  }
+
+  /// Quita foto del perfil y, si hay Storage, borra el objeto.
+  Future<void> clearOwnAvatar() async {
+    final user = _sb.auth.currentUser;
+    if (user == null) {
+      throw StateError('No hay sesión activa.');
+    }
+
+    await _sb.from('profiles').update({
+      'photo_url': null,
+    }).eq('id', user.id);
+
+    try {
+      await _sb.storage.from(avatarBucket).remove(['${user.id}/avatar.jpg']);
+    } catch (_) {
+      // Bucket ausente o sin objeto: OK.
+    }
   }
 
   Future<List<Profile>> fetchByIds(Iterable<String> ids) async {

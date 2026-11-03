@@ -22,6 +22,8 @@ plugins {
     // AGP 9.1.1 is the minimum that supports compileSdk / API 37.
     id("com.android.application") version "9.1.1" apply false
     id("org.jetbrains.kotlin.android") version "2.4.0" apply false
+    // FCM: solo se aplica en :app si existe google-services.json (ver app/build.gradle.kts).
+    id("com.google.gms.google-services") version "4.4.2" apply false
 }
 
 include(":app")

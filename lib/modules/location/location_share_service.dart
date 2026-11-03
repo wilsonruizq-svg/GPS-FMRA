@@ -33,7 +33,46 @@ class MemberLocation {
   }
 }
 
-/// Publica GPS propio (con consentimiento) y lee ubicaciones visibles vía RLS.
+/// Punto de historial (tabla `location_history`).
+class HistoryPoint {
+  const HistoryPoint({
+    required this.id,
+    required this.userId,
+    required this.lat,
+    required this.lon,
+    required this.recordedAt,
+    this.accuracyM,
+    this.displayName,
+  });
+
+  final String id;
+  final String userId;
+  final double lat;
+  final double lon;
+  final DateTime recordedAt;
+  final double? accuracyM;
+  final String? displayName;
+
+  factory HistoryPoint.fromMap(Map<String, dynamic> map) {
+    return HistoryPoint(
+      id: map['id'] as String,
+      userId: map['user_id'] as String,
+      lat: (map['lat'] as num).toDouble(),
+      lon: (map['lon'] as num).toDouble(),
+      accuracyM: (map['accuracy_m'] as num?)?.toDouble(),
+      recordedAt: DateTime.parse(map['recorded_at'] as String).toUtc(),
+      displayName: map['display_name'] as String?,
+    );
+  }
+
+  String get label {
+    final n = displayName?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    return 'Integrante';
+  }
+}
+
+/// Publica GPS propio (con consentimiento) y lee ubicaciones visibles vía RLS/RPC.
 class LocationShareService {
   LocationShareService({
     this._client,
@@ -61,16 +100,76 @@ class LocationShareService {
   }
 
   /// Upsert de la ubicación actual. Solo debe llamarse con consentimiento activo.
+  /// También intenta append a `location_history` (best-effort; no tumba el live).
   Future<void> publishPosition(Position pos) async {
     final now = DateTime.now().toUtc();
-    await _sb.from('location_updates').upsert({
+    final payload = {
       'user_id': _uid,
       'lat': pos.latitude,
       'lon': pos.longitude,
       'accuracy_m': pos.accuracy.isFinite ? pos.accuracy : null,
       'recorded_at': now.toIso8601String(),
       'is_mocked': pos.isMocked,
-    });
+    };
+    await _sb.from('location_updates').upsert(
+      payload,
+      onConflict: 'user_id',
+    );
+    try {
+      await _sb.from('location_history').insert({
+        'user_id': _uid,
+        'lat': pos.latitude,
+        'lon': pos.longitude,
+        'accuracy_m': pos.accuracy.isFinite ? pos.accuracy : null,
+        'recorded_at': now.toIso8601String(),
+      });
+    } catch (_) {
+      // Historial aún no APPLY / red: el mapa en vivo sigue OK.
+    }
+  }
+
+  /// Historial reciente visible del grupo (RPC). Vacío si no APPLY / sin permiso.
+  Future<List<HistoryPoint>> fetchGroupHistory({
+    required String groupId,
+    int hours = 24,
+    int limit = 200,
+  }) async {
+    try {
+      final rows = await _sb.rpc(
+        'list_group_location_history',
+        params: {
+          'p_group_id': groupId,
+          'p_hours': hours,
+          'p_limit': limit,
+        },
+      );
+      if (rows is! List) return const [];
+      return rows
+          .map(
+            (e) => HistoryPoint.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Ubicaciones visibles del grupo (RPC `list_group_locations`).
+  /// Fallback a SELECT directo filtrado por [memberIds] si el RPC aún no
+  /// está aplicado en el proyecto.
+  Future<List<MemberLocation>> fetchGroupLocations({
+    required String groupId,
+    required List<String> memberIds,
+  }) async {
+    try {
+      final rows = await _sb.rpc(
+        'list_group_locations',
+        params: {'p_group_id': groupId},
+      );
+      return _mapRows(rows);
+    } catch (_) {
+      return fetchVisibleLocations(memberIds);
+    }
   }
 
   /// Carga ubicaciones de los [userIds] visibles. RLS + `can_view_location`
@@ -85,7 +184,12 @@ class LocationShareService {
         .select('user_id, lat, lon, accuracy_m, recorded_at')
         .inFilter('user_id', userIds);
 
-    return (rows as List)
+    return _mapRows(rows);
+  }
+
+  List<MemberLocation> _mapRows(dynamic rows) {
+    if (rows is! List) return const [];
+    return rows
         .map(
           (e) => MemberLocation.fromMap(Map<String, dynamic>.from(e as Map)),
         )
@@ -98,7 +202,9 @@ class LocationShareService {
     required void Function(MemberLocation location) onChange,
     required void Function(String userId) onDelete,
   }) {
-    final channel = _sb.channel('location_updates_${_uid}_${DateTime.now().millisecondsSinceEpoch}');
+    final channel = _sb.channel(
+      'location_updates_${_uid}_${DateTime.now().millisecondsSinceEpoch}',
+    );
 
     channel.onPostgresChanges(
       event: PostgresChangeEvent.insert,

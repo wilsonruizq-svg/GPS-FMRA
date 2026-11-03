@@ -5,6 +5,7 @@ import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../app_shell.dart';
 import '../../profiles/profile_service.dart';
+import '../../push/push_service.dart';
 import 'login_shell_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -34,6 +35,11 @@ class _SplashScreenState extends State<SplashScreen> {
         await ProfileService().ensureOwnProfile();
       } catch (_) {
         // Continuar al flujo; la pantalla de ajustes mostrará el estado.
+      }
+      try {
+        await PushService().syncTokenAfterLogin();
+      } catch (_) {
+        // Sin FCM el SOS in-app sigue operativo.
       }
     }
 

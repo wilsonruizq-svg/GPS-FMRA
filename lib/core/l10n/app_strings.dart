@@ -83,6 +83,8 @@ abstract final class AppStrings {
       'Si eres el admin: crea el grupo y genera un código.';
   static const groupsEmptyJoinHint =
       'Si te invitaron: pega el código en “Unirme con código”.';
+  static const groupsAlreadyMemberHint =
+      'Ya perteneces a un grupo. Para invitar, abre el grupo → Invitar.';
   static const groupsCreateTitle = 'Nuevo grupo familiar';
   static const groupsCreateAction = 'Crear grupo';
   static const groupsJoinAction = 'Unirme con código';
@@ -165,13 +167,32 @@ abstract final class AppStrings {
 
   static const settingsTitle = 'Ajustes';
   static const settingsPrivacy = 'Privacidad y consentimiento';
+  static const settingsPrivacySubtitle =
+      'Quién puede ver tu ubicación en el mapa';
   static const settingsProfile = 'Perfil';
-  static const settingsProfileTap = 'Toca para editar tu perfil';
+  static const settingsProfileTap = 'Editar nombre, teléfono y foto';
   static const settingsSignOut = 'Cerrar sesión';
   static const settingsAbout = 'Acerca de GPS-FMRA';
-  static const settingsVersion = 'Versión 1.0.0 — Fase 1 (MVP pantallas)';
+  static const settingsVersion = 'Versión 1.0.0 — Fase 1';
+  static const settingsSectionAccount = 'Tu cuenta';
+  static const settingsSectionPrivacy = 'Privacidad';
+  static const settingsSectionSession = 'Sesión';
+  static const settingsSectionAbout = 'Información';
+  static const settingsHistory = 'Historial de ubicaciones';
+  static const settingsHistorySubtitle =
+      'Puntos recientes del grupo (con consentimiento)';
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
+
+  static const historyTitle = 'Historial';
+  static const historyConsentNote =
+      'Solo ves historial de quienes comparten contigo (consentimiento activo). '
+      'Tus puntos se guardan al compartir en el mapa. '
+      'SQL: 20261102272000_location_history.sql';
+  static const historyEmpty =
+      'Aún no hay puntos de historial visibles. '
+      'Comparte ubicación en el mapa unos minutos y aplica el SQL de historial '
+      'si aún no lo corriste.';
 
   static const exitPinTitle = 'PIN de salida';
   static const exitPinSetAction = 'Configurar PIN de salida';
@@ -216,13 +237,104 @@ abstract final class AppStrings {
   static const profileSaved = 'Perfil actualizado.';
   static const profileSaveError =
       'No se pudo guardar el perfil. Revisa la conexión e inténtalo de nuevo.';
+  static const profileAddPhoto = 'Añadir foto';
   static const profileChangePhoto = 'Cambiar foto';
   static const profileRemovePhoto = 'Quitar foto';
+  static const profilePhotoFromGallery = 'Elegir de la galería';
+  static const profilePhotoFromCamera = 'Tomar foto';
+  static const profilePhotoCropTitle = 'Ajustar foto';
+  static const profilePhotoCropHint =
+      'Mueve y recorta en cuadrado para que el rostro quede centrado.';
+  static const profilePhotoCropCancel = 'Foto cancelada.';
+  static const profilePhotoUploaded = 'Foto de perfil actualizada.';
   static const profilePhotoStorageNote =
-      'La foto de perfil aún no está disponible: falta el bucket Storage '
-      '“avatars” en Supabase. Puedes guardar nombre y teléfono ahora.';
+      'La foto aún no está activa en el servidor. En Supabase → SQL Editor '
+      'ejecuta 20261102251000_avatars_storage_hosted.sql '
+      '(éxito esperado: Success. No rows returned). '
+      'Luego vuelve a abrir esta pantalla. Puedes guardar nombre y teléfono ahora.';
   static const profilePhotoUploadError =
-      'No se pudo subir la foto. Inténtalo de nuevo.';
+      'No se pudo subir la foto. Si acabas de crear el bucket, cierra y '
+      'vuelve a entrar a Editar perfil. Si el error sigue: aplica '
+      '20261102251000_avatars_storage_hosted.sql en el SQL Editor '
+      '(Success. No rows returned) y revisa la conexión.';
+  static const profilePhotoApplyTitle = 'Falta preparar Storage (avatars)';
+  static const profilePhotoApplyBody =
+      'Para fotos de perfil:\n'
+      '1. Abre Supabase → SQL Editor → New query.\n'
+      '2. Pega todo el archivo '
+      'supabase/migrations/20261102251000_avatars_storage_hosted.sql\n'
+      '3. Run. Éxito esperado: Success. No rows returned.\n'
+      '4. Confirma en Storage → Buckets que exista “avatars”.\n'
+      '5. Vuelve a intentar Añadir foto.\n\n'
+      'Si viste ERROR 42501 con el SQL viejo: usa solo este archivo hosted.\n'
+      'Nombre y teléfono sí se pueden guardar sin el bucket.';
+
+  static const sosButtonTooltip = 'Emergencia SOS';
+  static const sosButtonLabel = 'SOS';
+  static const sosConfirmTitle = '¿Enviar alerta de emergencia?';
+  static String sosConfirmBody(String groupName) =>
+      'Se avisará a los integrantes de “$groupName”. '
+      'Verán una alerta en la app con tu ubicación si el GPS está disponible. '
+      'No se llama a servicios de emergencia externos.';
+  static const sosConfirmAction = 'Enviar SOS';
+  static const sosCancelAction = 'No enviar';
+  static const sosSent = 'Alerta SOS enviada al grupo.';
+  static const sosSendError =
+      'No se pudo enviar el SOS. Revisa la conexión e inténtalo de nuevo.';
+  static const sosNeedGroup =
+      'Elige o crea un grupo antes de enviar un SOS.';
+  static const sosNeedMigration =
+      'El API no ve la tabla sos_events (404). Aplica '
+      '20261102261000_sos_events_api_fix.sql en SQL Editor y reintenta.';
+  static const sosNeedMigrationTitle = 'SOS: falta activar en el API';
+  static const sosNeedMigrationBody =
+      'El botón SOS está en la app, pero el servidor responde 404 '
+      '(tabla no visible al API). Arreglo:\n\n'
+      '1. Abre Supabase → SQL Editor → New query.\n'
+      '2. Pega TODO el archivo:\n'
+      '   supabase/migrations/20261102261000_sos_events_api_fix.sql\n'
+      '3. Run. Al final debes ver sos_events_ok = true.\n'
+      '4. Cierra sesión en la app o reiníciala y pulsa SOS otra vez.\n\n'
+      'Ese script crea la tabla si falta, da permisos GRANT y recarga '
+      'el schema cache (NOTIFY pgrst). No hace falta chat/FCM para el banner.';
+  /// Exact banner title for peer SOS, e.g. "SOS de Wilson C".
+  static String sosBannerPeer(String name) => 'SOS de $name';
+  static String sosBannerSelfNamed(String name) => 'SOS de $name';
+  static const sosBannerSelf = 'Tu alerta SOS está activa.';
+  static const sosBannerDismissOwn = 'Cancelar alerta';
+  static const sosBannerAck = 'Aceptar';
+  static const sosBannerAckHint =
+      'Confirma que viste el SOS. El emisor espera a todo el grupo.';
+  static const sosAcknowledged = 'Alerta aceptada. El emisor verá tu confirmación.';
+  static const sosAcknowledgedAllDone =
+      'Alerta aceptada. Todos confirmaron: SOS cerrado.';
+  static const sosAckError =
+      'No se pudo registrar Aceptar. Revisa la conexión o aplica '
+      '20261102273000_sos_acks.sql.';
+  static const sosAckNoPeers =
+      'No hay otros integrantes en el grupo para confirmar.';
+  static const sosAckWaitingResolve = 'Todos aceptaron. Cerrando alerta…';
+  static String sosAckPendingList(
+    int acked,
+    int expected,
+    List<String> pendingNames,
+  ) {
+    final names = pendingNames.take(4).join(', ');
+    final more = pendingNames.length > 4
+        ? ' +${pendingNames.length - 4}'
+        : '';
+    return 'Confirmaciones $acked/$expected. Pendiente: $names$more';
+  }
+  static const sosCancelled = 'Alerta SOS cancelada.';
+  static const sosSending = 'Enviando alerta…';
+  static const sosPushTitle = 'SOS — GPS-FMRA';
+  static const sosPushBodyFallback = 'Un integrante del grupo necesita ayuda.';
+  static const sosPushNotConfigured =
+      'Alerta guardada. Push FCM aún no está activo en este teléfono '
+      '(falta google-services.json / Firebase). Los compañeros la verán '
+      'en la app si la tienen abierta.';
+  static const sosPeerHint =
+      'Los compañeros deben pulsar Aceptar. Tu alerta sigue hasta que todos confirmen.';
 
   static const navMap = 'Mapa';
   static const navGroups = 'Grupos';

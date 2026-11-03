@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -12,7 +14,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
+import '../../location/location_fix_filter.dart';
 import '../../location/location_share_service.dart';
+import '../../sos/sos_service.dart';
 
 /// Shell del mapa: MapLibre + pines de integrantes con consentimiento activo.
 class MapShellScreen extends StatefulWidget {
@@ -22,7 +26,8 @@ class MapShellScreen extends StatefulWidget {
   State<MapShellScreen> createState() => _MapShellScreenState();
 }
 
-class _MapShellScreenState extends State<MapShellScreen> {
+class _MapShellScreenState extends State<MapShellScreen>
+    with WidgetsBindingObserver {
   /// Bogotá — solo si no hay GPS disponible al abrir el mapa.
   static const _fallbackCamera = CameraPosition(
     target: LatLng(4.7110, -74.0721),
@@ -30,12 +35,20 @@ class _MapShellScreenState extends State<MapShellScreen> {
   );
 
   static const _myLocationZoom = 15.0;
-  static const _publishInterval = Duration(seconds: 20);
-  static const _pollInterval = Duration(seconds: 25);
+
+  /// Heartbeat de publicación (documentado): cada 8 s como máximo de espera
+  /// aunque el dispositivo esté quieto. El stream también publica al moverse
+  /// ≥8 m, con piso de 5 s entre upserts.
+  static const _publishHeartbeat = Duration(seconds: 8);
+  static const _pollInterval = Duration(seconds: 15);
+  static const _sosPollInterval = Duration(seconds: 5);
+  static const _consentCacheTtl = Duration(seconds: 45);
 
   final _groups = GroupsService();
   final _consent = ConsentService();
   final _locationShare = LocationShareService();
+  final _sos = SosService();
+  final _fixFilter = const LocationFixFilter();
 
   MapLibreMapController? _mapController;
   bool _styleReady = false;
@@ -58,27 +71,58 @@ class _MapShellScreenState extends State<MapShellScreen> {
   Map<String, MemberLocation> _locationsByUser = {};
 
   final Map<String, Circle> _circlesByUser = {};
+  final Map<String, Circle> _accuracyByUser = {};
   final Map<String, Symbol> _labelsByUser = {};
 
   Timer? _publishTimer;
   Timer? _pollTimer;
+  Timer? _sosPollTimer;
+  StreamSubscription<Position>? _positionSub;
   RealtimeChannel? _realtimeChannel;
+  RealtimeChannel? _sosChannel;
   bool _publishing = false;
   bool _syncingMarkers = false;
+  bool _markersDirty = false;
+  bool _didFitMembers = false;
+  bool _sosSending = false;
+  List<SosEvent> _activeSos = const [];
+  SosAckProgress? _sosAckProgress;
+  /// Receptores: ocultar tras Aceptar en este dispositivo (además del ack en servidor).
+  static final Set<String> _sosDismissedLocally = <String>{};
+  static final Map<String, DateTime> _sosDismissedSenderAt = <String, DateTime>{};
+  /// Invalida refrescos in-flight para que un poll viejo no resuscite el banner.
+  int _sosRefreshEpoch = 0;
+
+  Position? _lastAcceptedFix;
+  Position? _lastPublishedFix;
+  DateTime? _lastPublishedAt;
+  bool? _cachedCanPublish;
+  DateTime? _cachedCanPublishAt;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _resolveInitialCamera();
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopSharingLoop();
     _unsubscribeRealtime();
     _mapController = null;
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _cachedCanPublish = null;
+      _cachedCanPublishAt = null;
+      unawaited(_publishFromFix(force: true));
+    }
   }
 
   /// Pide permiso OS al abrir el mapa y fija [initialCameraPosition] con GPS
@@ -150,7 +194,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
         consentsBySharer = {
           for (final c in groupConsents) c.sharerId: c,
         };
-        locations = await _fetchLocationsMap(members);
+        locations = await _fetchLocationsMap(members, groupId: selected.id);
       }
       if (!mounted) return;
       setState(() {
@@ -161,6 +205,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
         _consentsBySharer = consentsBySharer;
         _locationsByUser = locations;
         _loading = false;
+        _didFitMembers = false;
       });
       _maybeAutoCenter();
       await _syncMarkers();
@@ -189,13 +234,15 @@ class _MapShellScreenState extends State<MapShellScreen> {
       final consentsBySharer = {
         for (final c in groupConsents) c.sharerId: c,
       };
-      final locations = await _fetchLocationsMap(members);
+      final locations =
+          await _fetchLocationsMap(members, groupId: group.id);
       if (!mounted) return;
       setState(() {
         _members = members;
         _myConsent = mine;
         _consentsBySharer = consentsBySharer;
         _locationsByUser = locations;
+        _didFitMembers = false;
       });
       _maybeAutoCenter();
       await _syncMarkers();
@@ -208,10 +255,17 @@ class _MapShellScreenState extends State<MapShellScreen> {
   }
 
   Future<Map<String, MemberLocation>> _fetchLocationsMap(
-    List<GroupMember> members,
-  ) async {
+    List<GroupMember> members, {
+    String? groupId,
+  }) async {
     final ids = members.map((m) => m.userId).toList();
-    final list = await _locationShare.fetchVisibleLocations(ids);
+    final gid = groupId ?? _selected?.id;
+    final list = gid == null
+        ? await _locationShare.fetchVisibleLocations(ids)
+        : await _locationShare.fetchGroupLocations(
+            groupId: gid,
+            memberIds: ids,
+          );
     return {for (final loc in list) loc.userId: loc};
   }
 
@@ -364,11 +418,38 @@ class _MapShellScreenState extends State<MapShellScreen> {
 
   // --- Publicar / refrescar / Realtime ------------------------------------
 
+  LocationSettings _trackingSettings() {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 8,
+        intervalDuration: const Duration(seconds: 5),
+        maxUpdateAge: const Duration(seconds: 20),
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 8,
+        activityType: ActivityType.other,
+        pauseLocationUpdatesAutomatically: true,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 8,
+    );
+  }
+
   void _stopSharingLoop() {
     _publishTimer?.cancel();
     _publishTimer = null;
     _pollTimer?.cancel();
     _pollTimer = null;
+    _sosPollTimer?.cancel();
+    _sosPollTimer = null;
+    unawaited(_positionSub?.cancel());
+    _positionSub = null;
   }
 
   void _unsubscribeRealtime() {
@@ -377,101 +458,499 @@ class _MapShellScreenState extends State<MapShellScreen> {
     if (ch != null) {
       unawaited(supabase.removeChannel(ch));
     }
+    final sos = _sosChannel;
+    _sosChannel = null;
+    if (sos != null) {
+      unawaited(_sos.unsubscribe(sos));
+    }
   }
 
   void _restartSharingLoop() {
     _publishTimer?.cancel();
     _publishTimer = null;
+    unawaited(_positionSub?.cancel());
+    _positionSub = null;
+    _lastAcceptedFix = null;
+    _lastPublishedFix = null;
+    _lastPublishedAt = null;
+    _cachedCanPublish = null;
+    _cachedCanPublishAt = null;
+
     final group = _selected;
     if (group == null || _myConsent?.isActive != true) return;
 
-    unawaited(_publishOnce());
-    _publishTimer = Timer.periodic(_publishInterval, (_) {
-      unawaited(_publishOnce());
+    unawaited(_ensureOsPermission(requestIfNeeded: false, showFeedback: false)
+        .then((granted) {
+      if (!granted || !mounted) return;
+      _positionSub = Geolocator.getPositionStream(
+        locationSettings: _trackingSettings(),
+      ).listen(
+        _onPositionFix,
+        onError: (_) {},
+        cancelOnError: false,
+      );
+    }));
+
+    unawaited(_publishFromFix(force: true));
+    _publishTimer = Timer.periodic(_publishHeartbeat, (_) {
+      unawaited(_publishFromFix(force: true));
     });
+  }
+
+  void _onPositionFix(Position pos) {
+    if (!_fixFilter.accept(pos, previous: _lastAcceptedFix)) return;
+    _lastAcceptedFix = pos;
+    _applySelfLocal(pos);
+    unawaited(_publishFromFix(force: false));
+  }
+
+  void _applySelfLocal(Position pos) {
+    if (!mounted || _myUid.isEmpty) return;
+    final self = MemberLocation(
+      userId: _myUid,
+      lat: pos.latitude,
+      lon: pos.longitude,
+      recordedAt: DateTime.now().toUtc(),
+      accuracyM: pos.accuracy.isFinite ? pos.accuracy : null,
+    );
+    setState(() {
+      _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
+        ..[self.userId] = self;
+    });
+    unawaited(_syncMarkers());
+  }
+
+  Future<bool> _canPublishCached(String groupId) async {
+    final now = DateTime.now().toUtc();
+    final cachedAt = _cachedCanPublishAt;
+    if (_cachedCanPublish != null &&
+        cachedAt != null &&
+        now.difference(cachedAt) < _consentCacheTtl) {
+      return _cachedCanPublish!;
+    }
+    try {
+      final allowed = await _locationShare
+          .canPublishForGroup(groupId)
+          .timeout(const Duration(seconds: 8), onTimeout: () => false);
+      _cachedCanPublish = allowed;
+      _cachedCanPublishAt = now;
+      return allowed;
+    } catch (_) {
+      return _cachedCanPublish ?? false;
+    }
+  }
+
+  Future<void> _publishFromFix({required bool force}) async {
+    if (_publishing) return;
+    final group = _selected;
+    if (group == null || _myConsent?.isActive != true) return;
+
+    final granted = await _ensureOsPermission(
+      requestIfNeeded: false,
+      showFeedback: false,
+    );
+    if (!granted) return;
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    Position? pos = _lastAcceptedFix;
+    final acceptedAge = pos == null
+        ? null
+        : DateTime.now().toUtc().difference(
+              pos.timestamp.isUtc ? pos.timestamp : pos.timestamp.toUtc(),
+            );
+    final needsFresh = pos == null ||
+        (force && (acceptedAge == null || acceptedAge > const Duration(seconds: 15)));
+
+    if (needsFresh) {
+      try {
+        final fresh = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+        if (_fixFilter.accept(fresh, previous: _lastAcceptedFix)) {
+          pos = fresh;
+          _lastAcceptedFix = fresh;
+          _applySelfLocal(fresh);
+        }
+      } catch (_) {
+        // Usa lastAccepted si existe.
+      }
+    }
+
+    if (pos == null) return;
+    if (!_fixFilter.shouldPublish(
+      pos,
+      lastPublished: _lastPublishedFix,
+      lastPublishedAt: _lastPublishedAt,
+    )) {
+      return;
+    }
+
+    // Consentimiento con caché + timeout: no bloquear el candado _publishing.
+    final allowed = await _canPublishCached(group.id);
+    if (!allowed) return;
+
+    _publishing = true;
+    try {
+      await _locationShare
+          .publishPosition(pos)
+          .timeout(const Duration(seconds: 10));
+      _lastPublishedFix = pos;
+      _lastPublishedAt = DateTime.now().toUtc();
+      _applySelfLocal(pos);
+    } catch (_) {
+      // Silencioso: el siguiente heartbeat / stream reintenta.
+    } finally {
+      _publishing = false;
+    }
+  }
+
+  void _mergeIncomingLocations(Map<String, MemberLocation> incoming) {
+    final merged = Map<String, MemberLocation>.from(_locationsByUser);
+    for (final e in incoming.entries) {
+      final existing = merged[e.key];
+      if (existing == null ||
+          !e.value.recordedAt.isBefore(existing.recordedAt)) {
+        merged[e.key] = e.value;
+      }
+    }
+    _locationsByUser = merged;
   }
 
   void _restartRealtimeAndPoll() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _sosPollTimer?.cancel();
+    _sosPollTimer = null;
     _unsubscribeRealtime();
 
-    if (_selected == null || _members.isEmpty) return;
+    if (_selected == null) {
+      if (_activeSos.isNotEmpty && mounted) {
+        setState(() => _activeSos = const []);
+      }
+      return;
+    }
 
-    try {
-      _realtimeChannel = _locationShare.subscribeLocationUpdates(
-        onChange: (loc) {
-          if (!mounted) return;
-          final memberIds = _members.map((m) => m.userId).toSet();
-          if (!memberIds.contains(loc.userId)) return;
-          setState(() {
-            _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-              ..[loc.userId] = loc;
-          });
-          unawaited(_syncMarkers());
-        },
-        onDelete: (userId) {
-          if (!mounted) return;
-          setState(() {
-            _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-              ..remove(userId);
-          });
-          unawaited(_syncMarkers());
-        },
-      );
-    } catch (_) {
-      // Fallback: solo polling.
+    if (_members.isNotEmpty) {
+      try {
+        _realtimeChannel = _locationShare.subscribeLocationUpdates(
+          onChange: (loc) {
+            if (!mounted) return;
+            final memberIds = _members.map((m) => m.userId).toSet();
+            if (!memberIds.contains(loc.userId)) return;
+            final existing = _locationsByUser[loc.userId];
+            if (existing != null &&
+                loc.recordedAt.isBefore(existing.recordedAt)) {
+              return;
+            }
+            setState(() {
+              _locationsByUser =
+                  Map<String, MemberLocation>.from(_locationsByUser)
+                    ..[loc.userId] = loc;
+            });
+            unawaited(_syncMarkers());
+          },
+          onDelete: (userId) {
+            if (!mounted) return;
+            // No borrar el pin propio local por un DELETE remoto obsoleto.
+            if (userId == _myUid && _lastAcceptedFix != null) return;
+            setState(() {
+              _locationsByUser =
+                  Map<String, MemberLocation>.from(_locationsByUser)
+                    ..remove(userId);
+            });
+            unawaited(_syncMarkers());
+          },
+        );
+      } catch (_) {
+        // Fallback: solo polling.
+      }
     }
 
     unawaited(_refreshMemberLocations());
+    unawaited(_refreshActiveSos());
+    _subscribeSosRealtime();
     _pollTimer = Timer.periodic(_pollInterval, (_) {
       unawaited(_refreshMemberLocations());
     });
+    // SOS: poll corto para que el compañero vea el banner aunque Realtime falle.
+    _sosPollTimer = Timer.periodic(_sosPollInterval, (_) {
+      unawaited(_refreshActiveSos());
+    });
   }
 
-  Future<void> _publishOnce() async {
-    if (_publishing) return;
+  void _subscribeSosRealtime() {
     final group = _selected;
     if (group == null) return;
-    _publishing = true;
     try {
-      final allowed = await _locationShare.canPublishForGroup(group.id);
-      if (!allowed) return;
-
-      final granted = await _ensureOsPermission(
-        requestIfNeeded: false,
-        showFeedback: false,
+      _sosChannel = _sos.subscribeGroup(
+        groupId: group.id,
+        onChange: () {
+          if (!mounted) return;
+          unawaited(_refreshActiveSos());
+        },
       );
-      if (!granted) return;
+    } catch (_) {
+      // Polling cubre el fallback.
+    }
+  }
 
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+  String _sosSenderDismissKey(SosEvent e) => '${e.groupId}|${e.userId}';
 
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
+  bool _isSosHiddenLocally(SosEvent e) {
+    final id = e.id.trim().toLowerCase();
+    if (id.isNotEmpty && _sosDismissedLocally.contains(id)) return true;
+    final until = _sosDismissedSenderAt[_sosSenderDismissKey(e)];
+    if (until != null && !e.createdAt.toUtc().isAfter(until.toUtc())) {
+      return true;
+    }
+    return false;
+  }
+
+  void _markSosDismissedLocally(SosEvent event) {
+    final id = event.id.trim().toLowerCase();
+    if (id.isNotEmpty) _sosDismissedLocally.add(id);
+    final key = _sosSenderDismissKey(event);
+    final at = event.createdAt.toUtc();
+    final prev = _sosDismissedSenderAt[key];
+    if (prev == null || !at.isBefore(prev)) {
+      _sosDismissedSenderAt[key] = at;
+    }
+  }
+
+  Future<void> _refreshActiveSos() async {
+    final group = _selected;
+    if (group == null) {
+      if (mounted && (_activeSos.isNotEmpty || _sosAckProgress != null)) {
+        setState(() {
+          _activeSos = const [];
+          _sosAckProgress = null;
+        });
+      }
+      return;
+    }
+    final epoch = ++_sosRefreshEpoch;
+    try {
+      final list = await _sos.listActiveForGroup(group.id);
+      if (!mounted || epoch != _sosRefreshEpoch) return;
+      final named = _withMemberNames(list);
+      final myUid = _myUid;
+      final myAcked = await _sos.listMyAckedSosIds(named.map((e) => e.id));
+      if (!mounted || epoch != _sosRefreshEpoch) return;
+
+      // Emisor: siempre ve su SOS activo hasta que todos acepten (resolved).
+      // Receptor: oculta si ya dio Aceptar (servidor o local).
+      final visible = named.where((e) {
+        if (e.userId == myUid) return true;
+        if (_isSosHiddenLocally(e)) return false;
+        if (myAcked.contains(e.id.trim().toLowerCase())) return false;
+        return true;
+      }).toList();
+
+      SosAckProgress? progress;
+      final own = visible.where((e) => e.userId == myUid).toList();
+      if (own.isNotEmpty) {
+        try {
+          progress = await _sos.listAckProgress(own.first.id);
+          if (!mounted || epoch != _sosRefreshEpoch) return;
+          if (progress.allPeersAcked) {
+            await _sos.tryResolveIfAllAcked(own.first.id);
+            if (!mounted || epoch != _sosRefreshEpoch) return;
+            // Re-lista: debería desaparecer si quedó resolved.
+            final again = await _sos.listActiveForGroup(group.id);
+            if (!mounted || epoch != _sosRefreshEpoch) return;
+            final namedAgain = _withMemberNames(again);
+            setState(() {
+              _activeSos = namedAgain.where((e) {
+                if (e.userId == myUid) return true;
+                if (_isSosHiddenLocally(e)) return false;
+                if (myAcked.contains(e.id.trim().toLowerCase())) return false;
+                return true;
+              }).toList();
+              _sosAckProgress = _activeSos.any((e) => e.userId == myUid)
+                  ? progress
+                  : null;
+            });
+            return;
+          }
+        } catch (_) {
+          progress = null;
+        }
+      }
+
+      setState(() {
+        _activeSos = visible;
+        _sosAckProgress = progress;
+      });
+    } catch (_) {
+      // Tabla aún no aplicada o red: no tumbar el mapa.
+    }
+  }
+
+  /// Prioriza el nombre del integrante del grupo ya cargado en el mapa.
+  List<SosEvent> _withMemberNames(List<SosEvent> events) {
+    if (events.isEmpty || _members.isEmpty) return events;
+    final nameById = {
+      for (final m in _members)
+        if (m.displayName != null && m.displayName!.trim().isNotEmpty)
+          m.userId: m.displayName!.trim()
+        else if (m.label.trim().isNotEmpty && m.label != 'Miembro')
+          m.userId: m.label.trim(),
+    };
+    if (nameById.isEmpty) return events;
+    return [
+      for (final e in events)
+        (e.displayName == null || e.displayName!.trim().isEmpty) &&
+                nameById.containsKey(e.userId)
+            ? e.copyWith(displayName: nameById[e.userId])
+            : e,
+    ];
+  }
+
+  String _sosSenderLabel(SosEvent event) {
+    final fromEvent = event.displayName?.trim();
+    if (fromEvent != null && fromEvent.isNotEmpty) return fromEvent;
+    for (final m in _members) {
+      if (m.userId != event.userId) continue;
+      final n = m.displayName?.trim();
+      if (n != null && n.isNotEmpty) return n;
+      if (m.label.trim().isNotEmpty && m.label != 'Miembro') return m.label;
+    }
+    return event.label;
+  }
+
+  Future<void> _onSosPressed() async {
+    final group = _selected;
+    if (group == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosNeedGroup)),
+      );
+      return;
+    }
+    if (_sosSending) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.sosConfirmTitle),
+        content: Text(AppStrings.sosConfirmBody(group.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(AppStrings.sosCancelAction),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accentRed,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(AppStrings.sosConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _sosSending = true);
+    try {
+      double? lat;
+      double? lon;
+      try {
+        final granted = await _ensureOsPermission(
+          requestIfNeeded: true,
+          showFeedback: false,
+        );
+        if (granted && await Geolocator.isLocationServiceEnabled()) {
+          final pos = _lastAcceptedFix ??
+              await Geolocator.getCurrentPosition(
+                locationSettings: const LocationSettings(
+                  accuracy: LocationAccuracy.high,
+                  timeLimit: Duration(seconds: 8),
+                ),
+              );
+          lat = pos.latitude;
+          lon = pos.longitude;
+        }
+      } catch (_) {
+        // SOS sin coords sigue siendo válido.
+      }
+
+      var event = await _sos.raise(groupId: group.id, lat: lat, lon: lon);
+      if (!mounted) return;
+      event = _withMemberNames([event]).first;
+      // Si no hay otros miembros, resuelve de inmediato.
+      unawaited(_sos.tryResolveIfAllAcked(event.id));
+      // Banner inmediato en este teléfono (sin esperar poll/Realtime).
+      setState(() {
+        _activeSos = [
+          event,
+          ..._activeSos.where((e) => e.id != event.id),
+        ];
+        _sosAckProgress = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${AppStrings.sosSent} ${AppStrings.sosPeerHint}'),
         ),
       );
-      await _locationShare.publishPosition(pos);
-
+      unawaited(_refreshActiveSos());
+    } catch (e) {
       if (!mounted) return;
-      final self = MemberLocation(
-        userId: _myUid,
-        lat: pos.latitude,
-        lon: pos.longitude,
-        recordedAt: DateTime.now().toUtc(),
-        accuracyM: pos.accuracy.isFinite ? pos.accuracy : null,
-      );
-      setState(() {
-        _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-          ..[self.userId] = self;
-      });
-      await _syncMarkers();
-    } catch (_) {
-      // Silencioso: no romper UI si falla un ciclo de publicación.
+      if (SosService.isMissingApiObject(e)) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text(AppStrings.sosNeedMigrationTitle),
+            content: const SingleChildScrollView(
+              child: Text(AppStrings.sosNeedMigrationBody),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(AppStrings.close),
+              ),
+            ],
+          ),
+        );
+      } else {
+        final short = e.toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              short.length > 160
+                  ? '${AppStrings.sosSendError} (${short.substring(0, 160)}…)'
+                  : '${AppStrings.sosSendError} ($short)',
+            ),
+          ),
+        );
+      }
     } finally {
-      _publishing = false;
+      if (mounted) setState(() => _sosSending = false);
+    }
+  }
+
+  Future<void> _cancelOwnSos(SosEvent event) async {
+    _sosRefreshEpoch++;
+    setState(() {
+      _activeSos = _activeSos.where((e) => e.id != event.id).toList();
+      if (_sosAckProgress?.sosId == event.id) _sosAckProgress = null;
+    });
+    try {
+      await _sos.cancel(event.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosCancelled)),
+      );
+      await _refreshActiveSos();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosSendError)),
+      );
     }
   }
 
@@ -480,31 +959,106 @@ class _MapShellScreenState extends State<MapShellScreen> {
     try {
       final locations = await _fetchLocationsMap(_members);
       if (!mounted) return;
-      setState(() => _locationsByUser = locations);
+      setState(() => _mergeIncomingLocations(locations));
       await _syncMarkers();
     } catch (_) {
       // Silencioso en poll.
     }
   }
 
+  double _accuracyRadiusPx(MemberLocation loc) {
+    final meters = (loc.accuracyM ?? 35).clamp(12.0, 120.0);
+    final zoom = _mapController?.cameraPosition?.zoom ?? _myLocationZoom;
+    final mPerPx = 156543.03392 *
+        math.cos(loc.lat * math.pi / 180).clamp(0.2, 1.0) /
+        math.pow(2, zoom);
+    return (meters / mPerPx).clamp(10.0, 90.0);
+  }
+
+  Future<void> _fitToMemberLocations(Map<String, LatLng> positions) async {
+    final controller = _mapController;
+    if (controller == null || !_styleReady || positions.isEmpty) return;
+    if (positions.length == 1) {
+      final only = positions.values.first;
+      try {
+        await controller.animateCamera(
+          CameraUpdate.newLatLngZoom(only, _myLocationZoom),
+        );
+      } catch (_) {}
+      return;
+    }
+    var minLat = positions.values.first.latitude;
+    var maxLat = minLat;
+    var minLon = positions.values.first.longitude;
+    var maxLon = minLon;
+    for (final p in positions.values) {
+      minLat = math.min(minLat, p.latitude);
+      maxLat = math.max(maxLat, p.latitude);
+      minLon = math.min(minLon, p.longitude);
+      maxLon = math.max(maxLon, p.longitude);
+    }
+    // Padding mínimo si están muy juntos.
+    if ((maxLat - minLat).abs() < 0.0004) {
+      minLat -= 0.0005;
+      maxLat += 0.0005;
+    }
+    if ((maxLon - minLon).abs() < 0.0004) {
+      minLon -= 0.0005;
+      maxLon += 0.0005;
+    }
+    try {
+      await controller.animateCamera(
+        CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+            southwest: LatLng(minLat, minLon),
+            northeast: LatLng(maxLat, maxLon),
+          ),
+          left: 56,
+          top: 56,
+          right: 56,
+          bottom: 56,
+        ),
+      );
+    } catch (_) {}
+  }
+
   Future<void> _syncMarkers() async {
     final controller = _mapController;
-    if (controller == null || !_styleReady || _syncingMarkers) return;
+    if (controller == null || !_styleReady) return;
+    if (_syncingMarkers) {
+      _markersDirty = true;
+      return;
+    }
     if (!_markerImageReady) await _ensureMarkerImages();
 
     _syncingMarkers = true;
+    _markersDirty = false;
     try {
+      // Coordenadas reales (sin nudge artificial): el nudge de 35 m era la
+      // causa de que el pin "tú" no coincidiera con el anillo GPS del dispositivo.
       final desired = Map<String, MemberLocation>.from(_locationsByUser);
-      // Quitar marcadores obsoletos.
-      final stale = _circlesByUser.keys
-          .where((id) => !desired.containsKey(id))
-          .toList();
+      final display = <String, LatLng>{
+        for (final e in desired.entries)
+          e.key: LatLng(e.value.lat, e.value.lon),
+      };
+
+      final stale = <String>{
+        ..._circlesByUser.keys,
+        ..._accuracyByUser.keys,
+        ..._labelsByUser.keys,
+      }.where((id) => !desired.containsKey(id)).toList();
       for (final id in stale) {
         final circle = _circlesByUser.remove(id);
+        final accuracy = _accuracyByUser.remove(id);
         final label = _labelsByUser.remove(id);
         if (circle != null) {
           try {
             await controller.removeCircle(circle);
+          } catch (_) {}
+        }
+        if (accuracy != null) {
+          try {
+            await controller.removeCircle(accuracy);
           } catch (_) {}
         }
         if (label != null) {
@@ -519,11 +1073,41 @@ class _MapShellScreenState extends State<MapShellScreen> {
       for (final entry in desired.entries) {
         final userId = entry.key;
         final loc = entry.value;
-        final geometry = LatLng(loc.lat, loc.lon);
+        final geometry = display[userId]!;
         final isSelf = userId == _myUid;
         final color = isSelf ? '#4DB6D4' : '#C62828';
         final label = nameById[userId] ??
             (isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember);
+        final accRadius = _accuracyRadiusPx(loc);
+
+        final existingAccuracy = _accuracyByUser[userId];
+        if (existingAccuracy == null) {
+          try {
+            final halo = await controller.addCircle(
+              CircleOptions(
+                geometry: geometry,
+                circleRadius: accRadius,
+                circleColor: color,
+                circleOpacity: 0.16,
+                circleStrokeWidth: 1,
+                circleStrokeColor: color,
+                circleStrokeOpacity: 0.35,
+              ),
+            );
+            _accuracyByUser[userId] = halo;
+          } catch (_) {}
+        } else {
+          try {
+            await controller.updateCircle(
+              existingAccuracy,
+              CircleOptions(
+                geometry: geometry,
+                circleRadius: accRadius,
+                circleColor: color,
+              ),
+            );
+          } catch (_) {}
+        }
 
         final existingCircle = _circlesByUser[userId];
         if (existingCircle == null) {
@@ -531,9 +1115,9 @@ class _MapShellScreenState extends State<MapShellScreen> {
             final circle = await controller.addCircle(
               CircleOptions(
                 geometry: geometry,
-                circleRadius: 10,
+                circleRadius: isSelf ? 10 : 12,
                 circleColor: color,
-                circleOpacity: 0.9,
+                circleOpacity: 0.92,
                 circleStrokeWidth: 2.5,
                 circleStrokeColor: '#FFFFFF',
               ),
@@ -544,7 +1128,11 @@ class _MapShellScreenState extends State<MapShellScreen> {
           try {
             await controller.updateCircle(
               existingCircle,
-              CircleOptions(geometry: geometry, circleColor: color),
+              CircleOptions(
+                geometry: geometry,
+                circleColor: color,
+                circleRadius: isSelf ? 10 : 12,
+              ),
             );
           } catch (_) {}
         }
@@ -575,8 +1163,16 @@ class _MapShellScreenState extends State<MapShellScreen> {
           } catch (_) {}
         }
       }
+
+      if (!_didFitMembers && display.length >= 2) {
+        _didFitMembers = true;
+        await _fitToMemberLocations(display);
+      }
     } finally {
       _syncingMarkers = false;
+      if (_markersDirty && mounted) {
+        unawaited(_syncMarkers());
+      }
     }
   }
 
@@ -600,7 +1196,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
           compassEnabled: true,
           myLocationEnabled: showMyLocation,
           myLocationTrackingMode: MyLocationTrackingMode.none,
-          trackCameraPosition: false,
+          trackCameraPosition: true,
           onMapCreated: _onMapCreated,
           onStyleLoadedCallback: () {
             unawaited(_onStyleLoaded());
@@ -609,21 +1205,51 @@ class _MapShellScreenState extends State<MapShellScreen> {
         Positioned(
           right: 12,
           bottom: 56,
-          child: FloatingActionButton.small(
-            heroTag: 'map_my_location',
-            tooltip: AppStrings.mapMyLocationTooltip,
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.deepBlue,
-            onPressed: _locating
-                ? null
-                : () => _centerOnMyLocation(fromUser: true),
-            child: _locating
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.my_location),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton(
+                heroTag: 'map_sos',
+                tooltip: AppStrings.sosButtonTooltip,
+                backgroundColor: AppColors.accentRed,
+                foregroundColor: Colors.white,
+                onPressed: _sosSending ? null : _onSosPressed,
+                child: _sosSending
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text(
+                        AppStrings.sosButtonLabel,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+              ),
+              const SizedBox(height: 12),
+              FloatingActionButton.small(
+                heroTag: 'map_my_location',
+                tooltip: AppStrings.mapMyLocationTooltip,
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.deepBlue,
+                onPressed: _locating
+                    ? null
+                    : () => _centerOnMyLocation(fromUser: true),
+                child: _locating
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+              ),
+            ],
           ),
         ),
         Positioned(
@@ -650,10 +1276,141 @@ class _MapShellScreenState extends State<MapShellScreen> {
     );
   }
 
+  Future<void> _acceptSosPeer(SosEvent event) async {
+    // Receptor: registra ack en servidor y oculta banner localmente.
+    _sosRefreshEpoch++;
+    _markSosDismissedLocally(event);
+    setState(() {
+      _activeSos = _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
+    });
+    final lat = event.lat;
+    final lon = event.lon;
+    final c = _mapController;
+    if (lat != null && lon != null && c != null) {
+      unawaited(
+        c.animateCamera(
+          CameraUpdate.newLatLngZoom(LatLng(lat, lon), _myLocationZoom),
+        ),
+      );
+    }
+    try {
+      final allAcked = await _sos.acknowledge(event.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            allAcked
+                ? AppStrings.sosAcknowledgedAllDone
+                : AppStrings.sosAcknowledged,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosAckError)),
+      );
+    }
+  }
+
+  Widget? _buildSosBanner() {
+    final visible = _activeSos.where((e) {
+      if (e.userId == _myUid) return true;
+      return !_isSosHiddenLocally(e);
+    }).toList();
+    if (visible.isEmpty) return null;
+    final event = visible.first;
+    final isSelf = event.userId == _myUid;
+    final senderName = _sosSenderLabel(event);
+    final progress =
+        isSelf && _sosAckProgress?.sosId == event.id ? _sosAckProgress : null;
+    final pendingNames =
+        progress?.pendingPeers.map((m) => m.displayName).toList() ?? const [];
+    final acked = progress?.ackedCount ?? 0;
+    final expected = progress?.expectedCount ?? 0;
+
+    return Material(
+      color: AppColors.accentRed,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isSelf
+                        ? AppStrings.sosBannerSelfNamed(senderName)
+                        : AppStrings.sosBannerPeer(senderName),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (isSelf) ...[
+              const SizedBox(height: 6),
+              Text(
+                expected == 0
+                    ? AppStrings.sosAckNoPeers
+                    : pendingNames.isEmpty
+                        ? AppStrings.sosAckWaitingResolve
+                        : AppStrings.sosAckPendingList(
+                            acked,
+                            expected,
+                            pendingNames,
+                          ),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => unawaited(_cancelOwnSos(event)),
+                  child: const Text(
+                    AppStrings.sosBannerDismissOwn,
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ] else ...[
+              const SizedBox(height: 10),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: AppColors.accentRed,
+                  minimumSize: const Size.fromHeight(44),
+                ),
+                onPressed: () => unawaited(_acceptSosPeer(event)),
+                child: const Text(
+                  AppStrings.sosBannerAck,
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final sosBanner = _buildSosBanner();
     return Column(
       children: [
+        ?sosBanner,
         Material(
           color: Colors.white,
           elevation: 1,
