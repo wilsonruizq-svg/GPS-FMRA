@@ -704,10 +704,42 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       final list = await _sos.listActiveForGroup(group.id);
       if (!mounted) return;
-      setState(() => _activeSos = list);
+      setState(() => _activeSos = _withMemberNames(list));
     } catch (_) {
       // Tabla aún no aplicada o red: no tumbar el mapa.
     }
+  }
+
+  /// Prioriza el nombre del integrante del grupo ya cargado en el mapa.
+  List<SosEvent> _withMemberNames(List<SosEvent> events) {
+    if (events.isEmpty || _members.isEmpty) return events;
+    final nameById = {
+      for (final m in _members)
+        if (m.displayName != null && m.displayName!.trim().isNotEmpty)
+          m.userId: m.displayName!.trim()
+        else if (m.label.trim().isNotEmpty && m.label != 'Miembro')
+          m.userId: m.label.trim(),
+    };
+    if (nameById.isEmpty) return events;
+    return [
+      for (final e in events)
+        (e.displayName == null || e.displayName!.trim().isEmpty) &&
+                nameById.containsKey(e.userId)
+            ? e.copyWith(displayName: nameById[e.userId])
+            : e,
+    ];
+  }
+
+  String _sosSenderLabel(SosEvent event) {
+    final fromEvent = event.displayName?.trim();
+    if (fromEvent != null && fromEvent.isNotEmpty) return fromEvent;
+    for (final m in _members) {
+      if (m.userId != event.userId) continue;
+      final n = m.displayName?.trim();
+      if (n != null && n.isNotEmpty) return n;
+      if (m.label.trim().isNotEmpty && m.label != 'Miembro') return m.label;
+    }
+    return event.label;
   }
 
   Future<void> _onSosPressed() async {
@@ -766,8 +798,9 @@ class _MapShellScreenState extends State<MapShellScreen>
         // SOS sin coords sigue siendo válido.
       }
 
-      final event = await _sos.raise(groupId: group.id, lat: lat, lon: lon);
+      var event = await _sos.raise(groupId: group.id, lat: lat, lon: lon);
       if (!mounted) return;
+      event = _withMemberNames([event]).first;
       // Banner inmediato en este teléfono (sin esperar poll/Realtime).
       setState(() {
         _activeSos = [
@@ -1158,6 +1191,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (_activeSos.isEmpty) return null;
     final event = _activeSos.first;
     final isSelf = event.userId == _myUid;
+    final senderName = _sosSenderLabel(event);
     return Material(
       color: AppColors.accentRed,
       child: Padding(
@@ -1169,8 +1203,8 @@ class _MapShellScreenState extends State<MapShellScreen>
             Expanded(
               child: Text(
                 isSelf
-                    ? AppStrings.sosBannerSelf
-                    : AppStrings.sosBannerPeer(event.label),
+                    ? AppStrings.sosBannerSelfNamed(senderName)
+                    : AppStrings.sosBannerPeer(senderName),
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,

@@ -33,8 +33,8 @@ class SosEvent {
 
   factory SosEvent.fromMap(Map<String, dynamic> map) {
     final profile = map['profiles'];
-    String? name;
-    if (profile is Map) {
+    String? name = map['display_name'] as String?;
+    if ((name == null || name.trim().isEmpty) && profile is Map) {
       name = profile['display_name'] as String?;
     }
     return SosEvent(
@@ -104,6 +104,7 @@ class SosService {
   }
 
   /// Alertas activas del grupo (más recientes primero).
+  /// Siempre intenta resolver `display_name` del emisor (embed o query profiles).
   Future<List<SosEvent>> listActiveForGroup(String groupId) async {
     List rows;
     try {
@@ -124,9 +125,49 @@ class SosService {
           .limit(20) as List;
     }
 
-    return rows
+    final events = rows
         .map((e) => SosEvent.fromMap(Map<String, dynamic>.from(e as Map)))
         .toList();
+    return _enrichDisplayNames(events);
+  }
+
+  /// Completa display_name faltante con `profiles` (batch).
+  Future<List<SosEvent>> _enrichDisplayNames(List<SosEvent> events) async {
+    final missingIds = events
+        .where(
+          (e) => e.displayName == null || e.displayName!.trim().isEmpty,
+        )
+        .map((e) => e.userId)
+        .toSet()
+        .toList();
+    if (missingIds.isEmpty) return events;
+
+    try {
+      final rows = await _sb
+          .from('profiles')
+          .select('id, display_name')
+          .inFilter('id', missingIds);
+      final names = <String, String>{};
+      for (final row in (rows as List)) {
+        final map = Map<String, dynamic>.from(row as Map);
+        final id = map['id'] as String?;
+        final name = (map['display_name'] as String?)?.trim();
+        if (id != null && name != null && name.isNotEmpty) {
+          names[id] = name;
+        }
+      }
+      if (names.isEmpty) return events;
+      return [
+        for (final e in events)
+          (e.displayName == null || e.displayName!.trim().isEmpty) &&
+                  names.containsKey(e.userId)
+              ? e.copyWith(displayName: names[e.userId])
+              : e,
+      ];
+    } catch (e) {
+      debugPrint('SosService._enrichDisplayNames: $e');
+      return events;
+    }
   }
 
   /// Registra SOS. Prefiere RPC `raise_sos`; fallback INSERT directo.
@@ -158,12 +199,17 @@ class SosService {
       );
     }
 
-    // Nombre propio para el banner local.
-    final myName = _sb.auth.currentUser?.userMetadata?['display_name'] as String?;
-    if ((event.displayName == null || event.displayName!.isEmpty) &&
-        myName != null &&
-        myName.trim().isNotEmpty) {
-      event = event.copyWith(displayName: myName.trim());
+    // Nombre del emisor para banner / push.
+    if (event.displayName == null || event.displayName!.trim().isEmpty) {
+      final enriched = await _enrichDisplayNames([event]);
+      event = enriched.first;
+    }
+    if (event.displayName == null || event.displayName!.trim().isEmpty) {
+      final meta =
+          _sb.auth.currentUser?.userMetadata?['display_name'] as String?;
+      if (meta != null && meta.trim().isNotEmpty) {
+        event = event.copyWith(displayName: meta.trim());
+      }
     }
 
     unawaited(_notifyPeersBestEffort(event));
