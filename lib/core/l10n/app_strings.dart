@@ -232,23 +232,24 @@ abstract final class AppStrings {
   static const profilePhotoUploaded = 'Foto de perfil actualizada.';
   static const profilePhotoStorageNote =
       'La foto aún no está activa en el servidor. En Supabase → SQL Editor '
-      'ejecuta el archivo 20261102250000_avatars_storage.sql '
+      'ejecuta 20261102251000_avatars_storage_hosted.sql '
       '(éxito esperado: Success. No rows returned). '
       'Luego vuelve a abrir esta pantalla. Puedes guardar nombre y teléfono ahora.';
   static const profilePhotoUploadError =
       'No se pudo subir la foto. Si acabas de crear el bucket, cierra y '
       'vuelve a entrar a Editar perfil. Si el error sigue: aplica '
-      '20261102250000_avatars_storage.sql en el SQL Editor '
+      '20261102251000_avatars_storage_hosted.sql en el SQL Editor '
       '(Success. No rows returned) y revisa la conexión.';
   static const profilePhotoApplyTitle = 'Falta preparar Storage (avatars)';
   static const profilePhotoApplyBody =
       'Para fotos de perfil:\n'
       '1. Abre Supabase → SQL Editor → New query.\n'
       '2. Pega todo el archivo '
-      'supabase/migrations/20261102250000_avatars_storage.sql\n'
+      'supabase/migrations/20261102251000_avatars_storage_hosted.sql\n'
       '3. Run. Éxito esperado: Success. No rows returned.\n'
       '4. Confirma en Storage → Buckets que exista “avatars”.\n'
       '5. Vuelve a intentar Añadir foto.\n\n'
+      'Si viste ERROR 42501 con el SQL viejo: usa solo este archivo hosted.\n'
       'Nombre y teléfono sí se pueden guardar sin el bucket.';
 
   static const sosButtonTooltip = 'Emergencia SOS';

@@ -24,10 +24,13 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY obligatorio si solo ves 1 pin** con 2 miembros + consentimiento:
       endurece `can_view_location` / helpers con `row_security=off` y añade
       RPC `list_group_locations` para que ambos pines sean visibles.)
-   7. `supabase/migrations/20261102250000_avatars_storage.sql`
-      (**APPLY para foto de perfil:** crea bucket público `avatars` + RLS
-      Storage. Éxito esperado en SQL Editor: **Success. No rows returned**
-      — o “Success” con filas del upsert del bucket.)
+   7. `supabase/migrations/20261102251000_avatars_storage_hosted.sql`
+      (**APPLY para foto de perfil en Supabase hosted.** Crea bucket
+      público `avatars` + policies. **No** hace COMMENT/ALTER sobre
+      `storage.objects` (evita ERROR 42501 must be owner of table objects).
+      Éxito esperado: **Success. No rows returned**.
+      Si ya corriste el archivo viejo `20261102250000_…` y falló al final,
+      corre **este** `…251000…_hosted.sql` — es seguro e idempotente.)
    8. `supabase/migrations/20261102260000_sos_events.sql`
       (**APPLY para botón SOS:** tabla `sos_events` + RLS + Realtime.
       Éxito esperado: **Success. No rows returned**.)

@@ -1,11 +1,10 @@
--- GPS-FMRA — Bucket Storage `avatars` + RLS
--- APPLY: pegar en SQL Editor → Run (ver supabase/APPLY_ES.md).
+-- GPS-FMRA — Bucket Storage `avatars` + RLS (histórico)
+-- Preferir en hosted: 20261102251000_avatars_storage_hosted.sql
+-- (este archivo antiguo fallaba con 42501 por COMMENT ON storage.objects).
 -- Idempotente. No incluye secretos.
 --
 -- Mensaje de éxito esperado (Supabase SQL Editor):
 --   Success. No rows returned
---   (o “Success. X rows returned” si el insert del bucket cuenta filas)
--- Tras APPLY: Storage → Buckets debe listar `avatars` (público).
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
@@ -59,5 +58,4 @@ create policy avatars_delete_own
     and (storage.foldername(name))[1] = auth.uid()::text
   );
 
-comment on table storage.objects is
-  'Incluye avatares GPS-FMRA en bucket avatars; path = {user_id}/avatar.jpg';
+-- No COMMENT ON / ALTER TABLE storage.objects (hosted → ERROR 42501).
