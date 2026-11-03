@@ -62,10 +62,18 @@ class _MapShellScreenState extends State<MapShellScreen> {
     });
     try {
       final groups = await _groups.listMyGroups();
-      FamilyGroup? selected = _selected;
-      if (selected == null || !groups.any((g) => g.id == selected!.id)) {
-        selected = groups.isNotEmpty ? groups.first : null;
+      // Reselect by id from the fresh list so DropdownButton value ∈ items.
+      final previousId = _selected?.id;
+      FamilyGroup? selected;
+      if (previousId != null) {
+        for (final g in groups) {
+          if (g.id == previousId) {
+            selected = g;
+            break;
+          }
+        }
       }
+      selected ??= groups.isNotEmpty ? groups.first : null;
       List<GroupMember> members = const [];
       LocationConsent? mine;
       if (selected != null) {
