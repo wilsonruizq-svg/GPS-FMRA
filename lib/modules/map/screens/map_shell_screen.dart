@@ -87,7 +87,12 @@ class _MapShellScreenState extends State<MapShellScreen>
   bool _sosSending = false;
   List<SosEvent> _activeSos = const [];
   /// SOS aceptados/ocultos solo en este dispositivo (no cancela al emisor).
-  final Set<String> _sosDismissedLocally = {};
+  /// Estático: sobrevive recreaciones del State en la misma sesión.
+  static final Set<String> _sosDismissedLocally = <String>{};
+  /// Emisor oculto hasta un createdAt mayor (nuevo SOS del mismo user sí se muestra).
+  static final Map<String, DateTime> _sosDismissedSenderAt = <String, DateTime>{};
+  /// Invalida refrescos in-flight para que un poll viejo no resuscite el banner.
+  int _sosRefreshEpoch = 0;
 
   Position? _lastAcceptedFix;
   Position? _lastPublishedFix;
@@ -695,6 +700,29 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
+  String _sosSenderDismissKey(SosEvent e) => '${e.groupId}|${e.userId}';
+
+  bool _isSosHiddenLocally(SosEvent e) {
+    final id = e.id.trim().toLowerCase();
+    if (id.isNotEmpty && _sosDismissedLocally.contains(id)) return true;
+    final until = _sosDismissedSenderAt[_sosSenderDismissKey(e)];
+    if (until != null && !e.createdAt.toUtc().isAfter(until.toUtc())) {
+      return true;
+    }
+    return false;
+  }
+
+  void _markSosDismissedLocally(SosEvent event) {
+    final id = event.id.trim().toLowerCase();
+    if (id.isNotEmpty) _sosDismissedLocally.add(id);
+    final key = _sosSenderDismissKey(event);
+    final at = event.createdAt.toUtc();
+    final prev = _sosDismissedSenderAt[key];
+    if (prev == null || !at.isBefore(prev)) {
+      _sosDismissedSenderAt[key] = at;
+    }
+  }
+
   Future<void> _refreshActiveSos() async {
     final group = _selected;
     if (group == null) {
@@ -703,14 +731,13 @@ class _MapShellScreenState extends State<MapShellScreen>
       }
       return;
     }
+    final epoch = ++_sosRefreshEpoch;
     try {
       final list = await _sos.listActiveForGroup(group.id);
-      if (!mounted) return;
+      if (!mounted || epoch != _sosRefreshEpoch) return;
       final named = _withMemberNames(list);
       setState(() {
-        _activeSos = named
-            .where((e) => !_sosDismissedLocally.contains(e.id))
-            .toList();
+        _activeSos = named.where((e) => !_isSosHiddenLocally(e)).toList();
       });
     } catch (_) {
       // Tabla aún no aplicada o red: no tumbar el mapa.
@@ -857,6 +884,11 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   Future<void> _cancelOwnSos(SosEvent event) async {
+    _sosRefreshEpoch++;
+    _markSosDismissedLocally(event);
+    setState(() {
+      _activeSos = _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
+    });
     try {
       await _sos.cancel(event.id);
       if (!mounted) return;
@@ -1195,9 +1227,11 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   void _acceptSosLocally(SosEvent event) {
-    _sosDismissedLocally.add(event.id);
+    // Invalida poll/realtime in-flight para que no vuelvan a pintar este SOS.
+    _sosRefreshEpoch++;
+    _markSosDismissedLocally(event);
     setState(() {
-      _activeSos = _activeSos.where((e) => e.id != event.id).toList();
+      _activeSos = _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
     });
     final lat = event.lat;
     final lon = event.lon;
@@ -1216,7 +1250,7 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   Widget? _buildSosBanner() {
     final visible =
-        _activeSos.where((e) => !_sosDismissedLocally.contains(e.id)).toList();
+        _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
     if (visible.isEmpty) return null;
     final event = visible.first;
     final isSelf = event.userId == _myUid;

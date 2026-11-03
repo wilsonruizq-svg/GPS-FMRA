@@ -37,10 +37,17 @@ class SosEvent {
     if ((name == null || name.trim().isEmpty) && profile is Map) {
       name = profile['display_name'] as String?;
     }
+    // IDs siempre String normalizado (PostgREST a veces entrega uuid dinámico).
+    final id = '${map['id']}'.trim();
+    final groupId = '${map['group_id']}'.trim();
+    final userId = '${map['user_id']}'.trim();
+    if (id.isEmpty || id == 'null') {
+      throw FormatException('sos_events.id inválido');
+    }
     return SosEvent(
-      id: map['id'] as String,
-      groupId: map['group_id'] as String,
-      userId: map['user_id'] as String,
+      id: id,
+      groupId: groupId,
+      userId: userId,
       status: map['status'] as String? ?? 'active',
       createdAt: DateTime.parse(map['created_at'] as String).toUtc(),
       lat: (map['lat'] as num?)?.toDouble(),
