@@ -300,10 +300,9 @@ abstract final class AppStrings {
   static const sosPeerHint =
       'Los compañeros verán un banner rojo en el mapa (app abierta). '
       'Push FCM es opcional.';
-  static String sosBannerPeer(String name) =>
-      '¡SOS de $name! Necesita ayuda.';
-  static String sosBannerSelfNamed(String name) =>
-      'Tu alerta SOS está activa ($name).';
+  /// Exact banner title for peer SOS, e.g. "SOS de Wilson C".
+  static String sosBannerPeer(String name) => 'SOS de $name';
+  static String sosBannerSelfNamed(String name) => 'SOS de $name';
   static const sosBannerSelf = 'Tu alerta SOS está activa.';
   static const sosBannerDismissOwn = 'Cancelar alerta';
   static const sosBannerAck = 'Aceptar';
