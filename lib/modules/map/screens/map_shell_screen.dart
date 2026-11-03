@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -13,6 +14,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
+import '../../location/location_fix_filter.dart';
 import '../../location/location_share_service.dart';
 
 /// Shell del mapa: MapLibre + pines de integrantes con consentimiento activo.
@@ -23,7 +25,8 @@ class MapShellScreen extends StatefulWidget {
   State<MapShellScreen> createState() => _MapShellScreenState();
 }
 
-class _MapShellScreenState extends State<MapShellScreen> {
+class _MapShellScreenState extends State<MapShellScreen>
+    with WidgetsBindingObserver {
   /// Bogotá — solo si no hay GPS disponible al abrir el mapa.
   static const _fallbackCamera = CameraPosition(
     target: LatLng(4.7110, -74.0721),
@@ -31,12 +34,18 @@ class _MapShellScreenState extends State<MapShellScreen> {
   );
 
   static const _myLocationZoom = 15.0;
-  static const _publishInterval = Duration(seconds: 20);
-  static const _pollInterval = Duration(seconds: 25);
+
+  /// Heartbeat de publicación (documentado): cada 8 s como máximo de espera
+  /// aunque el dispositivo esté quieto. El stream también publica al moverse
+  /// ≥8 m, con piso de 5 s entre upserts.
+  static const _publishHeartbeat = Duration(seconds: 8);
+  static const _pollInterval = Duration(seconds: 15);
+  static const _consentCacheTtl = Duration(seconds: 45);
 
   final _groups = GroupsService();
   final _consent = ConsentService();
   final _locationShare = LocationShareService();
+  final _fixFilter = const LocationFixFilter();
 
   MapLibreMapController? _mapController;
   bool _styleReady = false;
@@ -59,29 +68,48 @@ class _MapShellScreenState extends State<MapShellScreen> {
   Map<String, MemberLocation> _locationsByUser = {};
 
   final Map<String, Circle> _circlesByUser = {};
+  final Map<String, Circle> _accuracyByUser = {};
   final Map<String, Symbol> _labelsByUser = {};
 
   Timer? _publishTimer;
   Timer? _pollTimer;
+  StreamSubscription<Position>? _positionSub;
   RealtimeChannel? _realtimeChannel;
   bool _publishing = false;
   bool _syncingMarkers = false;
   bool _markersDirty = false;
   bool _didFitMembers = false;
 
+  Position? _lastAcceptedFix;
+  Position? _lastPublishedFix;
+  DateTime? _lastPublishedAt;
+  bool? _cachedCanPublish;
+  DateTime? _cachedCanPublishAt;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _resolveInitialCamera();
     _load();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopSharingLoop();
     _unsubscribeRealtime();
     _mapController = null;
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _cachedCanPublish = null;
+      _cachedCanPublishAt = null;
+      unawaited(_publishFromFix(force: true));
+    }
   }
 
   /// Pide permiso OS al abrir el mapa y fija [initialCameraPosition] con GPS
@@ -377,11 +405,36 @@ class _MapShellScreenState extends State<MapShellScreen> {
 
   // --- Publicar / refrescar / Realtime ------------------------------------
 
+  LocationSettings _trackingSettings() {
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      return AndroidSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 8,
+        intervalDuration: const Duration(seconds: 5),
+        maxUpdateAge: const Duration(seconds: 20),
+      );
+    }
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 8,
+        activityType: ActivityType.other,
+        pauseLocationUpdatesAutomatically: true,
+      );
+    }
+    return const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 8,
+    );
+  }
+
   void _stopSharingLoop() {
     _publishTimer?.cancel();
     _publishTimer = null;
     _pollTimer?.cancel();
     _pollTimer = null;
+    unawaited(_positionSub?.cancel());
+    _positionSub = null;
   }
 
   void _unsubscribeRealtime() {
@@ -395,13 +448,157 @@ class _MapShellScreenState extends State<MapShellScreen> {
   void _restartSharingLoop() {
     _publishTimer?.cancel();
     _publishTimer = null;
+    unawaited(_positionSub?.cancel());
+    _positionSub = null;
+    _lastAcceptedFix = null;
+    _lastPublishedFix = null;
+    _lastPublishedAt = null;
+    _cachedCanPublish = null;
+    _cachedCanPublishAt = null;
+
     final group = _selected;
     if (group == null || _myConsent?.isActive != true) return;
 
-    unawaited(_publishOnce());
-    _publishTimer = Timer.periodic(_publishInterval, (_) {
-      unawaited(_publishOnce());
+    unawaited(_ensureOsPermission(requestIfNeeded: false, showFeedback: false)
+        .then((granted) {
+      if (!granted || !mounted) return;
+      _positionSub = Geolocator.getPositionStream(
+        locationSettings: _trackingSettings(),
+      ).listen(
+        _onPositionFix,
+        onError: (_) {},
+        cancelOnError: false,
+      );
+    }));
+
+    unawaited(_publishFromFix(force: true));
+    _publishTimer = Timer.periodic(_publishHeartbeat, (_) {
+      unawaited(_publishFromFix(force: true));
     });
+  }
+
+  void _onPositionFix(Position pos) {
+    if (!_fixFilter.accept(pos, previous: _lastAcceptedFix)) return;
+    _lastAcceptedFix = pos;
+    _applySelfLocal(pos);
+    unawaited(_publishFromFix(force: false));
+  }
+
+  void _applySelfLocal(Position pos) {
+    if (!mounted || _myUid.isEmpty) return;
+    final self = MemberLocation(
+      userId: _myUid,
+      lat: pos.latitude,
+      lon: pos.longitude,
+      recordedAt: DateTime.now().toUtc(),
+      accuracyM: pos.accuracy.isFinite ? pos.accuracy : null,
+    );
+    setState(() {
+      _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
+        ..[self.userId] = self;
+    });
+    unawaited(_syncMarkers());
+  }
+
+  Future<bool> _canPublishCached(String groupId) async {
+    final now = DateTime.now().toUtc();
+    final cachedAt = _cachedCanPublishAt;
+    if (_cachedCanPublish != null &&
+        cachedAt != null &&
+        now.difference(cachedAt) < _consentCacheTtl) {
+      return _cachedCanPublish!;
+    }
+    try {
+      final allowed = await _locationShare
+          .canPublishForGroup(groupId)
+          .timeout(const Duration(seconds: 8), onTimeout: () => false);
+      _cachedCanPublish = allowed;
+      _cachedCanPublishAt = now;
+      return allowed;
+    } catch (_) {
+      return _cachedCanPublish ?? false;
+    }
+  }
+
+  Future<void> _publishFromFix({required bool force}) async {
+    if (_publishing) return;
+    final group = _selected;
+    if (group == null || _myConsent?.isActive != true) return;
+
+    final granted = await _ensureOsPermission(
+      requestIfNeeded: false,
+      showFeedback: false,
+    );
+    if (!granted) return;
+
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    Position? pos = _lastAcceptedFix;
+    final acceptedAge = pos == null
+        ? null
+        : DateTime.now().toUtc().difference(
+              pos.timestamp.isUtc ? pos.timestamp : pos.timestamp.toUtc(),
+            );
+    final needsFresh = pos == null ||
+        (force && (acceptedAge == null || acceptedAge > const Duration(seconds: 15)));
+
+    if (needsFresh) {
+      try {
+        final fresh = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 8),
+          ),
+        );
+        if (_fixFilter.accept(fresh, previous: _lastAcceptedFix)) {
+          pos = fresh;
+          _lastAcceptedFix = fresh;
+          _applySelfLocal(fresh);
+        }
+      } catch (_) {
+        // Usa lastAccepted si existe.
+      }
+    }
+
+    if (pos == null) return;
+    if (!_fixFilter.shouldPublish(
+      pos,
+      lastPublished: _lastPublishedFix,
+      lastPublishedAt: _lastPublishedAt,
+    )) {
+      return;
+    }
+
+    // Consentimiento con caché + timeout: no bloquear el candado _publishing.
+    final allowed = await _canPublishCached(group.id);
+    if (!allowed) return;
+
+    _publishing = true;
+    try {
+      await _locationShare
+          .publishPosition(pos)
+          .timeout(const Duration(seconds: 10));
+      _lastPublishedFix = pos;
+      _lastPublishedAt = DateTime.now().toUtc();
+      _applySelfLocal(pos);
+    } catch (_) {
+      // Silencioso: el siguiente heartbeat / stream reintenta.
+    } finally {
+      _publishing = false;
+    }
+  }
+
+  void _mergeIncomingLocations(Map<String, MemberLocation> incoming) {
+    final merged = Map<String, MemberLocation>.from(_locationsByUser);
+    for (final e in incoming.entries) {
+      final existing = merged[e.key];
+      if (existing == null ||
+          !e.value.recordedAt.isBefore(existing.recordedAt)) {
+        merged[e.key] = e.value;
+      }
+    }
+    _locationsByUser = merged;
   }
 
   void _restartRealtimeAndPoll() {
@@ -417,17 +614,26 @@ class _MapShellScreenState extends State<MapShellScreen> {
           if (!mounted) return;
           final memberIds = _members.map((m) => m.userId).toSet();
           if (!memberIds.contains(loc.userId)) return;
+          final existing = _locationsByUser[loc.userId];
+          if (existing != null &&
+              loc.recordedAt.isBefore(existing.recordedAt)) {
+            return;
+          }
           setState(() {
-            _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-              ..[loc.userId] = loc;
+            _locationsByUser =
+                Map<String, MemberLocation>.from(_locationsByUser)
+                  ..[loc.userId] = loc;
           });
           unawaited(_syncMarkers());
         },
         onDelete: (userId) {
           if (!mounted) return;
+          // No borrar el pin propio local por un DELETE remoto obsoleto.
+          if (userId == _myUid && _lastAcceptedFix != null) return;
           setState(() {
-            _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-              ..remove(userId);
+            _locationsByUser =
+                Map<String, MemberLocation>.from(_locationsByUser)
+                  ..remove(userId);
           });
           unawaited(_syncMarkers());
         },
@@ -442,88 +648,25 @@ class _MapShellScreenState extends State<MapShellScreen> {
     });
   }
 
-  Future<void> _publishOnce() async {
-    if (_publishing) return;
-    final group = _selected;
-    if (group == null) return;
-    _publishing = true;
-    try {
-      final allowed = await _locationShare.canPublishForGroup(group.id);
-      if (!allowed) return;
-
-      final granted = await _ensureOsPermission(
-        requestIfNeeded: false,
-        showFeedback: false,
-      );
-      if (!granted) return;
-
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
-
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 12),
-        ),
-      );
-      await _locationShare.publishPosition(pos);
-
-      if (!mounted) return;
-      final self = MemberLocation(
-        userId: _myUid,
-        lat: pos.latitude,
-        lon: pos.longitude,
-        recordedAt: DateTime.now().toUtc(),
-        accuracyM: pos.accuracy.isFinite ? pos.accuracy : null,
-      );
-      setState(() {
-        _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-          ..[self.userId] = self;
-      });
-      await _syncMarkers();
-    } catch (_) {
-      // Silencioso: no romper UI si falla un ciclo de publicación.
-    } finally {
-      _publishing = false;
-    }
-  }
-
   Future<void> _refreshMemberLocations() async {
     if (_members.isEmpty) return;
     try {
       final locations = await _fetchLocationsMap(_members);
       if (!mounted) return;
-      setState(() => _locationsByUser = locations);
+      setState(() => _mergeIncomingLocations(locations));
       await _syncMarkers();
     } catch (_) {
       // Silencioso en poll.
     }
   }
 
-  /// Separa pines casi coincidentes (~misma habitación) para que no se vean
-  /// como un solo punto.
-  Map<String, LatLng> _displayPositions(Map<String, MemberLocation> desired) {
-    final entries = desired.entries.toList();
-    final out = <String, LatLng>{
-      for (final e in entries) e.key: LatLng(e.value.lat, e.value.lon),
-    };
-    const mergeMeters = 25.0;
-    for (var i = 0; i < entries.length; i++) {
-      for (var j = i + 1; j < entries.length; j++) {
-        final a = entries[i].value;
-        final b = entries[j].value;
-        final dist = Geolocator.distanceBetween(a.lat, a.lon, b.lat, b.lon);
-        if (dist >= mergeMeters) continue;
-        // Desplaza el segundo ~35 m al NE en grados aprox.
-        final angle = (j * 2.2) % (2 * math.pi);
-        final dLat = (35 / 111320) * math.cos(angle);
-        final dLon =
-            (35 / (111320 * math.cos(b.lat * math.pi / 180).clamp(0.2, 1.0))) *
-                math.sin(angle);
-        out[entries[j].key] = LatLng(b.lat + dLat, b.lon + dLon);
-      }
-    }
-    return out;
+  double _accuracyRadiusPx(MemberLocation loc) {
+    final meters = (loc.accuracyM ?? 35).clamp(12.0, 120.0);
+    final zoom = _mapController?.cameraPosition?.zoom ?? _myLocationZoom;
+    final mPerPx = 156543.03392 *
+        math.cos(loc.lat * math.pi / 180).clamp(0.2, 1.0) /
+        math.pow(2, zoom);
+    return (meters / mPerPx).clamp(10.0, 90.0);
   }
 
   Future<void> _fitToMemberLocations(Map<String, LatLng> positions) async {
@@ -585,19 +728,31 @@ class _MapShellScreenState extends State<MapShellScreen> {
     _syncingMarkers = true;
     _markersDirty = false;
     try {
+      // Coordenadas reales (sin nudge artificial): el nudge de 35 m era la
+      // causa de que el pin "tú" no coincidiera con el anillo GPS del dispositivo.
       final desired = Map<String, MemberLocation>.from(_locationsByUser);
-      final display = _displayPositions(desired);
+      final display = <String, LatLng>{
+        for (final e in desired.entries)
+          e.key: LatLng(e.value.lat, e.value.lon),
+      };
 
-      // Quitar marcadores obsoletos.
-      final stale = _circlesByUser.keys
-          .where((id) => !desired.containsKey(id))
-          .toList();
+      final stale = <String>{
+        ..._circlesByUser.keys,
+        ..._accuracyByUser.keys,
+        ..._labelsByUser.keys,
+      }.where((id) => !desired.containsKey(id)).toList();
       for (final id in stale) {
         final circle = _circlesByUser.remove(id);
+        final accuracy = _accuracyByUser.remove(id);
         final label = _labelsByUser.remove(id);
         if (circle != null) {
           try {
             await controller.removeCircle(circle);
+          } catch (_) {}
+        }
+        if (accuracy != null) {
+          try {
+            await controller.removeCircle(accuracy);
           } catch (_) {}
         }
         if (label != null) {
@@ -611,11 +766,42 @@ class _MapShellScreenState extends State<MapShellScreen> {
 
       for (final entry in desired.entries) {
         final userId = entry.key;
+        final loc = entry.value;
         final geometry = display[userId]!;
         final isSelf = userId == _myUid;
         final color = isSelf ? '#4DB6D4' : '#C62828';
         final label = nameById[userId] ??
             (isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember);
+        final accRadius = _accuracyRadiusPx(loc);
+
+        final existingAccuracy = _accuracyByUser[userId];
+        if (existingAccuracy == null) {
+          try {
+            final halo = await controller.addCircle(
+              CircleOptions(
+                geometry: geometry,
+                circleRadius: accRadius,
+                circleColor: color,
+                circleOpacity: 0.16,
+                circleStrokeWidth: 1,
+                circleStrokeColor: color,
+                circleStrokeOpacity: 0.35,
+              ),
+            );
+            _accuracyByUser[userId] = halo;
+          } catch (_) {}
+        } else {
+          try {
+            await controller.updateCircle(
+              existingAccuracy,
+              CircleOptions(
+                geometry: geometry,
+                circleRadius: accRadius,
+                circleColor: color,
+              ),
+            );
+          } catch (_) {}
+        }
 
         final existingCircle = _circlesByUser[userId];
         if (existingCircle == null) {
@@ -704,7 +890,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
           compassEnabled: true,
           myLocationEnabled: showMyLocation,
           myLocationTrackingMode: MyLocationTrackingMode.none,
-          trackCameraPosition: false,
+          trackCameraPosition: true,
           onMapCreated: _onMapCreated,
           onStyleLoadedCallback: () {
             unawaited(_onStyleLoaded());
