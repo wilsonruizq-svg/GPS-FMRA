@@ -4,7 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../location/consent_service.dart';
+import '../exit_pin_service.dart';
 import '../groups_service.dart';
+import '../widgets/exit_pin_dialog.dart';
 import '../widgets/member_card.dart';
 
 class GroupDetailScreen extends StatefulWidget {
@@ -19,6 +21,7 @@ class GroupDetailScreen extends StatefulWidget {
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
   final _groups = GroupsService();
   final _consent = ConsentService();
+  final _exitPin = ExitPinService();
 
   bool _loading = true;
   String? _error;
@@ -26,6 +29,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   LocationConsent? _myConsent;
   InviteStub? _lastInvite;
   bool _iAmAdmin = false;
+  bool _exitPinSet = false;
+  bool _exitPinBusy = false;
 
   @override
   void initState() {
@@ -50,11 +55,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             (m) => m?.userId == uid,
             orElse: () => null,
           );
+      var pinSet = false;
+      try {
+        pinSet = await _exitPin.groupHasPin(widget.group.id);
+      } catch (_) {
+        pinSet = false;
+      }
       if (!mounted) return;
       setState(() {
         _members = members;
         _myConsent = mine;
         _iAmAdmin = me?.isAdmin ?? false;
+        _exitPinSet = pinSet;
         _loading = false;
       });
     } catch (e) {
@@ -190,6 +202,162 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
   }
 
+  Future<void> _setOrChangeExitPin({required bool changing}) async {
+    if (!_iAmAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.exitPinAdminOnly)),
+      );
+      return;
+    }
+    final pin = await showExitPinComposeDialog(
+      context: context,
+      purpose:
+          changing ? ExitPinPurpose.changePin : ExitPinPurpose.setPin,
+    );
+    if (pin == null || !mounted) return;
+    setState(() => _exitPinBusy = true);
+    try {
+      await _exitPin.setPin(groupId: widget.group.id, pin: pin);
+      if (!mounted) return;
+      setState(() {
+        _exitPinSet = true;
+        _exitPinBusy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.exitPinSaved)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _exitPinBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
+  Future<void> _clearExitPin() async {
+    if (!_iAmAdmin) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.exitPinClearAction),
+        content: const Text(AppStrings.exitPinClearConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(AppStrings.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(AppStrings.exitPinClearAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _exitPinBusy = true);
+    try {
+      await _exitPin.clearPin(widget.group.id);
+      if (!mounted) return;
+      setState(() {
+        _exitPinSet = false;
+        _exitPinBusy = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.exitPinCleared)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _exitPinBusy = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
+  Widget _exitPinSection(BuildContext context) {
+    if (!_iAmAdmin) {
+      if (!_exitPinSet) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Text(
+          AppStrings.exitPinStatusOn,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                AppStrings.exitPinTitle,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _exitPinSet
+                    ? AppStrings.exitPinStatusOn
+                    : AppStrings.exitPinStatusOff,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              if (_exitPinBusy)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(8),
+                    child: CircularProgressIndicator(),
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: () => _setOrChangeExitPin(
+                        changing: _exitPinSet,
+                      ),
+                      icon: Icon(
+                        _exitPinSet ? Icons.lock_reset : Icons.lock_outline,
+                        size: 18,
+                      ),
+                      label: Text(
+                        _exitPinSet
+                            ? AppStrings.exitPinChangeAction
+                            : AppStrings.exitPinSetAction,
+                      ),
+                    ),
+                    if (_exitPinSet)
+                      OutlinedButton.icon(
+                        onPressed: _clearExitPin,
+                        icon: const Icon(Icons.lock_open, size: 18),
+                        label: const Text(AppStrings.exitPinClearAction),
+                      ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _inviteBanner(BuildContext context) {
     final invite = _lastInvite;
     if (invite == null) {
@@ -312,6 +480,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                         ),
                       ),
                       _inviteBanner(context),
+                      _exitPinSection(context),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                         child: Text(

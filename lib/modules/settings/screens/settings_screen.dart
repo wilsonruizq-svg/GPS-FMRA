@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../auth/auth_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
+import '../../groups/exit_pin_service.dart';
+import '../../groups/widgets/exit_pin_dialog.dart';
 import '../../location/screens/consent_screen.dart';
 import '../../profiles/profile_service.dart';
 import '../../profiles/screens/edit_profile_screen.dart';
@@ -17,9 +19,11 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final _profiles = ProfileService();
   final _auth = AuthService();
+  final _exitPin = ExitPinService();
 
   Profile? _profile;
   bool _loading = true;
+  bool _signingOut = false;
 
   @override
   void initState() {
@@ -60,14 +64,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _signOut() async {
-    await _auth.signOut();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => const LoginShellScreen(supabaseReady: true),
-      ),
-      (_) => false,
-    );
+    if (_signingOut) return;
+    setState(() => _signingOut = true);
+    try {
+      final required = await _exitPin.isRequired();
+      if (!mounted) return;
+      if (required) {
+        final ok = await showExitPinChallenge(
+          context: context,
+          purpose: ExitPinPurpose.logout,
+          service: _exitPin,
+        );
+        if (!mounted) return;
+        if (!ok) return;
+      }
+
+      await _auth.signOut();
+      if (!mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => const LoginShellScreen(supabaseReady: true),
+        ),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) setState(() => _signingOut = false);
+    }
   }
 
   @override
@@ -136,7 +163,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             AppStrings.settingsSignOut,
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
-          onTap: _signOut,
+          trailing: _signingOut
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : null,
+          onTap: _signingOut ? null : _signOut,
         ),
         const Divider(),
         const ListTile(

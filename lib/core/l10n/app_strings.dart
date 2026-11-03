@@ -165,6 +165,38 @@ abstract final class AppStrings {
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
 
+  static const exitPinTitle = 'PIN de salida';
+  static const exitPinSetAction = 'Configurar PIN de salida';
+  static const exitPinChangeAction = 'Cambiar PIN de salida';
+  static const exitPinClearAction = 'Quitar PIN de salida';
+  static const exitPinSaveAction = 'Guardar PIN';
+  static const exitPinConfirmAction = 'Continuar';
+  static const exitPinLabel = 'PIN';
+  static const exitPinConfirmLabel = 'Confirmar PIN';
+  static const exitPinHint = '4 a 8 dígitos';
+  static const exitPinSetBody =
+      'Este PIN lo pedirá la app para cerrar sesión o salir con Atrás. '
+      'Compártelo solo con quien deba poder salir del modo familiar.';
+  static const exitPinChallengeBody =
+      'Ingresa el PIN del admin del grupo familiar para continuar.';
+  static const exitPinRequiredLogout =
+      'PIN requerido para cerrar sesión';
+  static const exitPinRequiredExit = 'PIN requerido para salir';
+  static const exitPinWrong = 'PIN incorrecto. Inténtalo de nuevo.';
+  static const exitPinMismatch = 'Los PIN no coinciden.';
+  static const exitPinFormatError =
+      'El PIN debe tener entre 4 y 8 dígitos numéricos.';
+  static const exitPinSaved = 'PIN de salida guardado.';
+  static const exitPinCleared = 'PIN de salida eliminado.';
+  static const exitPinAdminOnly =
+      'Solo un admin del grupo puede configurar el PIN de salida.';
+  static const exitPinStatusOn =
+      'PIN de salida activo: hace falta para cerrar sesión o salir.';
+  static const exitPinStatusOff =
+      'Sin PIN de salida: cualquiera puede cerrar sesión o salir.';
+  static const exitPinClearConfirm =
+      '¿Quitar el PIN de salida? La app dejará de pedirlo al salir.';
+
   static const profileEditTitle = 'Editar perfil';
   static const profileNameLabel = 'Nombre';
   static const profileNameHint = 'Ej. Wilson Ruiz';

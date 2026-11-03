@@ -13,10 +13,15 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    3. `supabase/migrations/20261102210000_fix_accept_invitation_pgcrypto.sql`
       (**APPLY** si ves `function digest(bytea, unknown) does not exist` —
       este archivo solo basta para el fix; pégalo completo → Run.)
+   4. `supabase/migrations/20261102220000_group_exit_pin.sql`
+      (PIN de salida del grupo: columnas + RPCs bcrypt. Obligatorio para
+      que “Cerrar sesión” / Atrás pidan PIN.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`.
-5. En **Database → Functions** confirma `accept_invitation(text)`.
+5. En **Database → Functions** confirma `accept_invitation(text)`,
+   `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,
+   `exit_pin_is_required`, `verify_exit_pin`.
 6. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
 
 ## Opción B — Supabase CLI
