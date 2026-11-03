@@ -26,6 +26,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
 
   bool _busy = false;
   bool _registerMode = false;
+  bool _obscurePassword = true;
   String? _error;
   String? _info;
 
@@ -182,11 +183,26 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
             const SizedBox(height: 16),
             TextField(
               controller: _passwordController,
-              obscureText: true,
+              obscureText: _obscurePassword,
               autofillHints: const [AutofillHints.password],
               enabled: !_busy,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: AppStrings.passwordLabel,
+                suffixIcon: IconButton(
+                  onPressed: _busy
+                      ? null
+                      : () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility
+                        : Icons.visibility_off,
+                  ),
+                  tooltip: _obscurePassword
+                      ? AppStrings.passwordShow
+                      : AppStrings.passwordHide,
+                ),
               ),
             ),
             if (_error != null) ...[

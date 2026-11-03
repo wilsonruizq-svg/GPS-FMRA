@@ -13,6 +13,8 @@ abstract final class AppStrings {
       'Entra con tu cuenta para ver el mapa familiar.';
   static const emailLabel = 'Correo electrónico';
   static const passwordLabel = 'Contraseña';
+  static const passwordShow = 'Mostrar contraseña';
+  static const passwordHide = 'Ocultar contraseña';
   static const displayNameLabel = 'Nombre para mostrar';
   static const loginButton = 'Entrar';
   static const registerButton = 'Crear cuenta';
