@@ -181,18 +181,33 @@ class GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
-  /// Abrir grupo = pantalla de miembros (fiable).
+  /// Abrir grupo = miembros (navegación root + expand inline).
   Future<void> _openGroupMembers(FamilyGroup group) async {
+    debugPrint('GroupsScreen: open members → ${group.name}');
+    if (!mounted) return;
     setState(() => _expandedIds.add(group.id));
     unawaited(_loadMembers(group.id));
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => GroupDetailScreen(group: group),
-      ),
-    );
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Abriendo integrantes: ${group.name}'),
+          duration: const Duration(milliseconds: 900),
+        ),
+      );
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          builder: (_) => GroupDetailScreen(group: group),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('open members ERROR: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir el grupo: $e')),
+      );
+    }
     if (!mounted) return;
     await _loadMembers(group.id);
-    await _loadSharedPlaces(_groups);
   }
 
   Future<void> _createCategory() async {
@@ -370,16 +385,36 @@ class GroupsScreenState extends State<GroupsScreen> {
     await _refresh();
   }
 
+  static String _safeCoords(NamedPlace p) {
+    final lat = p.lat;
+    final lon = p.lon;
+    if (!lat.isFinite || !lon.isFinite) return '';
+    return '${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}';
+  }
+
+  /// Filtro local seguro: nunca tira (NaN/coords/malos datos).
   List<NamedPlace> get _filteredPlaces {
-    final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return _sharedPlaces;
-    return _sharedPlaces.where((p) {
-      final name = p.name.toLowerCase();
-      final desc = (p.description ?? '').toLowerCase();
-      final coords =
-          '${p.lat.toStringAsFixed(5)},${p.lon.toStringAsFixed(5)}';
-      return name.contains(q) || desc.contains(q) || coords.contains(q);
-    }).toList();
+    try {
+      final q = _query.trim().toLowerCase();
+      if (q.isEmpty) return _sharedPlaces;
+      return _sharedPlaces.where((p) {
+        try {
+          final name = p.name.toLowerCase();
+          final desc = (p.description ?? '').toLowerCase();
+          final coords = _safeCoords(p).toLowerCase();
+          final cat = (_categoryName(p) ?? '').toLowerCase();
+          return name.contains(q) ||
+              desc.contains(q) ||
+              coords.contains(q) ||
+              cat.contains(q);
+        } catch (_) {
+          return false;
+        }
+      }).toList();
+    } catch (e) {
+      debugPrint('filter places: $e');
+      return _sharedPlaces;
+    }
   }
 
   String? _categoryName(NamedPlace place) {
@@ -391,13 +426,16 @@ class GroupsScreenState extends State<GroupsScreen> {
     return null;
   }
 
-  Widget _placeCard(NamedPlace place) {
-    final url = _places.publicPhotoUrl(place.photoPath);
+  Widget _placeCard(NamedPlace place, {required bool compact}) {
+    final url = compact ? null : _places.publicPhotoUrl(place.photoPath);
     final cat = _categoryName(place);
-    final detail = (place.description == null || place.description!.isEmpty)
-        ? '${place.lat.toStringAsFixed(5)}, ${place.lon.toStringAsFixed(5)}'
-        : place.description!;
+    final rawDetail =
+        (place.description == null || place.description!.trim().isEmpty)
+            ? _safeCoords(place)
+            : place.description!.trim();
+    final detail = rawDetail.isEmpty ? 'Sin detalle' : rawDetail;
     return Card(
+      key: ValueKey('place_${place.id}'),
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
       color: Colors.white,
@@ -410,6 +448,7 @@ class GroupsScreenState extends State<GroupsScreen> {
               child: Image.network(
                 url,
                 fit: BoxFit.cover,
+                gaplessPlayback: true,
                 errorBuilder: (_, _, _) => const ColoredBox(
                   color: Color(0xFFE8EEF4),
                   child: SizedBox(
@@ -423,7 +462,7 @@ class GroupsScreenState extends State<GroupsScreen> {
             const ColoredBox(
               color: Color(0xFFE8EEF4),
               child: SizedBox(
-                height: 56,
+                height: 48,
                 child: Center(
                   child: Icon(Icons.place_outlined, color: AppColors.midBlue),
                 ),
@@ -534,9 +573,17 @@ class GroupsScreenState extends State<GroupsScreen> {
                 ),
               )
             else ...[
-              // Siempre pintar cards planas (aunque haya categorías).
-              for (final p in places) _placeCard(p),
-              if (cats.isNotEmpty) ...[
+              Text(
+                _query.trim().isEmpty
+                    ? 'Mostrando ${places.length}'
+                    : 'Filtradas ${places.length} de ${_sharedPlaces.length}',
+                style: const TextStyle(fontSize: 12, color: AppColors.midBlue),
+              ),
+              const SizedBox(height: 6),
+              // compact=true al buscar → sin fotos de red (evita cuelgue).
+              for (final p in places)
+                _placeCard(p, compact: _query.trim().isNotEmpty),
+              if (cats.isNotEmpty && _query.trim().isEmpty) ...[
                 const SizedBox(height: 8),
                 const Text(
                   'Carpetas',
@@ -567,8 +614,6 @@ class GroupsScreenState extends State<GroupsScreen> {
                     ),
                   ),
               ],
-              if (uncategorized.isNotEmpty && cats.isNotEmpty)
-                const SizedBox.shrink(),
             ],
           ],
         ),
@@ -630,7 +675,7 @@ class GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  /// Nombre del grupo: tap abre miembros (navegación + expand inline).
+  /// Nombre del grupo + botón claro → abre miembros.
   Widget _buildGroupBlock(FamilyGroup group) {
     final expanded = _expandedIds.contains(group.id);
     return Material(
@@ -639,36 +684,59 @@ class GroupsScreenState extends State<GroupsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 8,
-            ),
-            leading: CircleAvatar(
-              backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
-              child: const Icon(
-                Icons.family_restroom,
-                color: AppColors.deepBlue,
-              ),
-            ),
-            title: Text(
-              group.name,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                color: AppColors.deepBlue,
-              ),
-            ),
-            subtitle: const Text(
-              AppStrings.groupsTapMembers,
-              style: TextStyle(color: AppColors.midBlue),
-            ),
-            trailing: const Icon(
-              Icons.people_outline,
-              color: AppColors.deepBlue,
-              size: 28,
-            ),
+          InkWell(
             onTap: () => unawaited(_openGroupMembers(group)),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 8),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+                    child: const Icon(
+                      Icons.family_restroom,
+                      color: AppColors.deepBlue,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          group.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                            color: AppColors.deepBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        const Text(
+                          AppStrings.groupsTapMembers,
+                          style: TextStyle(
+                            color: AppColors.midBlue,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.people_outline,
+                    color: AppColors.deepBlue,
+                    size: 28,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: FilledButton.icon(
+              onPressed: () => unawaited(_openGroupMembers(group)),
+              icon: const Icon(Icons.people),
+              label: const Text('Ver integrantes'),
+            ),
           ),
           if (expanded) ...[
             const Divider(height: 1),
@@ -763,6 +831,14 @@ class GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
+  void _onSearchChanged(String v) {
+    try {
+      setState(() => _query = v);
+    } catch (e) {
+      debugPrint('search setState: $e');
+    }
+  }
+
   Widget _searchBar() {
     return Material(
       elevation: 6,
@@ -773,7 +849,7 @@ class GroupsScreenState extends State<GroupsScreen> {
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
           child: TextField(
             controller: _searchCtrl,
-            onChanged: (v) => setState(() => _query = v),
+            onChanged: _onSearchChanged,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
               hintText: AppStrings.groupsPlacesSearchHint,
@@ -784,7 +860,7 @@ class GroupsScreenState extends State<GroupsScreen> {
                       tooltip: AppStrings.cancel,
                       onPressed: () {
                         _searchCtrl.clear();
-                        setState(() => _query = '');
+                        _onSearchChanged('');
                       },
                       icon: const Icon(Icons.clear),
                     ),
@@ -825,14 +901,21 @@ class GroupsScreenState extends State<GroupsScreen> {
           Material(
             color: Colors.white,
             elevation: 1,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text(
-                header,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: AppColors.deepBlue,
+            child: InkWell(
+              // Si tocan el encabezado con el nombre del grupo → abrir miembros.
+              onTap: first == null || _groups.isEmpty
+                  ? null
+                  : () => unawaited(_openGroupMembers(_groups.first)),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Text(
+                  header,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                    color: AppColors.deepBlue,
+                  ),
                 ),
               ),
             ),
