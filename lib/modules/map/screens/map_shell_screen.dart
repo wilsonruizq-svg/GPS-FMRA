@@ -288,23 +288,40 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
+  /// Espera N frames (ruta de diálogo / InheritedWidget ya deactivated).
+  Future<void> _waitFrames(int count) async {
+    for (var i = 0; i < count; i++) {
+      final done = Completer<void>();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!done.isCompleted) done.complete();
+      });
+      WidgetsBinding.instance.scheduleFrame();
+      await done.future;
+    }
+  }
+
+  /// Tras pop del AlertDialog: no setState / MapLibre hasta que el route muera.
+  Future<void> _waitAfterDialogClosed() async {
+    await _waitFrames(3);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted) return;
+    await _waitFrames(1);
+  }
+
   Future<void> _syncPlaceMarkersAfterFrame() async {
     if (!mounted) return;
     final done = Completer<void>();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         if (!mounted) return;
+        // Solo MapLibre controller — sin setState (evita 6281 con dialog/route).
         await _syncPlaceMarkers();
       } catch (e) {
         debugPrint('syncPlaceMarkers deferred: $e');
       } finally {
-        if (mounted) {
-          setState(() {});
-        }
         if (!done.isCompleted) done.complete();
       }
     });
-    // Empuja un frame si el motor está idle.
     WidgetsBinding.instance.scheduleFrame();
     await done.future;
   }
@@ -1483,7 +1500,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
     if (!mounted) return;
     if (fix == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      GpsFmraApp.messengerKey.currentState?.showSnackBar(
         const SnackBar(content: Text(AppStrings.mapSavePlaceNeedGps)),
       );
       return;
@@ -1491,9 +1508,11 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     final nameController = TextEditingController();
     var shareWithGroup = false;
-    // null = cancel; true = guardar; 'wa' = WhatsApp
+    // null = cancel; 'save' | 'wa'
     final action = await showDialog<String>(
       context: context,
+      useRootNavigator: true,
+      barrierDismissible: true,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
@@ -1540,15 +1559,17 @@ class _MapShellScreenState extends State<MapShellScreen>
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx),
+                  onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
                   child: const Text(AppStrings.cancel),
                 ),
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx, 'wa'),
+                  onPressed: () =>
+                      Navigator.of(ctx, rootNavigator: true).pop('wa'),
                   child: const Text(AppStrings.mapSavePlaceWhatsApp),
                 ),
                 FilledButton(
-                  onPressed: () => Navigator.pop(ctx, 'save'),
+                  onPressed: () =>
+                      Navigator.of(ctx, rootNavigator: true).pop('save'),
                   child: const Text(AppStrings.mapSavePlaceSave),
                 ),
               ],
@@ -1558,19 +1579,24 @@ class _MapShellScreenState extends State<MapShellScreen>
       },
     );
 
+    // Capturar datos YA; no usar ctx del diálogo. No dispose aún (ruta animando).
     final name = nameController.text.trim();
-    nameController.dispose();
-    if (action == null) return;
+    if (action == null) {
+      await _waitAfterDialogClosed();
+      nameController.dispose();
+      return;
+    }
 
-    // Locals: no usar contexto del diálogo tras pop; fijar GPS/grupo ahora.
     final placeName = name.isEmpty ? 'Mi ubicación' : name;
     final lat = fix.latitude;
     final lon = fix.longitude;
     final groupIdForSave = shareWithGroup ? _selected?.id : null;
     final wantGroup = shareWithGroup;
 
-    // Crítico: dejar que el AlertDialog termine de dispose (assert 6281).
-    await Future<void>.delayed(const Duration(milliseconds: 400));
+    // Crítico (assert 6281): route deactivated → _dependents.isEmpty.
+    // Cero setState / MapLibre hasta que el diálogo termine de morir.
+    await _waitAfterDialogClosed();
+    nameController.dispose();
     if (!mounted) return;
 
     void toast(String text, {int seconds = 4}) {
@@ -1604,8 +1630,10 @@ class _MapShellScreenState extends State<MapShellScreen>
       return;
     }
 
+    // Spinner FAB solo después de settle (rebuild MapLibre seguro).
     _savingPlace = true;
     if (mounted) setState(() {});
+
     try {
       debugPrint(
         'named_places save: name=$placeName share=$wantGroup '
@@ -1618,21 +1646,25 @@ class _MapShellScreenState extends State<MapShellScreen>
         groupId: groupIdForSave,
       );
       debugPrint('named_places save ok id=${created.id}');
-      // Persisted: update local list WITHOUT touching MapLibre yet.
-      _namedPlaces = [created, ..._namedPlaces.where((p) => p.id != created.id)];
-      if (mounted) setState(() {});
+      // Lista en memoria; NO setState aquí (_namedPlaces no pinta Flutter UI).
+      _namedPlaces = [
+        created,
+        ..._namedPlaces.where((p) => p.id != created.id),
+      ];
       toast(
         wantGroup
             ? AppStrings.mapSavePlaceShared
             : AppStrings.mapSavePlaceSaved,
       );
-      // Sync pines mucho después — fuera del ciclo del diálogo (assert 6281).
+      // Pines MapLibre mucho después, en frames propios.
       _placeSyncTimer?.cancel();
-      _placeSyncTimer = Timer(const Duration(milliseconds: 900), () async {
+      _placeSyncTimer = Timer(const Duration(milliseconds: 700), () async {
+        if (!mounted) return;
+        await _waitFrames(2);
         if (!mounted) return;
         await _syncPlaceMarkersSafe();
         if (!mounted) return;
-        await Future<void>.delayed(const Duration(milliseconds: 900));
+        await Future<void>.delayed(const Duration(milliseconds: 500));
         if (!mounted) return;
         await _loadNamedPlaces();
       });
@@ -1648,7 +1680,11 @@ class _MapShellScreenState extends State<MapShellScreen>
       toast(msg, seconds: 12);
     } finally {
       _savingPlace = false;
-      if (mounted) setState(() {});
+      if (mounted) {
+        // Un frame más por si el snackbar / map aún sincronizan.
+        await _waitFrames(1);
+        if (mounted) setState(() {});
+      }
     }
   }
 
