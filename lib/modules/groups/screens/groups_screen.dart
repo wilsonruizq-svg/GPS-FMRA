@@ -68,17 +68,11 @@ class GroupsScreenState extends State<GroupsScreen> {
         debugPrint('listSoloMine: $e');
       }
       if (!mounted) return;
-      // Primer grupo expandido por defecto para que se vean miembros/lugares.
-      final expanded = Set<String>.from(_expandedIds);
-      if (groups.isNotEmpty && expanded.isEmpty) {
-        expanded.add(groups.first.id);
-      }
+      // Ubicaciones se cargan siempre; miembros al expandir.
       setState(() {
         _groups = groups;
         _soloPlaces = solo;
-        _expandedIds
-          ..clear()
-          ..addAll(expanded.where((id) => groups.any((g) => g.id == id)));
+        _expandedIds.removeWhere((id) => !groups.any((g) => g.id == id));
         _loading = false;
       });
       for (final g in groups) {
@@ -636,18 +630,19 @@ class GroupsScreenState extends State<GroupsScreen> {
               ),
             ),
           ),
-          // UBICACIONES siempre debajo del nombre (no solo al expandir).
+          // Ubicaciones SIEMPRE justo debajo del nombre (lista Grupos).
+          // Al expandir/abrir: solo MIEMBROS (sin repetir ubicaciones ahí).
           ColoredBox(
             color: AppColors.surface,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const Divider(height: 1),
+                _locationsBelowGroup(group, showSolo: showSolo),
                 if (expanded) ...[
                   const Divider(height: 1),
                   _membersSection(group),
                 ],
-                const Divider(height: 1),
-                _locationsBelowGroup(group, showSolo: showSolo),
               ],
             ),
           ),
