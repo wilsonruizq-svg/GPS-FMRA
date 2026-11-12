@@ -9,6 +9,9 @@ class GpsFmraApp extends StatelessWidget {
 
   final bool supabaseReady;
 
+  /// Para snackbars globales (p. ej. alerta de chat fuera de la pantalla).
+  static final messengerKey = GlobalKey<ScaffoldMessengerState>();
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -16,6 +19,7 @@ class GpsFmraApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       locale: const Locale('es'),
+      scaffoldMessengerKey: messengerKey,
       home: SplashScreen(supabaseReady: supabaseReady),
     );
   }

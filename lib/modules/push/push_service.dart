@@ -16,8 +16,9 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('FCM background: ${message.messageId} type=${message.data['type']}');
 }
 
-/// FCM opcional: si no hay `google-services.json` / Firebase, queda desactivado
-/// y el SOS sigue funcionando con banner in-app + Realtime.
+/// FCM opcional + notificaciones locales (SOS y chat).
+/// Sin Firebase el SOS/chat in-app siguen; las locales de chat vía Realtime
+/// funcionan si [ensureLocalNotificationsReady] se llamó.
 class PushService {
   PushService({this._client});
 
@@ -26,13 +27,27 @@ class PushService {
 
   static const androidChannelId = 'sos_alerts';
   static const androidChannelName = 'Alertas SOS';
+  static const chatChannelId = 'chat_messages';
+  static const chatChannelName = 'Mensajes del grupo';
 
   static bool _initialized = false;
+  static bool _localReady = false;
   static bool ready = false;
 
   final _local = FlutterLocalNotificationsPlugin();
   StreamSubscription<String>? _tokenRefreshSub;
   StreamSubscription<RemoteMessage>? _foregroundSub;
+
+  /// Notificaciones locales sin depender de FCM.
+  Future<void> ensureLocalNotificationsReady() async {
+    if (kIsWeb || _localReady) return;
+    try {
+      await _initLocalNotifications();
+      _localReady = true;
+    } catch (e) {
+      debugPrint('PushService local notifications: $e');
+    }
+  }
 
   /// Intenta inicializar Firebase + permisos + registro de token.
   Future<bool> ensureInitialized() async {
@@ -44,13 +59,13 @@ class PushService {
       return false;
     }
 
+    await ensureLocalNotificationsReady();
+
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
       FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-
-      await _initLocalNotifications();
 
       final messaging = FirebaseMessaging.instance;
       final settings = await messaging.requestPermission(
@@ -75,8 +90,6 @@ class PushService {
 
       _foregroundSub = FirebaseMessaging.onMessage.listen(_onForegroundMessage);
 
-      // getToken / onTokenRefresh: token FCM clásico para HTTP v1 `message.token`.
-      // (register/onRegistered usa FID; nuestro Edge Function envía por token.)
       // ignore: deprecated_member_use
       _tokenRefreshSub = messaging.onTokenRefresh.listen((t) {
         unawaited(registerToken(t));
@@ -113,11 +126,31 @@ class PushService {
         importance: Importance.high,
       ),
     );
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        chatChannelId,
+        chatChannelName,
+        description: 'Mensajes nuevos del chat familiar',
+        importance: Importance.high,
+      ),
+    );
     await androidPlugin?.requestNotificationsPermission();
   }
 
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     final type = message.data['type'];
+    if (type == 'chat') {
+      final title = message.notification?.title ?? AppStrings.chatPushTitle;
+      final body = message.notification?.body ?? AppStrings.chatPushBodyFallback;
+      await showChatLocalNotification(
+        id: message.hashCode,
+        title: title,
+        body: body,
+        groupId: message.data['group_id'],
+        messageId: message.data['message_id'],
+      );
+      return;
+    }
     if (type != 'sos') return;
 
     final title = message.notification?.title ?? AppStrings.sosPushTitle;
@@ -138,6 +171,33 @@ class PushService {
         ),
       ),
       payload: message.data['sos_id'],
+    );
+  }
+
+  Future<void> showChatLocalNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? groupId,
+    String? messageId,
+  }) async {
+    await ensureLocalNotificationsReady();
+    if (!_localReady) return;
+    await _local.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          chatChannelId,
+          chatChannelName,
+          channelDescription: 'Mensajes nuevos del chat familiar',
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.message,
+        ),
+      ),
+      payload: groupId ?? messageId,
     );
   }
 
@@ -197,6 +257,31 @@ class PushService {
       );
     } catch (e) {
       debugPrint('PushService.notifyPeersOfSos: $e');
+    }
+  }
+
+  /// Best-effort: push FCM de chat (requiere secret + deploy `notify-chat`).
+  Future<void> notifyPeersOfChat({
+    required String groupId,
+    required String messageId,
+    required String senderId,
+    required String body,
+    String? displayName,
+  }) async {
+    try {
+      await _sb.functions.invoke(
+        'notify-chat',
+        body: {
+          'group_id': groupId,
+          'message_id': messageId,
+          'sender_id': senderId,
+          'body': body,
+          if (displayName != null && displayName.isNotEmpty)
+            'display_name': displayName,
+        },
+      );
+    } catch (e) {
+      debugPrint('PushService.notifyPeersOfChat: $e');
     }
   }
 

@@ -28,8 +28,28 @@ Sin este SQL, abrir chat o enviar falla (tabla/API no visible).
 2. A escribe y envía → B debe ver el mensaje en segundos (Realtime).
 3. B responde → A lo ve sin refrescar manualmente.
 
+## Alertas al llegar un mensaje
+
+**Con la app abierta (primer plano):** Realtime muestra notificación local
+Android + snackbar, aunque no estés en la pantalla de chat.
+
+**App en segundo plano / cerrada:** requiere FCM (mismo secret que SOS):
+
+1. Secret Supabase `FIREBASE_SERVICE_ACCOUNT_JSON` (cuenta de servicio Firebase).
+2. Deploy:
+   ```powershell
+   cd "D:\APPS PROYECTOS\GPS-FMRA"
+   npx supabase functions deploy notify-chat
+   npx supabase functions deploy notify-sos
+   ```
+3. SQL `device_push_tokens` aplicado + filas tras abrir la app logueada.
+4. Permiso de notificaciones en el teléfono.
+
+Sin el secret/deploy, el chat **sigue funcionando** in-app; solo faltan
+alertas con la app cerrada. Detalle: `docs/FCM_SOS_ES.md` y el status FCM
+del Project store.
+
 ## Fuera de v1
 
-- Push FCM al recibir mensaje con app en segundo plano.
 - Adjuntos / fotos / reacciones.
 - Chats 1:1 aparte del grupo (este MVP es **chat de grupo**).

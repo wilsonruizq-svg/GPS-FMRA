@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../groups/groups_service.dart';
+import '../../push/push_service.dart';
+import '../chat_alert_service.dart';
 import '../chat_service.dart';
 
 /// Chat de texto del grupo (lista + compositor). Realtime en primer plano.
@@ -23,6 +25,7 @@ class GroupChatScreen extends StatefulWidget {
 
 class _GroupChatScreenState extends State<GroupChatScreen> {
   final _chat = ChatService();
+  final _push = PushService();
   final _controller = TextEditingController();
   final _scroll = ScrollController();
   final _focus = FocusNode();
@@ -40,11 +43,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   @override
   void initState() {
     super.initState();
+    ChatAlertService.instance.muteGroup(widget.group.id);
     unawaited(_bootstrap());
   }
 
   @override
   void dispose() {
+    ChatAlertService.instance.muteGroup(null);
     unawaited(_chat.unsubscribe(_channel));
     _controller.dispose();
     _scroll.dispose();
@@ -126,6 +131,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         });
         _scrollToEnd();
       }
+      // Best-effort FCM (falla en silencio si falta secret/deploy).
+      unawaited(
+        _push.notifyPeersOfChat(
+          groupId: sent.groupId,
+          messageId: sent.id,
+          senderId: sent.senderId,
+          body: sent.body,
+          displayName: sent.senderName,
+        ),
+      );
       _focus.requestFocus();
     } catch (e) {
       if (!mounted) return;

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'core/l10n/app_strings.dart';
+import 'modules/chat/chat_alert_service.dart';
 import 'modules/groups/exit_pin_service.dart';
 import 'modules/groups/screens/groups_screen.dart';
 import 'modules/groups/widgets/exit_pin_dialog.dart';
@@ -27,6 +30,18 @@ class _AppShellState extends State<AppShell> {
     AppStrings.groupsTitle,
     AppStrings.settingsTitle,
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(ChatAlertService.instance.start());
+  }
+
+  @override
+  void dispose() {
+    unawaited(ChatAlertService.instance.stop());
+    super.dispose();
+  }
 
   Future<void> _onRootBack() async {
     if (_exitGateBusy) return;

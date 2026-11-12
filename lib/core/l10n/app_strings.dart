@@ -363,4 +363,10 @@ abstract final class AppStrings {
       '(group_messages_ok = true). Guía: docs/CHAT_ES.md';
   static const chatNeedGroup =
       'Elige un grupo arriba para abrir el chat.';
+  static const chatPushTitle = 'Chat — GPS-FMRA';
+  static const chatPushBodyFallback = 'Nuevo mensaje en tu grupo.';
+  static String chatPushBody(String sender, String text) {
+    final preview = text.length > 80 ? '${text.substring(0, 77)}…' : text;
+    return '$sender: $preview';
+  }
 }
