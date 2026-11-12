@@ -269,7 +269,40 @@ class _MapShellScreenState extends State<MapShellScreen>
     return {for (final loc in list) loc.userId: loc};
   }
 
-  String get _myUid => supabase.auth.currentUser?.id ?? '';
+  String get _myUid =>
+      (supabase.auth.currentUser?.id ?? '').trim().toLowerCase();
+
+  bool _isOwnSos(SosEvent e) =>
+      e.userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+
+  /// Paleta fija de pines (peers). El propio usuario usa [_selfPinColor].
+  /// El color se elige con hash del user id → estable entre sesiones.
+  static const _selfPinColor = '#4DB6D4';
+  static const _peerPinPalette = <String>[
+    '#1565C0', // azul
+    '#2E7D32', // verde
+    '#6A1B9A', // morado
+    '#EF6C00', // naranja
+    '#00838F', // teal
+    '#AD1457', // rosa
+    '#4527A0', // índigo
+    '#558B2F', // verde oliva
+    '#C62828', // rojo (uno entre varios)
+    '#0277BD', // azul claro
+    '#5D4037', // café
+    '#F9A825', // ámbar
+  ];
+
+  String _pinColorFor(String userId, {required bool isSelf}) {
+    if (isSelf) return _selfPinColor;
+    final id = userId.trim().toLowerCase();
+    if (id.isEmpty) return _peerPinPalette.first;
+    var hash = 0;
+    for (var i = 0; i < id.length; i++) {
+      hash = 0x1fffffff & (hash * 31 + id.codeUnitAt(i));
+    }
+    return _peerPinPalette[hash % _peerPinPalette.length];
+  }
 
   String _shareFor(GroupMember m) {
     final c = _consentsBySharer[m.userId];
@@ -722,6 +755,15 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
+  bool _shouldShowSosEvent(SosEvent e, Set<String> myAcked) {
+    // Emisor: siempre ve su SOS activo hasta resolved/cancelled en servidor.
+    if (_isOwnSos(e)) return true;
+    // Receptor: ocultar si Aceptar local o ack en servidor.
+    if (_isSosHiddenLocally(e)) return false;
+    if (myAcked.contains(e.id.trim().toLowerCase())) return false;
+    return true;
+  }
+
   Future<void> _refreshActiveSos() async {
     final group = _selected;
     if (group == null) {
@@ -738,21 +780,14 @@ class _MapShellScreenState extends State<MapShellScreen>
       final list = await _sos.listActiveForGroup(group.id);
       if (!mounted || epoch != _sosRefreshEpoch) return;
       final named = _withMemberNames(list);
-      final myUid = _myUid;
       final myAcked = await _sos.listMyAckedSosIds(named.map((e) => e.id));
       if (!mounted || epoch != _sosRefreshEpoch) return;
 
-      // Emisor: siempre ve su SOS activo hasta que todos acepten (resolved).
-      // Receptor: oculta si ya dio Aceptar (servidor o local).
-      final visible = named.where((e) {
-        if (e.userId == myUid) return true;
-        if (_isSosHiddenLocally(e)) return false;
-        if (myAcked.contains(e.id.trim().toLowerCase())) return false;
-        return true;
-      }).toList();
+      var visible =
+          named.where((e) => _shouldShowSosEvent(e, myAcked)).toList();
 
       SosAckProgress? progress;
-      final own = visible.where((e) => e.userId == myUid).toList();
+      final own = visible.where(_isOwnSos).toList();
       if (own.isNotEmpty) {
         try {
           progress = await _sos.listAckProgress(own.first.id);
@@ -760,22 +795,17 @@ class _MapShellScreenState extends State<MapShellScreen>
           if (progress.allPeersAcked) {
             await _sos.tryResolveIfAllAcked(own.first.id);
             if (!mounted || epoch != _sosRefreshEpoch) return;
-            // Re-lista: debería desaparecer si quedó resolved.
             final again = await _sos.listActiveForGroup(group.id);
             if (!mounted || epoch != _sosRefreshEpoch) return;
             final namedAgain = _withMemberNames(again);
-            setState(() {
-              _activeSos = namedAgain.where((e) {
-                if (e.userId == myUid) return true;
-                if (_isSosHiddenLocally(e)) return false;
-                if (myAcked.contains(e.id.trim().toLowerCase())) return false;
-                return true;
-              }).toList();
-              _sosAckProgress = _activeSos.any((e) => e.userId == myUid)
-                  ? progress
-                  : null;
-            });
-            return;
+            final acked2 =
+                await _sos.listMyAckedSosIds(namedAgain.map((e) => e.id));
+            if (!mounted || epoch != _sosRefreshEpoch) return;
+            visible = namedAgain
+                .where((e) => _shouldShowSosEvent(e, acked2))
+                .toList();
+            progress =
+                visible.any(_isOwnSos) ? progress : null;
           }
         } catch (_) {
           progress = null;
@@ -1074,8 +1104,9 @@ class _MapShellScreenState extends State<MapShellScreen>
         final userId = entry.key;
         final loc = entry.value;
         final geometry = display[userId]!;
-        final isSelf = userId == _myUid;
-        final color = isSelf ? '#4DB6D4' : '#C62828';
+        final isSelf =
+            userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+        final color = _pinColorFor(userId, isSelf: isSelf);
         final label = nameById[userId] ??
             (isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember);
         final accRadius = _accuracyRadiusPx(loc);
