@@ -100,6 +100,11 @@ abstract final class AppStrings {
       '¿Eliminar esta ubicación del grupo?';
   static const groupsPlacesOpenMap = 'Ver en mapa';
   static const groupsPlacesUncategorized = 'Sin categoría';
+  static const groupsPlacesSoloTitle = 'Solo yo';
+  static const groupsPlacesSoloHint =
+      'Guardados sin compartir con el grupo. En el Mapa elige '
+      '“Compartir con el grupo” para que los vea toda la familia.';
+  static const groupsPlacesSharedTitle = 'Compartidos con el grupo';
   static const groupsPlacesSectionHint = 'Toca para ver ubicaciones';
   static const groupsCategoryCreateTitle = 'Nueva categoría';
   static const groupsCategoryCreateAction = 'Nueva carpeta';

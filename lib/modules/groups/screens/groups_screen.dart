@@ -25,6 +25,7 @@ class GroupsScreenState extends State<GroupsScreen>
   bool _loading = true;
   String? _error;
   List<FamilyGroup> _groups = const [];
+  List<NamedPlace> _soloPlaces = const [];
   final Map<String, List<PlaceCategory>> _catsByGroup = {};
   final Map<String, List<NamedPlace>> _placesByGroup = {};
   final Map<String, bool> _sectionLoading = {};
@@ -50,9 +51,16 @@ class GroupsScreenState extends State<GroupsScreen>
     });
     try {
       final groups = await _service.listMyGroups();
+      var solo = const <NamedPlace>[];
+      try {
+        solo = await _places.listSoloMine();
+      } catch (e) {
+        debugPrint('listSoloMine in refresh: $e');
+      }
       if (!mounted) return;
       setState(() {
         _groups = groups;
+        _soloPlaces = solo;
         _loading = false;
       });
       for (final g in groups) {
@@ -315,12 +323,15 @@ class GroupsScreenState extends State<GroupsScreen>
     );
   }
 
-  Widget _locationsBelowGroup(FamilyGroup group) {
+  Widget _locationsBelowGroup(FamilyGroup group, {required bool showSolo}) {
     final loading = _sectionLoading[group.id] == true;
     final cats = _catsByGroup[group.id] ?? const <PlaceCategory>[];
     final places = _placesByGroup[group.id] ?? const <NamedPlace>[];
     final uncategorized = places
         .where((p) => p.categoryId == null || p.categoryId!.trim().isEmpty)
+        .toList();
+    final categorized = places
+        .where((p) => p.categoryId != null && p.categoryId!.trim().isNotEmpty)
         .toList();
 
     return Padding(
@@ -332,7 +343,7 @@ class GroupsScreenState extends State<GroupsScreen>
             children: [
               Expanded(
                 child: Text(
-                  AppStrings.groupsPlacesTitle,
+                  AppStrings.groupsPlacesSharedTitle,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -373,7 +384,7 @@ class GroupsScreenState extends State<GroupsScreen>
                     .copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
                   key: PageStorageKey<String>('cat_${cat.id}'),
-                  initiallyExpanded: _openCats.contains(cat.id),
+                  initiallyExpanded: true,
                   onExpansionChanged: (open) {
                     setState(() {
                       if (open) {
@@ -387,7 +398,7 @@ class GroupsScreenState extends State<GroupsScreen>
                   title: Text(cat.name),
                   subtitle: Text(
                     AppStrings.groupsCategoryPlaceCount(
-                      places.where((p) => p.categoryId == cat.id).length,
+                      categorized.where((p) => p.categoryId == cat.id).length,
                     ),
                   ),
                   children: [
@@ -404,11 +415,11 @@ class GroupsScreenState extends State<GroupsScreen>
                       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                       child: Column(
                         children: [
-                          for (final p in places.where(
+                          for (final p in categorized.where(
                             (p) => p.categoryId == cat.id,
                           ))
                             _placeCard(group, p),
-                          if (places
+                          if (categorized
                               .where((p) => p.categoryId == cat.id)
                               .isEmpty)
                             Padding(
@@ -434,12 +445,36 @@ class GroupsScreenState extends State<GroupsScreen>
               for (final p in uncategorized) _placeCard(group, p),
             ],
           ],
+          if (showSolo) ...[
+            const SizedBox(height: 16),
+            Text(
+              AppStrings.groupsPlacesSoloTitle,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              AppStrings.groupsPlacesSoloHint,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            if (_soloPlaces.isEmpty)
+              Text(
+                'Ninguno aún.',
+                style: Theme.of(context).textTheme.bodySmall,
+              )
+            else
+              for (final p in _soloPlaces) _placeCard(group, p),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildGroupBlock(FamilyGroup group) {
+  Widget _buildGroupBlock(FamilyGroup group, {required bool showSolo}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -474,7 +509,7 @@ class GroupsScreenState extends State<GroupsScreen>
             await _refresh();
           },
         ),
-        _locationsBelowGroup(group),
+        _locationsBelowGroup(group, showSolo: showSolo),
       ],
     );
   }
@@ -584,7 +619,11 @@ class GroupsScreenState extends State<GroupsScreen>
                         children: [
                           for (var i = 0; i < _groups.length; i++) ...[
                             if (i > 0) const Divider(height: 1),
-                            _buildGroupBlock(_groups[i]),
+                            // Solo yo: una sola sección bajo el primer grupo.
+                            _buildGroupBlock(
+                              _groups[i],
+                              showSolo: i == 0,
+                            ),
                           ],
                           const SizedBox(height: 12),
                           Padding(

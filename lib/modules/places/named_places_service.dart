@@ -142,15 +142,54 @@ class NamedPlacesService {
     } catch (e) {
       // Fallback si faltan columnas nuevas (description/photo/category).
       debugPrint('listForGroup fallback: $e');
+      try {
+        final rows = await _sb
+            .from('named_places')
+            .select('id, owner_id, group_id, name, lat, lon, created_at')
+            .eq('group_id', gid)
+            .order('created_at', ascending: false)
+            .limit(120);
+        return (rows as List)
+            .map((e) => NamedPlace.fromMap(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      } catch (e2) {
+        debugPrint('listForGroup failed: $e2');
+        return const [];
+      }
+    }
+  }
+
+  /// Lugares del usuario con group_id null (Solo yo) — visibles en Grupos.
+  Future<List<NamedPlace>> listSoloMine() async {
+    final uid = _uid;
+    try {
       final rows = await _sb
           .from('named_places')
-          .select('id, owner_id, group_id, name, lat, lon, created_at')
-          .eq('group_id', gid)
+          .select(_placeSelect)
+          .eq('owner_id', uid)
+          .isFilter('group_id', null)
           .order('created_at', ascending: false)
-          .limit(120);
+          .limit(80);
       return (rows as List)
           .map((e) => NamedPlace.fromMap(Map<String, dynamic>.from(e as Map)))
           .toList();
+    } catch (e) {
+      debugPrint('listSoloMine: $e');
+      try {
+        final rows = await _sb
+            .from('named_places')
+            .select('id, owner_id, group_id, name, lat, lon, created_at')
+            .eq('owner_id', uid)
+            .order('created_at', ascending: false)
+            .limit(80);
+        return (rows as List)
+            .map((e) => NamedPlace.fromMap(Map<String, dynamic>.from(e as Map)))
+            .where((p) => p.groupId == null || p.groupId!.trim().isEmpty)
+            .toList();
+      } catch (e2) {
+        debugPrint('listSoloMine failed: $e2');
+        return const [];
+      }
     }
   }
 

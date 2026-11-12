@@ -1512,7 +1512,8 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     final nameController = TextEditingController();
     final descController = TextEditingController();
-    var shareWithGroup = false;
+    // Si hay grupo seleccionado, por defecto compartir (así aparece en Grupos).
+    var shareWithGroup = _selected != null;
     Uint8List? photoBytes;
     String? selectedCategoryId;
     List<PlaceCategory> categories = const [];
@@ -1551,6 +1552,8 @@ class _MapShellScreenState extends State<MapShellScreen>
       }
     }
 
+    var scheduledCatLoad = false;
+
     // null = cancel; 'save' | 'wa'
     final action = await showDialog<String>(
       context: context,
@@ -1559,6 +1562,12 @@ class _MapShellScreenState extends State<MapShellScreen>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
+            if (shareWithGroup && !categoriesLoaded && !scheduledCatLoad) {
+              scheduledCatLoad = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                unawaited(ensureCategories(setLocal));
+              });
+            }
             return AlertDialog(
               title: const Text(AppStrings.mapSavePlaceTitle),
               content: SingleChildScrollView(
