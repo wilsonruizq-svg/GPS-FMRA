@@ -104,8 +104,12 @@ abstract final class AppStrings {
   static const groupsPlacesSoloHint =
       'Guardados sin compartir con el grupo. En el Mapa elige '
       '“Compartir con el grupo” para que los vea toda la familia.';
-  static const groupsPlacesSharedTitle = 'Compartidos con el grupo';
+  static const groupsPlacesSharedTitle = 'Ubicaciones compartidas';
   static const groupsPlacesSectionHint = 'Toca para ver ubicaciones';
+  static const groupsPlacesSearchHint =
+      'Buscar ubicaciones (nombre, detalle…)';
+  static const groupsPlacesSearchEmpty =
+      'Ninguna ubicación coincide con la búsqueda.';
   static const groupsCategoryCreateTitle = 'Nueva categoría';
   static const groupsCategoryCreateAction = 'Nueva carpeta';
   static const groupsCategoryNameLabel = 'Nombre';

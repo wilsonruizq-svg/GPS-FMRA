@@ -11,9 +11,10 @@ import '../widgets/member_card.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
-/// Lista de grupos: tap → expandir miembros + ubicaciones debajo.
-///
-/// AppShell monta solo esta pestaña (sin IndexedStack+MapLibre encima).
+/// Pestaña Grupos:
+/// - Filas de grupo → tap abre solo MIEMBROS.
+/// - Debajo: lista compartida de UBICACIONES (todos los grupos + solo yo).
+/// - Buscador fijo abajo para filtrar esas ubicaciones.
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
@@ -24,18 +25,19 @@ class GroupsScreen extends StatefulWidget {
 class GroupsScreenState extends State<GroupsScreen> {
   final _service = GroupsService();
   final _places = NamedPlacesService();
+  final _searchCtrl = TextEditingController();
 
   bool _loading = true;
+  bool _placesLoading = false;
   String? _error;
   List<FamilyGroup> _groups = const [];
-  List<NamedPlace> _soloPlaces = const [];
-  final Map<String, List<PlaceCategory>> _catsByGroup = {};
-  final Map<String, List<NamedPlace>> _placesByGroup = {};
+  List<NamedPlace> _sharedPlaces = const [];
+  List<PlaceCategory> _sharedCats = const [];
   final Map<String, List<GroupMember>> _membersByGroup = {};
-  final Map<String, bool> _sectionLoading = {};
+  final Map<String, bool> _membersLoading = {};
   final Set<String> _expandedIds = {};
+  String _query = '';
 
-  /// Para FAB del AppShell.
   bool get isLoading => _loading;
   int get groupCount => _groups.length;
   bool get isEmpty => !_loading && _error == null && _groups.isEmpty;
@@ -44,10 +46,19 @@ class GroupsScreenState extends State<GroupsScreen> {
 
   String? get _uid => Supabase.instance.client.auth.currentUser?.id;
 
+  FamilyGroup? get _primaryGroup =>
+      _groups.isEmpty ? null : _groups.first;
+
   @override
   void initState() {
     super.initState();
     unawaited(reload());
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> reload() => _refresh();
@@ -61,22 +72,15 @@ class GroupsScreenState extends State<GroupsScreen> {
     try {
       final groups = await _service.listMyGroups();
       debugPrint('GroupsScreen: listMyGroups → ${groups.length}');
-      var solo = const <NamedPlace>[];
-      try {
-        solo = await _places.listSoloMine();
-      } catch (e) {
-        debugPrint('listSoloMine: $e');
-      }
       if (!mounted) return;
-      // Ubicaciones se cargan siempre; miembros al expandir.
       setState(() {
         _groups = groups;
-        _soloPlaces = solo;
         _expandedIds.removeWhere((id) => !groups.any((g) => g.id == id));
         _loading = false;
       });
-      for (final g in groups) {
-        unawaited(_loadSection(g.id));
+      await _loadSharedPlaces(groups);
+      for (final id in _expandedIds) {
+        unawaited(_loadMembers(id));
       }
     } catch (e, st) {
       debugPrint('GroupsScreen._refresh ERROR: $e\n$st');
@@ -88,34 +92,69 @@ class GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
-  Future<void> _loadSection(String groupId) async {
+  /// Une lugares de todos los grupos + Solo yo (sin SQL nuevo).
+  Future<void> _loadSharedPlaces(List<FamilyGroup> groups) async {
     if (!mounted) return;
-    setState(() => _sectionLoading[groupId] = true);
-    var cats = const <PlaceCategory>[];
-    var places = const <NamedPlace>[];
-    var members = const <GroupMember>[];
-    try {
-      members = await _service.listMembers(groupId);
-    } catch (e) {
-      debugPrint('listMembers($groupId): $e');
+    setState(() => _placesLoading = true);
+    final byId = <String, NamedPlace>{};
+    final cats = <PlaceCategory>[];
+    final seenCat = <String>{};
+
+    for (final g in groups) {
+      try {
+        final places = await _places.listForGroup(g.id);
+        for (final p in places) {
+          byId[p.id] = p;
+        }
+      } catch (e) {
+        debugPrint('listForGroup(${g.id}): $e');
+      }
+      try {
+        final list = await _places.listCategories(g.id);
+        for (final c in list) {
+          if (seenCat.add(c.id)) cats.add(c);
+        }
+      } catch (e) {
+        debugPrint('listCategories(${g.id}): $e');
+      }
     }
     try {
-      places = await _places.listForGroup(groupId);
+      final solo = await _places.listSoloMine();
+      for (final p in solo) {
+        byId[p.id] = p;
+      }
     } catch (e) {
-      debugPrint('listForGroup($groupId): $e');
+      debugPrint('listSoloMine: $e');
     }
-    try {
-      cats = await _places.listCategories(groupId);
-    } catch (e) {
-      debugPrint('listCategories($groupId): $e');
-    }
+
+    final merged = byId.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     if (!mounted) return;
     setState(() {
-      _membersByGroup[groupId] = members;
-      _placesByGroup[groupId] = places;
-      _catsByGroup[groupId] = cats;
-      _sectionLoading[groupId] = false;
+      _sharedPlaces = merged;
+      _sharedCats = cats;
+      _placesLoading = false;
     });
+  }
+
+  Future<void> _loadMembers(String groupId) async {
+    if (!mounted) return;
+    setState(() => _membersLoading[groupId] = true);
+    try {
+      final members = await _service.listMembers(groupId);
+      if (!mounted) return;
+      setState(() {
+        _membersByGroup[groupId] = members;
+        _membersLoading[groupId] = false;
+      });
+    } catch (e) {
+      debugPrint('listMembers($groupId): $e');
+      if (!mounted) return;
+      setState(() {
+        _membersByGroup[groupId] = const [];
+        _membersLoading[groupId] = false;
+      });
+    }
   }
 
   Future<void> _openGroupDetail(FamilyGroup group) async {
@@ -127,7 +166,14 @@ class GroupsScreenState extends State<GroupsScreen> {
     await _refresh();
   }
 
-  Future<void> _createCategory(FamilyGroup group) async {
+  Future<void> _createCategory() async {
+    final group = _primaryGroup;
+    if (group == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Crea o únete a un grupo primero.')),
+      );
+      return;
+    }
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
@@ -163,7 +209,7 @@ class GroupsScreenState extends State<GroupsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppStrings.groupsCategoryCreated(name))),
       );
-      await _loadSection(group.id);
+      await _loadSharedPlaces(_groups);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -172,7 +218,7 @@ class GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
-  Future<void> _deletePlace(FamilyGroup group, NamedPlace place) async {
+  Future<void> _deletePlace(NamedPlace place) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -199,7 +245,7 @@ class GroupsScreenState extends State<GroupsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text(AppStrings.groupsPlacesDeleted)),
       );
-      await _refresh();
+      await _loadSharedPlaces(_groups);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -208,7 +254,7 @@ class GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
-  Future<void> _deleteCategory(FamilyGroup group, PlaceCategory cat) async {
+  Future<void> _deleteCategory(PlaceCategory cat) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -230,7 +276,7 @@ class GroupsScreenState extends State<GroupsScreen> {
     try {
       await _places.deleteCategory(cat.id);
       if (!mounted) return;
-      await _loadSection(group.id);
+      await _loadSharedPlaces(_groups);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -295,11 +341,37 @@ class GroupsScreenState extends State<GroupsScreen> {
     await _refresh();
   }
 
-  Widget _placeCard(FamilyGroup group, NamedPlace place) {
+  List<NamedPlace> get _filteredPlaces {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return _sharedPlaces;
+    return _sharedPlaces.where((p) {
+      final name = p.name.toLowerCase();
+      final desc = (p.description ?? '').toLowerCase();
+      final coords =
+          '${p.lat.toStringAsFixed(5)},${p.lon.toStringAsFixed(5)}';
+      return name.contains(q) || desc.contains(q) || coords.contains(q);
+    }).toList();
+  }
+
+  String? _categoryName(NamedPlace place) {
+    final id = place.categoryId?.trim();
+    if (id == null || id.isEmpty) return null;
+    for (final c in _sharedCats) {
+      if (c.id == id) return c.name;
+    }
+    return null;
+  }
+
+  Widget _placeCard(NamedPlace place) {
     final url = _places.publicPhotoUrl(place.photoPath);
+    final cat = _categoryName(place);
+    final detail = (place.description == null || place.description!.isEmpty)
+        ? '${place.lat.toStringAsFixed(5)}, ${place.lon.toStringAsFixed(5)}'
+        : place.description!;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       clipBehavior: Clip.antiAlias,
+      color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -309,9 +381,9 @@ class GroupsScreenState extends State<GroupsScreen> {
               child: Image.network(
                 url,
                 fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => ColoredBox(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const SizedBox(
+                errorBuilder: (_, _, _) => const ColoredBox(
+                  color: Color(0xFFE8EEF4),
+                  child: SizedBox(
                     height: 72,
                     child: Center(child: Icon(Icons.broken_image_outlined)),
                   ),
@@ -319,30 +391,34 @@ class GroupsScreenState extends State<GroupsScreen> {
               ),
             )
           else
-            ColoredBox(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              child: const SizedBox(
+            const ColoredBox(
+              color: Color(0xFFE8EEF4),
+              child: SizedBox(
                 height: 56,
-                child: Center(child: Icon(Icons.place_outlined)),
+                child: Center(
+                  child: Icon(Icons.place_outlined, color: AppColors.midBlue),
+                ),
               ),
             ),
           ListTile(
             dense: true,
             title: Text(
               place.name,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: AppColors.deepBlue,
+              ),
             ),
             subtitle: Text(
-              (place.description == null || place.description!.isEmpty)
-                  ? '${place.lat.toStringAsFixed(5)}, ${place.lon.toStringAsFixed(5)}'
-                  : place.description!,
+              cat == null ? detail : '$cat · $detail',
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: AppColors.midBlue),
             ),
             trailing: IconButton(
               tooltip: AppStrings.groupsPlacesDelete,
-              icon: const Icon(Icons.delete_outline),
-              onPressed: () => unawaited(_deletePlace(group, place)),
+              icon: const Icon(Icons.delete_outline, color: AppColors.accentRed),
+              onPressed: () => unawaited(_deletePlace(place)),
             ),
           ),
         ],
@@ -350,165 +426,164 @@ class GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  Widget _locationsBelowGroup(FamilyGroup group, {required bool showSolo}) {
-    final loading = _sectionLoading[group.id] == true;
-    final cats = _catsByGroup[group.id] ?? const <PlaceCategory>[];
-    final places = _placesByGroup[group.id] ?? const <NamedPlace>[];
-    final uncategorized = places
-        .where((p) => p.categoryId == null || p.categoryId!.trim().isEmpty)
-        .toList();
+  Widget _sharedPlacesSection() {
+    final places = _filteredPlaces;
+    final cats = _sharedCats;
     final categorized = places
         .where((p) => p.categoryId != null && p.categoryId!.trim().isNotEmpty)
         .toList();
+    final uncategorized = places
+        .where((p) => p.categoryId == null || p.categoryId!.trim().isEmpty)
+        .toList();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
+    return Material(
+      color: Colors.white,
+      elevation: 1,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    AppStrings.groupsPlacesTitle,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                      color: AppColors.deepBlue,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _createCategory,
+                  icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                  label: const Text(AppStrings.groupsCategoryCreateAction),
+                ),
+              ],
+            ),
+            const Text(
+              'Compartidas para todos tus grupos (y Solo yo).',
+              style: TextStyle(fontSize: 12, color: AppColors.midBlue),
+            ),
+            const SizedBox(height: 8),
+            if (_placesLoading && _sharedPlaces.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 20),
+                child: Center(
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+              )
+            else if (places.isEmpty && cats.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8, top: 4),
                 child: Text(
-                  AppStrings.groupsPlacesSharedTitle,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  _query.trim().isEmpty
+                      ? AppStrings.groupsPlacesEmpty
+                      : AppStrings.groupsPlacesSearchEmpty,
+                  style: const TextStyle(color: AppColors.midBlue),
+                ),
+              )
+            else ...[
+              for (final cat in cats)
+                Theme(
+                  data: Theme.of(context)
+                      .copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    key: ValueKey('cat_${cat.id}'),
+                    initiallyExpanded: true,
+                    leading: const Icon(
+                      Icons.folder_outlined,
+                      color: AppColors.deepBlue,
+                    ),
+                    title: Text(
+                      cat.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.deepBlue,
+                      ),
+                    ),
+                    subtitle: Text(
+                      AppStrings.groupsCategoryPlaceCount(
+                        categorized
+                            .where((p) => p.categoryId == cat.id)
+                            .length,
+                      ),
+                    ),
+                    children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => unawaited(_deleteCategory(cat)),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text(AppStrings.groupsCategoryDelete),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: Column(
+                          children: [
+                            for (final p in categorized.where(
+                              (p) => p.categoryId == cat.id,
+                            ))
+                              _placeCard(p),
+                            if (categorized
+                                .where((p) => p.categoryId == cat.id)
+                                .isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: Text(
+                                  AppStrings.groupsCategoryEmpty,
+                                  style: TextStyle(color: AppColors.midBlue),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (uncategorized.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  AppStrings.groupsPlacesUncategorized,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: AppColors.deepBlue,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: () => unawaited(_createCategory(group)),
-                icon: const Icon(Icons.create_new_folder_outlined, size: 18),
-                label: const Text(AppStrings.groupsCategoryCreateAction),
-              ),
-            ],
-          ),
-          if (loading && cats.isEmpty && places.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              ),
-            )
-          else if (cats.isEmpty && places.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                AppStrings.groupsPlacesEmpty,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            )
-          else ...[
-            for (final cat in cats)
-              Theme(
-                data: Theme.of(context)
-                    .copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  key: ValueKey('cat_${cat.id}'),
-                  initiallyExpanded: true,
-                  leading: const Icon(Icons.folder_outlined),
-                  title: Text(cat.name),
-                  subtitle: Text(
-                    AppStrings.groupsCategoryPlaceCount(
-                      categorized.where((p) => p.categoryId == cat.id).length,
-                    ),
-                  ),
-                  children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () =>
-                            unawaited(_deleteCategory(group, cat)),
-                        icon: const Icon(Icons.delete_outline, size: 18),
-                        label: const Text(AppStrings.groupsCategoryDelete),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                      child: Column(
-                        children: [
-                          for (final p in categorized.where(
-                            (p) => p.categoryId == cat.id,
-                          ))
-                            _placeCard(group, p),
-                          if (categorized
-                              .where((p) => p.categoryId == cat.id)
-                              .isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Text(
-                                AppStrings.groupsCategoryEmpty,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            if (uncategorized.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                AppStrings.groupsPlacesUncategorized,
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 6),
-              for (final p in uncategorized) _placeCard(group, p),
+                const SizedBox(height: 6),
+                for (final p in uncategorized) _placeCard(p),
+              ],
             ],
           ],
-          if (showSolo) ...[
-            const SizedBox(height: 16),
-            Text(
-              AppStrings.groupsPlacesSoloTitle,
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              AppStrings.groupsPlacesSoloHint,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            if (_soloPlaces.isEmpty)
-              Text(
-                'Ninguno aún.',
-                style: Theme.of(context).textTheme.bodySmall,
-              )
-            else
-              for (final p in _soloPlaces) _placeCard(group, p),
-          ],
-        ],
+        ),
       ),
     );
   }
 
   Widget _membersSection(FamilyGroup group) {
-    final loading = _sectionLoading[group.id] == true;
+    final loading = _membersLoading[group.id] == true;
     final members = _membersByGroup[group.id];
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(
+              const Expanded(
                 child: Text(
                   AppStrings.groupsMembersSection,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.deepBlue,
-                      ),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.deepBlue,
+                  ),
                 ),
               ),
               TextButton.icon(
@@ -534,12 +609,9 @@ class GroupsScreenState extends State<GroupsScreen> {
               ),
             )
           else if (members == null || members.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text(
-                AppStrings.groupsMembersEmpty,
-                style: TextStyle(color: AppColors.midBlue),
-              ),
+            const Text(
+              AppStrings.groupsMembersEmpty,
+              style: TextStyle(color: AppColors.midBlue),
             )
           else
             for (final m in members)
@@ -569,11 +641,12 @@ class GroupsScreenState extends State<GroupsScreen> {
       }
     });
     if (open) {
-      unawaited(_loadSection(group.id));
+      unawaited(_loadMembers(group.id));
     }
   }
 
-  Widget _buildGroupBlock(FamilyGroup group, {required bool showSolo}) {
+  /// Solo nombre + miembros al expandir (sin ubicaciones dentro del grupo).
+  Widget _buildGroupBlock(FamilyGroup group) {
     final expanded = _expandedIds.contains(group.id);
     return Material(
       color: Colors.white,
@@ -581,7 +654,6 @@ class GroupsScreenState extends State<GroupsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Nombre siempre visible; tap → muestra/oculta MIEMBROS.
           InkWell(
             onTap: () => _toggleGroup(group),
             child: Padding(
@@ -630,22 +702,13 @@ class GroupsScreenState extends State<GroupsScreen> {
               ),
             ),
           ),
-          // Ubicaciones SIEMPRE justo debajo del nombre (lista Grupos).
-          // Al expandir/abrir: solo MIEMBROS (sin repetir ubicaciones ahí).
-          ColoredBox(
-            color: AppColors.surface,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Divider(height: 1),
-                _locationsBelowGroup(group, showSolo: showSolo),
-                if (expanded) ...[
-                  const Divider(height: 1),
-                  _membersSection(group),
-                ],
-              ],
+          if (expanded) ...[
+            const Divider(height: 1),
+            ColoredBox(
+              color: AppColors.surface,
+              child: _membersSection(group),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -715,20 +778,25 @@ class GroupsScreenState extends State<GroupsScreen> {
             icon: const Icon(Icons.vpn_key_outlined),
             label: const Text(AppStrings.groupsJoinAction),
           ),
+          const SizedBox(height: 24),
+          _sharedPlacesSection(),
         ],
       );
     }
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(0, 8, 0, 96),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 16),
       children: [
         for (var i = 0; i < _groups.length; i++) ...[
           if (i > 0) const SizedBox(height: 8),
-          _buildGroupBlock(_groups[i], showSolo: i == 0),
+          _buildGroupBlock(_groups[i]),
         ],
         const SizedBox(height: 12),
+        // Lista compartida debajo de los nombres de grupo.
+        _sharedPlacesSection(),
+        const SizedBox(height: 8),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           child: Text(
             AppStrings.groupsAlreadyMemberHint,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -737,6 +805,48 @@ class GroupsScreenState extends State<GroupsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _searchBar() {
+    return Material(
+      elevation: 6,
+      color: Colors.white,
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+          child: TextField(
+            controller: _searchCtrl,
+            onChanged: (v) => setState(() => _query = v),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: AppStrings.groupsPlacesSearchHint,
+              prefixIcon: const Icon(Icons.search, color: AppColors.deepBlue),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: AppStrings.cancel,
+                      onPressed: () {
+                        _searchCtrl.clear();
+                        setState(() => _query = '');
+                      },
+                      icon: const Icon(Icons.clear),
+                    ),
+              filled: true,
+              fillColor: AppColors.surface,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -778,6 +888,8 @@ class GroupsScreenState extends State<GroupsScreen> {
               child: _buildScrollBody(),
             ),
           ),
+          // Buscador fijo abajo: filtra la lista compartida de ubicaciones.
+          if (!_loading && _error == null) _searchBar(),
         ],
       ),
     );
