@@ -305,6 +305,83 @@ class _MapShellScreenState extends State<MapShellScreen>
     return _peerPinPalette[hash % _peerPinPalette.length];
   }
 
+  /// Distancia aproximada en metros (suficiente para agrupar pines en casa).
+  double _approxMeters(double lat1, double lon1, double lat2, double lon2) {
+    final dLat = (lat1 - lat2) * 111320.0;
+    final cosLat = math.cos(lat1 * math.pi / 180.0).abs().clamp(0.2, 1.0);
+    final dLon = (lon1 - lon2) * 111320.0 * cosLat;
+    return math.sqrt(dLat * dLat + dLon * dLon);
+  }
+
+  /// Si varios están a <~28 m, reparte pin+etiqueta en un círculo (spiderfy).
+  /// El halo de precisión sigue en la coordenada GPS real.
+  Map<String, LatLng> _spiderfyDisplayPositions(
+    Map<String, MemberLocation> desired,
+  ) {
+    final ids = desired.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final assigned = <String>{};
+    final out = <String, LatLng>{};
+    const clusterM = 28.0;
+
+    for (final seed in ids) {
+      if (assigned.contains(seed)) continue;
+      final cluster = <String>[seed];
+      assigned.add(seed);
+      var grew = true;
+      while (grew) {
+        grew = false;
+        for (final cand in ids) {
+          if (assigned.contains(cand)) continue;
+          final cLoc = desired[cand]!;
+          for (final member in cluster) {
+            final mLoc = desired[member]!;
+            if (_approxMeters(
+                  mLoc.lat,
+                  mLoc.lon,
+                  cLoc.lat,
+                  cLoc.lon,
+                ) <=
+                clusterM) {
+              cluster.add(cand);
+              assigned.add(cand);
+              grew = true;
+              break;
+            }
+          }
+        }
+      }
+
+      cluster.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      if (cluster.length == 1) {
+        final loc = desired[cluster.first]!;
+        out[cluster.first] = LatLng(loc.lat, loc.lon);
+        continue;
+      }
+
+      var sumLat = 0.0;
+      var sumLon = 0.0;
+      for (final id in cluster) {
+        sumLat += desired[id]!.lat;
+        sumLon += desired[id]!.lon;
+      }
+      final n = cluster.length;
+      final cLat = sumLat / n;
+      final cLon = sumLon / n;
+      // Radio ~14–22 m para separar etiquetas sin alejarse mucho del hogar.
+      final radiusM = (14.0 + (n - 2) * 3.0).clamp(14.0, 28.0);
+      final cosLat = math.cos(cLat * math.pi / 180.0).abs().clamp(0.2, 1.0);
+
+      for (var i = 0; i < n; i++) {
+        final angle = (2 * math.pi * i / n) - (math.pi / 2);
+        final dLat = (radiusM * math.cos(angle)) / 111320.0;
+        final dLon = (radiusM * math.sin(angle)) / (111320.0 * cosLat);
+        out[cluster[i]] = LatLng(cLat + dLat, cLon + dLon);
+      }
+    }
+    return out;
+  }
+
   String _shareFor(GroupMember m) {
     final c = _consentsBySharer[m.userId];
     final isSelf =
@@ -1055,13 +1132,10 @@ class _MapShellScreenState extends State<MapShellScreen>
     _syncingMarkers = true;
     _markersDirty = false;
     try {
-      // Coordenadas reales (sin nudge artificial): el nudge de 35 m era la
-      // causa de que el pin "tú" no coincidiera con el anillo GPS del dispositivo.
+      // GPS real en [desired]; pin+label pueden spiderfy si se apilan en casa.
+      // El halo de precisión usa siempre la coordenada real.
       final desired = Map<String, MemberLocation>.from(_locationsByUser);
-      final display = <String, LatLng>{
-        for (final e in desired.entries)
-          e.key: LatLng(e.value.lat, e.value.lon),
-      };
+      final display = _spiderfyDisplayPositions(desired);
 
       final stale = <String>{
         ..._circlesByUser.keys,
@@ -1094,7 +1168,8 @@ class _MapShellScreenState extends State<MapShellScreen>
       for (final entry in desired.entries) {
         final userId = entry.key;
         final loc = entry.value;
-        final geometry = display[userId]!;
+        final realGeometry = LatLng(loc.lat, loc.lon);
+        final pinGeometry = display[userId] ?? realGeometry;
         final isSelf =
             userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
         final color = _pinColorFor(userId, isSelf: isSelf);
@@ -1107,7 +1182,7 @@ class _MapShellScreenState extends State<MapShellScreen>
           try {
             final halo = await controller.addCircle(
               CircleOptions(
-                geometry: geometry,
+                geometry: realGeometry,
                 circleRadius: accRadius,
                 circleColor: color,
                 circleOpacity: 0.16,
@@ -1123,7 +1198,7 @@ class _MapShellScreenState extends State<MapShellScreen>
             await controller.updateCircle(
               existingAccuracy,
               CircleOptions(
-                geometry: geometry,
+                geometry: realGeometry,
                 circleRadius: accRadius,
                 circleColor: color,
               ),
@@ -1136,7 +1211,7 @@ class _MapShellScreenState extends State<MapShellScreen>
           try {
             final circle = await controller.addCircle(
               CircleOptions(
-                geometry: geometry,
+                geometry: pinGeometry,
                 circleRadius: isSelf ? 10 : 12,
                 circleColor: color,
                 circleOpacity: 0.92,
@@ -1151,7 +1226,7 @@ class _MapShellScreenState extends State<MapShellScreen>
             await controller.updateCircle(
               existingCircle,
               CircleOptions(
-                geometry: geometry,
+                geometry: pinGeometry,
                 circleColor: color,
                 circleRadius: isSelf ? 10 : 12,
               ),
@@ -1164,7 +1239,7 @@ class _MapShellScreenState extends State<MapShellScreen>
           try {
             final symbol = await controller.addSymbol(
               SymbolOptions(
-                geometry: geometry,
+                geometry: pinGeometry,
                 textField: label,
                 textSize: 12,
                 textColor: '#0B2A4A',
@@ -1180,7 +1255,7 @@ class _MapShellScreenState extends State<MapShellScreen>
           try {
             await controller.updateSymbol(
               existingLabel,
-              SymbolOptions(geometry: geometry, textField: label),
+              SymbolOptions(geometry: pinGeometry, textField: label),
             );
           } catch (_) {}
         }
