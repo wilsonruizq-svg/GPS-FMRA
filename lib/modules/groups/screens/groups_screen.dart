@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_strings.dart';
@@ -9,18 +8,20 @@ import '../groups_service.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
-/// Lista de grupos familiares. Debajo de cada grupo: categorías/carpetas
-/// de ubicaciones (restaurantes, negocios…) con foto — no en el detalle.
+/// Lista de grupos familiares. Debajo de cada uno: carpetas/ubicaciones.
+/// State público para que [AppShell] pueda forzar reload al abrir la pestaña.
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
   @override
-  State<GroupsScreen> createState() => _GroupsScreenState();
+  GroupsScreenState createState() => GroupsScreenState();
 }
 
-class _GroupsScreenState extends State<GroupsScreen> {
+class GroupsScreenState extends State<GroupsScreen>
+    with AutomaticKeepAliveClientMixin {
   final _service = GroupsService();
   final _places = NamedPlacesService();
+
   bool _loading = true;
   String? _error;
   List<FamilyGroup> _groups = const [];
@@ -30,12 +31,19 @@ class _GroupsScreenState extends State<GroupsScreen> {
   final Set<String> _openCats = {};
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    _refresh();
+    unawaited(reload());
   }
 
+  /// Llamado desde AppShell al seleccionar la pestaña Grupos.
+  Future<void> reload() => _refresh();
+
   Future<void> _refresh() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -50,7 +58,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
       for (final g in groups) {
         unawaited(_loadSection(g.id));
       }
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('GroupsScreen._refresh ERROR: $e\n$st');
       if (!mounted) return;
       setState(() {
         _error = e.toString();
@@ -62,18 +71,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
   Future<void> _loadSection(String groupId) async {
     if (!mounted) return;
     setState(() => _sectionLoading[groupId] = true);
-    // Cargas separadas: si falla Storage/categorías, la pestaña Grupos sigue.
     var cats = const <PlaceCategory>[];
     var places = const <NamedPlace>[];
     try {
       places = await _places.listForGroup(groupId);
-    } catch (e) {
-      debugPrint('group places: $e');
+    } catch (e, st) {
+      debugPrint('listForGroup($groupId): $e\n$st');
     }
     try {
       cats = await _places.listCategories(groupId);
-    } catch (e) {
-      debugPrint('group categories: $e');
+    } catch (e, st) {
+      debugPrint('listCategories($groupId): $e\n$st');
     }
     if (!mounted) return;
     setState(() {
@@ -111,6 +119,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
         ],
       ),
     );
+    controller.dispose();
     if (name == null || name.isEmpty) return;
     try {
       await _places.createCategory(groupId: group.id, name: name);
@@ -223,20 +232,15 @@ class _GroupsScreenState extends State<GroupsScreen> {
         );
       },
     );
-
+    controller.dispose();
     if (name == null || name.isEmpty) return;
 
     try {
       final group = await _service.createGroup(name);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppStrings.groupsCreatedPrefix} ${group.name}')),
-      );
-      await _refresh();
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => GroupDetailScreen(group: group),
+        SnackBar(
+          content: Text('${AppStrings.groupsCreatedPrefix} ${group.name}'),
         ),
       );
       await _refresh();
@@ -250,20 +254,9 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   Future<void> _joinWithCode() async {
     final result = await Navigator.of(context).push<AcceptInviteResult>(
-      MaterialPageRoute(
-        builder: (_) => const AcceptInviteScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const AcceptInviteScreen()),
     );
     if (result == null) return;
-    await _refresh();
-    if (!mounted) return;
-    final match = _groups.where((g) => g.id == result.groupId);
-    if (match.isEmpty) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => GroupDetailScreen(group: match.first),
-      ),
-    );
     await _refresh();
   }
 
@@ -283,7 +276,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => ColoredBox(
                   color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  child: const Center(child: Icon(Icons.broken_image_outlined)),
+                  child: const SizedBox(
+                    height: 72,
+                    child: Center(child: Icon(Icons.broken_image_outlined)),
+                  ),
                 ),
               ),
             )
@@ -319,13 +315,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  /// Bloque DEBAJO del grupo familiar (misma pestaña lista, no detalle).
   Widget _locationsBelowGroup(FamilyGroup group) {
     final loading = _sectionLoading[group.id] == true;
     final cats = _catsByGroup[group.id] ?? const <PlaceCategory>[];
     final places = _placesByGroup[group.id] ?? const <NamedPlace>[];
-    final uncategorized =
-        places.where((p) => p.categoryId == null || p.categoryId!.isEmpty);
+    final uncategorized = places
+        .where((p) => p.categoryId == null || p.categoryId!.trim().isEmpty)
+        .toList();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -352,7 +348,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
           if (loading && cats.isEmpty && places.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
             )
           else if (cats.isEmpty && places.isEmpty)
             Padding(
@@ -366,54 +368,61 @@ class _GroupsScreenState extends State<GroupsScreen> {
             )
           else ...[
             for (final cat in cats)
-              ExpansionTile(
-                key: PageStorageKey('cat_${cat.id}'),
-                initiallyExpanded: _openCats.contains(cat.id),
-                onExpansionChanged: (open) {
-                  setState(() {
-                    if (open) {
-                      _openCats.add(cat.id);
-                    } else {
-                      _openCats.remove(cat.id);
-                    }
-                  });
-                },
-                leading: const Icon(Icons.folder_outlined),
-                title: Text(cat.name),
-                subtitle: Text(
-                  AppStrings.groupsCategoryPlaceCount(
-                    places.where((p) => p.categoryId == cat.id).length,
-                  ),
-                ),
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () => unawaited(_deleteCategory(group, cat)),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text(AppStrings.groupsCategoryDelete),
+              Theme(
+                data: Theme.of(context)
+                    .copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  key: PageStorageKey<String>('cat_${cat.id}'),
+                  initiallyExpanded: _openCats.contains(cat.id),
+                  onExpansionChanged: (open) {
+                    setState(() {
+                      if (open) {
+                        _openCats.add(cat.id);
+                      } else {
+                        _openCats.remove(cat.id);
+                      }
+                    });
+                  },
+                  leading: const Icon(Icons.folder_outlined),
+                  title: Text(cat.name),
+                  subtitle: Text(
+                    AppStrings.groupsCategoryPlaceCount(
+                      places.where((p) => p.categoryId == cat.id).length,
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                    child: Column(
-                      children: [
-                        for (final p in places.where(
-                          (p) => p.categoryId == cat.id,
-                        ))
-                          _placeCard(group, p),
-                        if (places.where((p) => p.categoryId == cat.id).isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              AppStrings.groupsCategoryEmpty,
-                              style: Theme.of(context).textTheme.bodySmall,
+                  children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () =>
+                            unawaited(_deleteCategory(group, cat)),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text(AppStrings.groupsCategoryDelete),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                      child: Column(
+                        children: [
+                          for (final p in places.where(
+                            (p) => p.categoryId == cat.id,
+                          ))
+                            _placeCard(group, p),
+                          if (places
+                              .where((p) => p.categoryId == cat.id)
+                              .isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(
+                                AppStrings.groupsCategoryEmpty,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             if (uncategorized.isNotEmpty) ...[
               const SizedBox(height: 4),
@@ -465,7 +474,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
             await _refresh();
           },
         ),
-        // Ubicaciones / categorías: DEBAJO en esta misma pantalla.
         _locationsBelowGroup(group),
       ],
     );
@@ -473,9 +481,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final showCreateJoinFab = !_loading && _error == null && _groups.isEmpty;
 
+    // primary: false — AppShell ya trae Scaffold/AppBar; evita pelear el layout.
     return Scaffold(
+      primary: false,
       floatingActionButton: showCreateJoinFab
           ? Column(
               mainAxisSize: MainAxisSize.min,
@@ -496,7 +507,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 ),
               ],
             )
-          : null,
+          : FloatingActionButton(
+              heroTag: 'groups_refresh',
+              tooltip: AppStrings.retry,
+              onPressed: _loading ? null : _refresh,
+              child: const Icon(Icons.refresh),
+            ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: _loading
@@ -512,6 +528,12 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(24),
                     children: [
+                      Icon(
+                        Icons.error_outline,
+                        size: 40,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      const SizedBox(height: 12),
                       Text(
                         _error!,
                         style: TextStyle(
@@ -548,29 +570,17 @@ class _GroupsScreenState extends State<GroupsScreen> {
                             icon: const Icon(Icons.add),
                             label: const Text(AppStrings.groupsCreateAction),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            AppStrings.groupsEmptyCreateHint,
-                            style: Theme.of(context).textTheme.bodySmall,
-                            textAlign: TextAlign.center,
-                          ),
                           const SizedBox(height: 20),
                           OutlinedButton.icon(
                             onPressed: _joinWithCode,
                             icon: const Icon(Icons.vpn_key_outlined),
                             label: const Text(AppStrings.groupsJoinAction),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            AppStrings.groupsEmptyJoinHint,
-                            style: Theme.of(context).textTheme.bodySmall,
-                            textAlign: TextAlign.center,
-                          ),
                         ],
                       )
                     : ListView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.only(bottom: 24),
+                        padding: const EdgeInsets.only(bottom: 88),
                         children: [
                           for (var i = 0; i < _groups.length; i++) ...[
                             if (i > 0) const Divider(height: 1),

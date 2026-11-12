@@ -13,17 +13,23 @@ independientes del grupo de tracking familiar.
 Proyecto `dgmzewsxbnwxjpnrtgyb` → **SQL Editor** → New query.
 
 1. Si falta la tabla base: `20261102284000_named_places.sql`
-2. **Obligatorio ahora:**  
+2. **Obligatorio:**  
    `supabase/migrations/20261102284300_named_places_photos.sql`  
-   → Run completo.  
-   Éxito: **`named_places_photos_ok = true`**
+   → Éxito: **`named_places_photos_ok = true`**
+3. Si Grupos no muestra carpetas/lugares tras (2), corre también:  
+   `supabase/migrations/20261102284400_places_groups_verify.sql`  
+   → Éxito: **`places_groups_verify_ok = true`**
 
-Crea:
+Crea / verifica:
 
 - `place_categories` (carpetas por `family_group`)
 - columnas `description`, `photo_path`, `category_id` en `named_places`
 - RPC `save_named_place` + `create_place_category`
 - bucket Storage **`place-photos`**
+- RLS select para miembros + `NOTIFY pgrst reload schema`
+
+**Nota:** las ubicaciones aparecen bajo el grupo solo si al Guardar
+elegiste **Compartir con el grupo** (no “Solo yo”).
 
 ## Uso
 

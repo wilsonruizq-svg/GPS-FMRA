@@ -20,10 +20,10 @@ class FamilyGroup {
 
   factory FamilyGroup.fromMap(Map<String, dynamic> map) {
     return FamilyGroup(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      createdBy: map['created_by'] as String,
-      status: map['status'] as String? ?? 'active',
+      id: map['id'].toString(),
+      name: (map['name'] ?? '').toString(),
+      createdBy: (map['created_by'] ?? '').toString(),
+      status: (map['status'] as String?) ?? 'active',
     );
   }
 
@@ -126,7 +126,9 @@ class GroupsService {
         .eq('status', 'active');
 
     final groupIds = (memberships as List)
-        .map((e) => (e as Map)['group_id'] as String)
+        .map((e) => (e as Map)['group_id']?.toString())
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
 
@@ -141,6 +143,7 @@ class GroupsService {
 
     return (rows as List)
         .map((e) => FamilyGroup.fromMap(Map<String, dynamic>.from(e as Map)))
+        .where((g) => g.id.isNotEmpty && g.name.isNotEmpty)
         .toList();
   }
 

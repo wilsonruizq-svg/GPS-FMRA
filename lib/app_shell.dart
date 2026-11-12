@@ -24,6 +24,7 @@ class _AppShellState extends State<AppShell> {
   int _index = 0;
   final _exitPin = ExitPinService();
   bool _exitGateBusy = false;
+  final _groupsKey = GlobalKey<GroupsScreenState>();
 
   static const _titles = [
     AppStrings.mapTitle,
@@ -48,6 +49,10 @@ class _AppShellState extends State<AppShell> {
     // Al volver al Mapa, asegurar listener de alertas de chat.
     if (i == 0) {
       unawaited(ChatAlertService.instance.ensureRunning());
+    }
+    // Grupos: forzar recarga al entrar (evita lista vacía por carga temprana).
+    if (i == 1) {
+      unawaited(_groupsKey.currentState?.reload() ?? Future<void>.value());
     }
   }
 
@@ -95,10 +100,10 @@ class _AppShellState extends State<AppShell> {
             : AppBar(title: Text(_titles[_index])),
         body: IndexedStack(
           index: _index,
-          children: const [
-            MapShellScreen(),
-            GroupsScreen(),
-            SettingsScreen(),
+          children: [
+            const MapShellScreen(),
+            GroupsScreen(key: _groupsKey),
+            const SettingsScreen(),
           ],
         ),
         bottomNavigationBar: NavigationBar(
