@@ -89,7 +89,10 @@ class _AppShellState extends State<AppShell> {
         _onRootBack();
       },
       child: Scaffold(
-        appBar: AppBar(title: Text(_titles[_index])),
+        // Mapa a pantalla completa (sin AppBar); Grupos/Ajustes conservan título.
+        appBar: _index == 0
+            ? null
+            : AppBar(title: Text(_titles[_index])),
         body: IndexedStack(
           index: _index,
           children: const [
