@@ -9,6 +9,9 @@ comparte con el grupo.
 2. Copia todo:
    `supabase/migrations/20261102284000_named_places.sql`
 3. **Run** → debe verse `named_places_ok = true`.
+4. Si **Guardar** falla (RLS) aunque el paso 3 fue OK, corre también:
+   `supabase/migrations/20261102284100_named_places_rls_fix.sql`
+   → `named_places_rls_ok = true`.
 
 ## Cómo usarlo en la app
 

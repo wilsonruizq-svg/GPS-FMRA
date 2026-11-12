@@ -24,14 +24,24 @@ class NamedPlace {
   bool get isShared => groupId != null && groupId!.trim().isNotEmpty;
 
   factory NamedPlace.fromMap(Map<String, dynamic> map) {
+    double asDouble(Object? v) {
+      if (v is num) return v.toDouble();
+      return double.parse(v.toString());
+    }
+
+    DateTime asTime(Object? v) {
+      if (v is DateTime) return v.toUtc();
+      return DateTime.parse(v.toString()).toUtc();
+    }
+
     return NamedPlace(
-      id: map['id'] as String,
-      ownerId: map['owner_id'] as String,
-      groupId: map['group_id'] as String?,
+      id: map['id'].toString(),
+      ownerId: map['owner_id'].toString(),
+      groupId: map['group_id']?.toString(),
       name: (map['name'] as String?)?.trim() ?? 'Lugar',
-      lat: (map['lat'] as num).toDouble(),
-      lon: (map['lon'] as num).toDouble(),
-      createdAt: DateTime.parse(map['created_at'] as String).toUtc(),
+      lat: asDouble(map['lat']),
+      lon: asDouble(map['lon']),
+      createdAt: asTime(map['created_at']),
     );
   }
 }
@@ -87,19 +97,37 @@ class NamedPlacesService {
       'name': trimmed,
       'lat': lat,
       'lon': lon,
+      // Explícito null = Solo yo (evita basura / omitir columna).
+      'group_id': null,
     };
     final gid = groupId?.trim();
     if (gid != null && gid.isNotEmpty) {
       payload['group_id'] = gid;
     }
 
-    final row = await _sb
-        .from('named_places')
-        .insert(payload)
-        .select('id, owner_id, group_id, name, lat, lon, created_at')
-        .single();
-
-    return NamedPlace.fromMap(row);
+    // Prefer=representation: si .single() falla por RLS RETURNING, reintenta listando.
+    try {
+      final row = await _sb
+          .from('named_places')
+          .insert(payload)
+          .select('id, owner_id, group_id, name, lat, lon, created_at')
+          .single();
+      return NamedPlace.fromMap(Map<String, dynamic>.from(row));
+    } catch (e) {
+      // Insert pudo aplicar aunque el RETURNING/.single falle.
+      final mine = await _sb
+          .from('named_places')
+          .select('id, owner_id, group_id, name, lat, lon, created_at')
+          .eq('owner_id', _uid)
+          .eq('name', trimmed)
+          .order('created_at', ascending: false)
+          .limit(1);
+      final list = mine as List;
+      if (list.isNotEmpty) {
+        return NamedPlace.fromMap(Map<String, dynamic>.from(list.first as Map));
+      }
+      rethrow;
+    }
   }
 
   Future<void> delete(String id) async {

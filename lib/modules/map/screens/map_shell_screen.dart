@@ -271,8 +271,10 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       final list = await _places.listVisible(groupId: _selected?.id);
       if (!mounted) return;
-      setState(() => _namedPlaces = list);
+      // Actualizar lista sin rebuild antes de tocar MapLibre (evita assert ~6281).
+      _namedPlaces = list;
       await _syncPlaceMarkers();
+      if (mounted) setState(() {});
     } catch (e) {
       if (NamedPlacesService.looksLikeMissingTable(e)) {
         debugPrint('named_places: falta APPLY SQL');
@@ -1351,7 +1353,14 @@ class _MapShellScreenState extends State<MapShellScreen>
   Future<void> _syncPlaceMarkers() async {
     final controller = _mapController;
     if (controller == null || !_styleReady) return;
+    try {
+      await _syncPlaceMarkersBody(controller);
+    } catch (e) {
+      debugPrint('syncPlaceMarkers: $e');
+    }
+  }
 
+  Future<void> _syncPlaceMarkersBody(MapLibreMapController controller) async {
     final desired = {for (final p in _namedPlaces) p.id: p};
     final stale = [
       ..._placeCirclesById.keys,
@@ -1559,12 +1568,17 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     setState(() => _savingPlace = true);
     try {
-      await _places.create(
+      debugPrint(
+        'named_places save: name=$placeName share=$shareWithGroup '
+        'group=${_selected?.id} lat=${fix.latitude} lon=${fix.longitude}',
+      );
+      final created = await _places.create(
         name: placeName,
         lat: fix.latitude,
         lon: fix.longitude,
         groupId: shareWithGroup ? _selected?.id : null,
       );
+      debugPrint('named_places save ok id=${created.id}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1576,12 +1590,18 @@ class _MapShellScreenState extends State<MapShellScreen>
         ),
       );
       await _loadNamedPlaces();
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('named_places save ERROR: $e\n$st');
       if (!mounted) return;
       final msg = NamedPlacesService.looksLikeMissingTable(e)
           ? AppStrings.mapSavePlaceApply
-          : AppStrings.mapSavePlaceError;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+          : '${AppStrings.mapSavePlaceError}\n$e';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          duration: const Duration(seconds: 8),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _savingPlace = false);
     }
