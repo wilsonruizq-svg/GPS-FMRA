@@ -1257,7 +1257,8 @@ class _MapShellScreenState extends State<MapShellScreen>
               SymbolOptions(
                 geometry: pinGeometry,
                 iconImage: iconName,
-                iconSize: isSelf ? 0.95 : 1.05,
+                // ~40% más pequeñas que la primera versión (0.95/1.05).
+                iconSize: isSelf ? 0.57 : 0.63,
                 iconAnchor: 'bottom',
               ),
             );
@@ -1270,7 +1271,7 @@ class _MapShellScreenState extends State<MapShellScreen>
               SymbolOptions(
                 geometry: pinGeometry,
                 iconImage: iconName,
-                iconSize: isSelf ? 0.95 : 1.05,
+                iconSize: isSelf ? 0.57 : 0.63,
               ),
             );
           } catch (_) {}
