@@ -87,8 +87,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   final Set<String> _registeredPersonImages = {};
   List<NamedPlace> _namedPlaces = const [];
   bool _savingPlace = false;
-  /// Mapa amplio por defecto: panel de integrantes oculto.
-  bool _membersPanelVisible = false;
+  /// false = vista normal (miembros visibles); true = mapa ampliado.
+  bool _mapExpanded = false;
   Timer? _placeSyncTimer;
 
   Timer? _publishTimer;
@@ -2135,123 +2135,127 @@ class _MapShellScreenState extends State<MapShellScreen>
     return Column(
       children: [
         ?sosBanner,
-        // Franja DELGADA de branding (nombre del programa).
-        Material(
-          color: scheme.primary,
-          child: SafeArea(
-            bottom: false,
-            child: SizedBox(
-              height: 32,
-              child: Center(
-                child: Text(
-                  AppStrings.appName,
-                  style: TextStyle(
-                    color: scheme.onPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14,
-                    letterSpacing: 0.6,
+        // Solo en mapa ampliado: franja DELGADA con nombre del programa.
+        if (_mapExpanded)
+          Material(
+            color: scheme.primary,
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: 32,
+                child: Center(
+                  child: Text(
+                    AppStrings.appName,
+                    style: TextStyle(
+                      color: scheme.onPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      letterSpacing: 0.6,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        // Selector de grupo compacto (sin chat).
+        // Selector de grupo (sin chat). SafeArea arriba si no hay franja brand.
         Material(
           color: Colors.white,
           elevation: 1,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
-            child: SizedBox(
-              height: 40,
-              child: Row(
-                children: [
-                  Text(
-                    AppStrings.mapGroupSelector,
-                    style: Theme.of(context).textTheme.labelLarge,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _groupsList.isEmpty
-                        ? Text(
-                            AppStrings.mapNoGroup,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  color: scheme.onSurfaceVariant,
-                                ),
-                          )
-                        : DropdownButtonHideUnderline(
-                            child: DropdownButton<FamilyGroup>(
-                              isExpanded: true,
-                              value: _selected,
-                              // GF-17: una línea + ellipsis.
-                              selectedItemBuilder: (context) {
-                                return _groupsList
+          child: SafeArea(
+            top: !_mapExpanded,
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+              child: SizedBox(
+                height: 40,
+                child: Row(
+                  children: [
+                    Text(
+                      AppStrings.mapGroupSelector,
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _groupsList.isEmpty
+                          ? Text(
+                              AppStrings.mapNoGroup,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: scheme.onSurfaceVariant,
+                                  ),
+                            )
+                          : DropdownButtonHideUnderline(
+                              child: DropdownButton<FamilyGroup>(
+                                isExpanded: true,
+                                value: _selected,
+                                // GF-17: una línea + ellipsis.
+                                selectedItemBuilder: (context) {
+                                  return _groupsList
+                                      .map(
+                                        (g) => Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            g.name,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            softWrap: false,
+                                          ),
+                                        ),
+                                      )
+                                      .toList();
+                                },
+                                items: _groupsList
                                     .map(
-                                      (g) => Align(
-                                        alignment: Alignment.centerLeft,
+                                      (g) => DropdownMenuItem(
+                                        value: g,
                                         child: Text(
                                           g.name,
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
-                                          softWrap: false,
                                         ),
                                       ),
                                     )
-                                    .toList();
-                              },
-                              items: _groupsList
-                                  .map(
-                                    (g) => DropdownMenuItem(
-                                      value: g,
-                                      child: Text(
-                                        g.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: _onSelectGroup,
+                                    .toList(),
+                                onChanged: _onSelectGroup,
+                              ),
                             ),
-                          ),
-                  ),
-                  IconButton(
-                    tooltip: _membersPanelVisible
-                        ? AppStrings.mapHideMembersTooltip
-                        : AppStrings.mapShowMembersTooltip,
-                    onPressed: () {
-                      setState(
-                        () => _membersPanelVisible = !_membersPanelVisible,
-                      );
-                    },
-                    icon: Icon(
-                      _membersPanelVisible
-                          ? Icons.people_alt
-                          : Icons.people_outline,
                     ),
-                  ),
-                  IconButton(
-                    tooltip: AppStrings.retry,
-                    onPressed: _loading ? null : _load,
-                    icon: const Icon(Icons.refresh),
-                  ),
-                ],
+                    IconButton(
+                      tooltip: _mapExpanded
+                          ? AppStrings.mapCollapseTooltip
+                          : AppStrings.mapExpandTooltip,
+                      onPressed: () {
+                        setState(() => _mapExpanded = !_mapExpanded);
+                      },
+                      icon: Icon(
+                        _mapExpanded
+                            ? Icons.fullscreen_exit
+                            : Icons.fullscreen,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: AppStrings.retry,
+                      onPressed: _loading ? null : _load,
+                      icon: const Icon(Icons.refresh),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-        // Mapa amplio: ocupa todo el resto (miembros ocultos por defecto).
+        // Mapa: por defecto comparte espacio con miembros; ampliado = full.
         Expanded(
+          flex: _mapExpanded ? 1 : 3,
           child: _buildMapPane(context),
         ),
-        if (_membersPanelVisible)
-          SizedBox(
-            height: MediaQuery.sizeOf(context).height * 0.28,
+        if (!_mapExpanded)
+          Expanded(
+            flex: 2,
             child: _buildMembersPanel(),
           ),
       ],
