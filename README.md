@@ -83,7 +83,9 @@ Prueba con dos cuentas: [`docs/INVITACIONES_PRUEBA_ES.md`](docs/INVITACIONES_PRU
 
 **Incluido (perfil/SOS):** editar perfil + foto (bucket `avatars`), botón SOS en el mapa (`sos_events` + banner), cableado FCM (`device_push_tokens` + Edge Function `notify-sos`). Ver `supabase/APPLY_ES.md` y `docs/FCM_SOS_ES.md`.
 
-**No incluido:** chat, WebRTC, mapas offline. Google Maps pausado por billing; mapa online = MapLibre. Push FCM requiere `google-services.json` + secret Firebase (opcional).
+**Incluido (chat MVP):** mensajes de texto del grupo (`group_messages` + Realtime). Abrir desde Mapa/Grupos (icono burbuja). APPLY: `docs/CHAT_ES.md`. Sin push FCM de chat en v1.
+
+**No incluido:** WebRTC, mapas offline, push FCM de chat. Google Maps pausado por billing; mapa online = MapLibre. Push FCM de SOS requiere secret Firebase + deploy `notify-sos` (opcional; ver `docs/FCM_SOS_ES.md`).
 
 ## APK de prueba (entrega local)
 

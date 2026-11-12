@@ -349,4 +349,18 @@ abstract final class AppStrings {
   static const navMap = 'Mapa';
   static const navGroups = 'Grupos';
   static const navSettings = 'Ajustes';
+
+  static const chatAction = 'Chat';
+  static const chatHint = 'Escribe un mensaje…';
+  static const chatSend = 'Enviar';
+  static const chatEmpty =
+      'Aún no hay mensajes. Escribe el primero para el grupo.';
+  static String chatTitleFor(String groupName) => 'Chat · $groupName';
+  static const chatMissingSql =
+      'Falta aplicar el SQL del chat en Supabase. '
+      'SQL Editor → pega todo supabase/migrations/'
+      '20261102280000_group_messages.sql → Run '
+      '(group_messages_ok = true). Guía: docs/CHAT_ES.md';
+  static const chatNeedGroup =
+      'Elige un grupo arriba para abrir el chat.';
 }

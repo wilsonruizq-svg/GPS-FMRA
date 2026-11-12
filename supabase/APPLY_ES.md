@@ -51,10 +51,13 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       `list_sos_ack_progress`. El emisor ve pendientes; el SOS se resuelve
       cuando todos los compañeros aceptan. Éxito: `sos_acks_ok = true`.
       Guía: `docs/SOS_ACKS_ES.md`.)
+   13. `supabase/migrations/20261102280000_group_messages.sql`
+      (**APPLY para chat del grupo:** tabla `group_messages` + RLS +
+      Realtime. Éxito: `group_messages_ok = true`. Guía: `docs/CHAT_ES.md`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,
-   `device_push_tokens`, `sos_acks`.
+   `device_push_tokens`, `sos_acks`, `group_messages`.
 5. En **Storage → Buckets** confirma el bucket **`avatars`** (público).
 6. En **Database → Functions** confirma `accept_invitation(text)`,
    `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,
@@ -62,7 +65,8 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    `can_view_location`, `list_group_push_tokens`.
 7. En **Authentication → Policies** (o Table → RLS) confirma que RLS está **ON**.
 8. En **Database → Replication** (o Publication) confirma que
-   `location_updates` y `sos_events` están en `supabase_realtime`.
+   `location_updates`, `sos_events` y `group_messages` están en
+   `supabase_realtime`.
 
 ## Diagnóstico rápido — solo 1 pin (2 miembros, 1 grupo)
 

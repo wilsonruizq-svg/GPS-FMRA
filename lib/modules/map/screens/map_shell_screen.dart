@@ -11,6 +11,7 @@ import '../../../core/config/env.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/supabase/supabase_bootstrap.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../chat/screens/group_chat_screen.dart';
 import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
@@ -1474,6 +1475,26 @@ class _MapShellScreenState extends State<MapShellScreen>
                               onChanged: _onSelectGroup,
                             ),
                           ),
+                  ),
+                  IconButton(
+                    tooltip: AppStrings.chatAction,
+                    onPressed: () {
+                      final group = _selected;
+                      if (group == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(AppStrings.chatNeedGroup),
+                          ),
+                        );
+                        return;
+                      }
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => GroupChatScreen(group: group),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline),
                   ),
                   IconButton(
                     tooltip: AppStrings.retry,

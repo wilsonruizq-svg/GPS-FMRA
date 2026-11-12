@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
+import '../../chat/screens/group_chat_screen.dart';
 import '../../location/consent_service.dart';
 import '../exit_pin_service.dart';
 import '../groups_service.dart';
@@ -435,6 +436,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       appBar: AppBar(
         title: Text(widget.group.name),
         actions: [
+          IconButton(
+            tooltip: AppStrings.chatAction,
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => GroupChatScreen(group: widget.group),
+                ),
+              );
+            },
+            icon: const Icon(Icons.chat_bubble_outline),
+          ),
           if (_iAmAdmin)
             IconButton(
               tooltip: AppStrings.inviteAction,
