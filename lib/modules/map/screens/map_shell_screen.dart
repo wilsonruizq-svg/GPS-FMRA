@@ -19,6 +19,7 @@ import '../../location/consent_service.dart';
 import '../../location/location_fix_filter.dart';
 import '../../location/location_share_service.dart';
 import '../../sos/sos_service.dart';
+import '../person_marker_bitmaps.dart';
 
 /// Shell del mapa: MapLibre + pines de integrantes con consentimiento activo.
 class MapShellScreen extends StatefulWidget {
@@ -72,9 +73,10 @@ class _MapShellScreenState extends State<MapShellScreen>
   Map<String, LocationConsent> _consentsBySharer = {};
   Map<String, MemberLocation> _locationsByUser = {};
 
-  final Map<String, Circle> _circlesByUser = {};
+  final Map<String, Symbol> _figuresByUser = {};
   final Map<String, Circle> _accuracyByUser = {};
   final Map<String, Symbol> _labelsByUser = {};
+  final Set<String> _registeredPersonImages = {};
 
   Timer? _publishTimer;
   Timer? _pollTimer;
@@ -306,6 +308,33 @@ class _MapShellScreenState extends State<MapShellScreen>
     return _peerPinPalette[hash % _peerPinPalette.length];
   }
 
+  Color _colorFromHex(String hex) {
+    final h = hex.replaceAll('#', '').trim();
+    final value = int.parse(h.length == 6 ? 'FF$h' : h, radix: 16);
+    return Color(value);
+  }
+
+  Future<String> _ensurePersonImage({
+    required bool female,
+    required String colorHex,
+  }) async {
+    final controller = _mapController;
+    final name = PersonMarkerBitmaps.imageName(
+      female: female,
+      colorHex: colorHex,
+    );
+    if (controller == null || _registeredPersonImages.contains(name)) {
+      return name;
+    }
+    final bytes = await PersonMarkerBitmaps.png(
+      female: female,
+      color: _colorFromHex(colorHex),
+    );
+    await controller.addImage(name, bytes);
+    _registeredPersonImages.add(name);
+    return name;
+  }
+
   /// Distancia aproximada en metros (suficiente para agrupar pines en casa).
   double _approxMeters(double lat1, double lon1, double lat2, double lon2) {
     final dLat = (lat1 - lat2) * 111320.0;
@@ -411,6 +440,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   Future<void> _onStyleLoaded() async {
     _styleReady = true;
     _markerImageReady = false;
+    _registeredPersonImages.clear();
     await _ensureMarkerImages();
     _maybeAutoCenter();
     await _syncMarkers();
@@ -422,6 +452,9 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       await controller.setSymbolIconAllowOverlap(true);
       await controller.setSymbolTextAllowOverlap(true);
+      // Precalienta mujer/hombre en color “tú”.
+      await _ensurePersonImage(female: true, colorHex: _selfPinColor);
+      await _ensurePersonImage(female: false, colorHex: _selfPinColor);
       _markerImageReady = true;
     } catch (_) {
       _markerImageReady = true;
@@ -1139,17 +1172,17 @@ class _MapShellScreenState extends State<MapShellScreen>
       final display = _spiderfyDisplayPositions(desired);
 
       final stale = <String>{
-        ..._circlesByUser.keys,
+        ..._figuresByUser.keys,
         ..._accuracyByUser.keys,
         ..._labelsByUser.keys,
       }.where((id) => !desired.containsKey(id)).toList();
       for (final id in stale) {
-        final circle = _circlesByUser.remove(id);
+        final figure = _figuresByUser.remove(id);
         final accuracy = _accuracyByUser.remove(id);
         final label = _labelsByUser.remove(id);
-        if (circle != null) {
+        if (figure != null) {
           try {
-            await controller.removeCircle(circle);
+            await controller.removeSymbol(figure);
           } catch (_) {}
         }
         if (accuracy != null) {
@@ -1164,6 +1197,7 @@ class _MapShellScreenState extends State<MapShellScreen>
         }
       }
 
+      final memberById = {for (final m in _members) m.userId: m};
       final nameById = {for (final m in _members) m.userId: m.label};
 
       for (final entry in desired.entries) {
@@ -1174,6 +1208,15 @@ class _MapShellScreenState extends State<MapShellScreen>
         final isSelf =
             userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
         final color = _pinColorFor(userId, isSelf: isSelf);
+        final member = memberById[userId];
+        final female = PersonMarkerGender.isFemale(
+          gender: member?.gender,
+          displayName: member?.displayName ?? nameById[userId],
+        );
+        final iconName = await _ensurePersonImage(
+          female: female,
+          colorHex: color,
+        );
         final label = nameById[userId] ??
             (isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember);
         final accRadius = _accuracyRadiusPx(loc);
@@ -1207,29 +1250,27 @@ class _MapShellScreenState extends State<MapShellScreen>
           } catch (_) {}
         }
 
-        final existingCircle = _circlesByUser[userId];
-        if (existingCircle == null) {
+        final existingFigure = _figuresByUser[userId];
+        if (existingFigure == null) {
           try {
-            final circle = await controller.addCircle(
-              CircleOptions(
+            final figure = await controller.addSymbol(
+              SymbolOptions(
                 geometry: pinGeometry,
-                circleRadius: isSelf ? 10 : 12,
-                circleColor: color,
-                circleOpacity: 0.92,
-                circleStrokeWidth: 2.5,
-                circleStrokeColor: '#FFFFFF',
+                iconImage: iconName,
+                iconSize: isSelf ? 0.95 : 1.05,
+                iconAnchor: 'bottom',
               ),
             );
-            _circlesByUser[userId] = circle;
+            _figuresByUser[userId] = figure;
           } catch (_) {}
         } else {
           try {
-            await controller.updateCircle(
-              existingCircle,
-              CircleOptions(
+            await controller.updateSymbol(
+              existingFigure,
+              SymbolOptions(
                 geometry: pinGeometry,
-                circleColor: color,
-                circleRadius: isSelf ? 10 : 12,
+                iconImage: iconName,
+                iconSize: isSelf ? 0.95 : 1.05,
               ),
             );
           } catch (_) {}
@@ -1246,7 +1287,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                 textColor: '#0B2A4A',
                 textHaloColor: '#FFFFFF',
                 textHaloWidth: 1.4,
-                textOffset: const Offset(0, 1.4),
+                textOffset: const Offset(0, 1.55),
                 textAnchor: 'top',
               ),
             );

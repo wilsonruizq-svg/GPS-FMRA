@@ -131,6 +131,24 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: Image.asset(
+                  'assets/branding/gps-fmra-launcher-icon.png',
+                  width: 72,
+                  height: 72,
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.high,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.shield_outlined,
+                    size: 56,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             Text(
               AppStrings.appName,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(

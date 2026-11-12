@@ -11,19 +11,24 @@ class Profile {
     this.displayName,
     this.photoUrl,
     this.phone,
+    this.gender,
   });
 
   final String id;
   final String? displayName;
   final String? photoUrl;
   final String? phone;
+  /// `female` | `male` | null
+  final String? gender;
 
   factory Profile.fromMap(Map<String, dynamic> map) {
+    final g = (map['gender'] as String?)?.trim();
     return Profile(
       id: map['id'] as String,
       displayName: map['display_name'] as String?,
       photoUrl: map['photo_url'] as String?,
       phone: map['phone'] as String?,
+      gender: (g != null && g.isNotEmpty) ? g : null,
     );
   }
 
@@ -44,20 +49,31 @@ class ProfileService {
   static const avatarBucket = 'avatars';
 
   static const _profileSelect =
+      'id, display_name, photo_url, phone, gender';
+  static const _profileSelectLegacy =
       'id, display_name, photo_url, phone';
 
   Future<Profile?> fetchOwn() async {
     final uid = _sb.auth.currentUser?.id;
     if (uid == null) return null;
 
-    final row = await _sb
-        .from('profiles')
-        .select(_profileSelect)
-        .eq('id', uid)
-        .maybeSingle();
-
-    if (row == null) return null;
-    return Profile.fromMap(row);
+    try {
+      final row = await _sb
+          .from('profiles')
+          .select(_profileSelect)
+          .eq('id', uid)
+          .maybeSingle();
+      if (row == null) return null;
+      return Profile.fromMap(row);
+    } catch (_) {
+      final row = await _sb
+          .from('profiles')
+          .select(_profileSelectLegacy)
+          .eq('id', uid)
+          .maybeSingle();
+      if (row == null) return null;
+      return Profile.fromMap(row);
+    }
   }
 
   /// Si el trigger aún no creó la fila, la inserta (RLS: solo propia).
@@ -75,14 +91,26 @@ class ProfileService {
         : (user.userMetadata?['display_name'] as String?) ??
             (user.email?.split('@').first ?? 'Usuario');
 
-    final inserted = await _sb
-        .from('profiles')
-        .insert({
-          'id': user.id,
-          'display_name': name,
-        })
-        .select(_profileSelect)
-        .single();
+    Map<String, dynamic> inserted;
+    try {
+      inserted = await _sb
+          .from('profiles')
+          .insert({
+            'id': user.id,
+            'display_name': name,
+          })
+          .select(_profileSelect)
+          .single();
+    } catch (_) {
+      inserted = await _sb
+          .from('profiles')
+          .insert({
+            'id': user.id,
+            'display_name': name,
+          })
+          .select(_profileSelectLegacy)
+          .single();
+    }
 
     // Settings también los crea el trigger; fallback idempotente.
     await _sb.from('user_settings').upsert({
@@ -98,6 +126,8 @@ class ProfileService {
     String? phone,
     String? photoUrl,
     bool clearPhoto = false,
+    String? gender,
+    bool clearGender = false,
   }) async {
     final user = _sb.auth.currentUser;
     if (user == null) {
@@ -120,15 +150,38 @@ class ProfileService {
     } else if (photoUrl != null) {
       payload['photo_url'] = photoUrl;
     }
+    if (clearGender) {
+      payload['gender'] = null;
+    } else if (gender != null) {
+      final g = gender.trim().toLowerCase();
+      if (g != 'female' && g != 'male') {
+        throw ArgumentError('Género inválido.');
+      }
+      payload['gender'] = g;
+    }
 
-    final row = await _sb
-        .from('profiles')
-        .update(payload)
-        .eq('id', user.id)
-        .select(_profileSelect)
-        .single();
-
-    return Profile.fromMap(row);
+    try {
+      final row = await _sb
+          .from('profiles')
+          .update(payload)
+          .eq('id', user.id)
+          .select(_profileSelect)
+          .single();
+      return Profile.fromMap(row);
+    } catch (e) {
+      // Sin columna gender APPLY aún: guarda el resto.
+      if (payload.containsKey('gender')) {
+        payload.remove('gender');
+        final row = await _sb
+            .from('profiles')
+            .update(payload)
+            .eq('id', user.id)
+            .select(_profileSelectLegacy)
+            .single();
+        return Profile.fromMap(row);
+      }
+      rethrow;
+    }
   }
 
   /// Comprueba si el bucket de avatares responde (Storage listo).

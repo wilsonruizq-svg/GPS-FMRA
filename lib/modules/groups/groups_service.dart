@@ -44,6 +44,7 @@ class GroupMember {
     required this.status,
     this.displayName,
     this.photoUrl,
+    this.gender,
   });
 
   final String membershipId;
@@ -53,6 +54,8 @@ class GroupMember {
   final String status;
   final String? displayName;
   final String? photoUrl;
+  /// `female` | `male` | null (mapa usa heurística por nombre).
+  final String? gender;
 
   String get label =>
       (displayName != null && displayName!.trim().isNotEmpty)
@@ -161,27 +164,44 @@ class GroupsService {
   }
 
   Future<List<GroupMember>> listMembers(String groupId) async {
-    final rows = await _sb
-        .from('group_memberships')
-        .select(
-          'id, group_id, user_id, role, status, '
-          'profiles(display_name, photo_url)',
-        )
-        .eq('group_id', groupId)
-        .eq('status', 'active')
-        .order('joined_at');
+    List rows;
+    try {
+      rows = await _sb
+          .from('group_memberships')
+          .select(
+            'id, group_id, user_id, role, status, '
+            'profiles(display_name, photo_url, gender)',
+          )
+          .eq('group_id', groupId)
+          .eq('status', 'active')
+          .order('joined_at') as List;
+    } catch (_) {
+      // Columna gender aún no APPLY → lista sin género (heurística por nombre).
+      rows = await _sb
+          .from('group_memberships')
+          .select(
+            'id, group_id, user_id, role, status, '
+            'profiles(display_name, photo_url)',
+          )
+          .eq('group_id', groupId)
+          .eq('status', 'active')
+          .order('joined_at') as List;
+    }
 
-    return (rows as List).map((raw) {
+    return rows.map((raw) {
       final e = Map<String, dynamic>.from(raw as Map);
       final profile = e['profiles'];
       String? displayName;
       String? photoUrl;
+      String? gender;
       if (profile is Map) {
         displayName = profile['display_name'] as String?;
         final rawUrl = profile['photo_url'] as String?;
         if (rawUrl != null && rawUrl.trim().isNotEmpty) {
           photoUrl = rawUrl.trim();
         }
+        final g = profile['gender'] as String?;
+        if (g != null && g.trim().isNotEmpty) gender = g.trim();
       }
       return GroupMember(
         membershipId: e['id'] as String,
@@ -191,6 +211,7 @@ class GroupsService {
         status: (e['status'] as String?) ?? 'active',
         displayName: displayName,
         photoUrl: photoUrl,
+        gender: gender,
       );
     }).toList();
   }

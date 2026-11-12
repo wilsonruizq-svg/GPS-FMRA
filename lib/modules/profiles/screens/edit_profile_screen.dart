@@ -34,6 +34,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _error;
   String? _photoUrl;
   bool _clearPhoto = false;
+  /// `female` | `male` | null (= automático / heurística).
+  String? _gender;
 
   @override
   void initState() {
@@ -61,6 +63,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _phoneController.text = p.phone ?? '';
       setState(() {
         _photoUrl = p.photoUrl;
+        _gender = p.gender;
         _storageReady = storage;
         _checkingStorage = false;
         _loading = false;
@@ -244,6 +247,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         phone: _phoneController.text,
         photoUrl: _clearPhoto ? null : _photoUrl,
         clearPhoto: _clearPhoto,
+        gender: _gender,
+        clearGender: _gender == null,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -321,6 +326,47 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     validator: _validatePhone,
                     enabled: !_saving,
                     onFieldSubmitted: (_) => _save(),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    AppStrings.profileGenderLabel,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    AppStrings.profileGenderHelper,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.midBlue,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(
+                        value: 'auto',
+                        label: Text(AppStrings.profileGenderUnset),
+                        icon: Icon(Icons.auto_awesome_outlined, size: 18),
+                      ),
+                      ButtonSegment(
+                        value: 'female',
+                        label: Text(AppStrings.profileGenderFemale),
+                        icon: Icon(Icons.woman, size: 18),
+                      ),
+                      ButtonSegment(
+                        value: 'male',
+                        label: Text(AppStrings.profileGenderMale),
+                        icon: Icon(Icons.man, size: 18),
+                      ),
+                    ],
+                    selected: {_gender ?? 'auto'},
+                    onSelectionChanged: _saving
+                        ? null
+                        : (set) {
+                            final v = set.first;
+                            setState(() {
+                              _gender = v == 'auto' ? null : v;
+                            });
+                          },
                   ),
                   const SizedBox(height: 12),
                   Text(

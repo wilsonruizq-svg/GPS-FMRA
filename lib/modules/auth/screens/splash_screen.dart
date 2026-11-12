@@ -54,6 +54,9 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
+  static const _brandAsset =
+      'assets/branding/gps-fmra-launcher-icon.png';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -62,8 +65,22 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.shield_outlined, size: 72, color: AppColors.onDeep),
-            const SizedBox(height: 16),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Image.asset(
+                _brandAsset,
+                width: 128,
+                height: 128,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (context, error, stackTrace) => Icon(
+                  Icons.shield_outlined,
+                  size: 72,
+                  color: AppColors.onDeep,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
             Text(
               AppStrings.appName,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(

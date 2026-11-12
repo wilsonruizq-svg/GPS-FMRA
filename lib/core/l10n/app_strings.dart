@@ -231,6 +231,12 @@ abstract final class AppStrings {
   static const profilePhoneLabel = 'Teléfono (opcional)';
   static const profilePhoneHint = 'Ej. +57 300 123 4567';
   static const profilePhoneHelper = 'Solo tú lo editas; puedes dejarlo vacío.';
+  static const profileGenderLabel = 'Figurita en el mapa';
+  static const profileGenderHelper =
+      'Mujer u hombre en el mapa. Si no eliges, se estima por el nombre.';
+  static const profileGenderFemale = 'Mujer';
+  static const profileGenderMale = 'Hombre';
+  static const profileGenderUnset = 'Automático';
   static const profileEmailReadonly = 'Correo';
   static const profileSave = 'Guardar cambios';
   static const profileSaved = 'Perfil actualizado.';

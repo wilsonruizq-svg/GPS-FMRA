@@ -61,6 +61,10 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY para mensajes 1:1 / DM:** tabla `direct_messages` + RLS +
       Realtime. Éxito: `direct_messages_ok = true` y
       `direct_messages_realtime_ok = true`. Guía: `docs/DM_ES.md`.)
+   16. `supabase/migrations/20261102283000_profiles_gender.sql`
+      (**APPLY para figuritas mujer/hombre:** columna `profiles.gender`
+      (`female`|`male`). Éxito: `profiles_gender_ok = true`. Sin esto la app
+      estima por el nombre.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,
