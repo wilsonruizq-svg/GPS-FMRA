@@ -128,30 +128,51 @@ class NamedPlacesService {
   Future<List<NamedPlace>> listForGroup(String groupId) async {
     final gid = groupId.trim();
     if (gid.isEmpty) return const [];
-    final rows = await _sb
-        .from('named_places')
-        .select(_placeSelect)
-        .eq('group_id', gid)
-        .order('created_at', ascending: false)
-        .limit(120);
+    try {
+      final rows = await _sb
+          .from('named_places')
+          .select(_placeSelect)
+          .eq('group_id', gid)
+          .order('created_at', ascending: false)
+          .limit(120);
 
-    return (rows as List)
-        .map((e) => NamedPlace.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
+      return (rows as List)
+          .map((e) => NamedPlace.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    } catch (e) {
+      // Fallback si faltan columnas nuevas (description/photo/category).
+      debugPrint('listForGroup fallback: $e');
+      final rows = await _sb
+          .from('named_places')
+          .select('id, owner_id, group_id, name, lat, lon, created_at')
+          .eq('group_id', gid)
+          .order('created_at', ascending: false)
+          .limit(120);
+      return (rows as List)
+          .map((e) => NamedPlace.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
   }
 
   Future<List<PlaceCategory>> listCategories(String groupId) async {
     final gid = groupId.trim();
     if (gid.isEmpty) return const [];
-    final rows = await _sb
-        .from('place_categories')
-        .select('id, group_id, name, created_by, created_at')
-        .eq('group_id', gid)
-        .order('name', ascending: true);
+    try {
+      final rows = await _sb
+          .from('place_categories')
+          .select('id, group_id, name, created_by, created_at')
+          .eq('group_id', gid)
+          .order('name', ascending: true);
 
-    return (rows as List)
-        .map((e) => PlaceCategory.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
+      return (rows as List)
+          .map(
+            (e) => PlaceCategory.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('listCategories: $e');
+      return const [];
+    }
   }
 
   Future<PlaceCategory> createCategory({

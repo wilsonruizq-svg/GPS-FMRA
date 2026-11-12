@@ -60,25 +60,27 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _loadSection(String groupId) async {
+    if (!mounted) return;
     setState(() => _sectionLoading[groupId] = true);
+    // Cargas separadas: si falla Storage/categorías, la pestaña Grupos sigue.
+    var cats = const <PlaceCategory>[];
+    var places = const <NamedPlace>[];
     try {
-      final cats = await _places.listCategories(groupId);
-      final places = await _places.listForGroup(groupId);
-      if (!mounted) return;
-      setState(() {
-        _catsByGroup[groupId] = cats;
-        _placesByGroup[groupId] = places;
-        _sectionLoading[groupId] = false;
-      });
+      places = await _places.listForGroup(groupId);
     } catch (e) {
-      debugPrint('group places section: $e');
-      if (!mounted) return;
-      setState(() {
-        _catsByGroup[groupId] ??= const [];
-        _placesByGroup[groupId] ??= const [];
-        _sectionLoading[groupId] = false;
-      });
+      debugPrint('group places: $e');
     }
+    try {
+      cats = await _places.listCategories(groupId);
+    } catch (e) {
+      debugPrint('group categories: $e');
+    }
+    if (!mounted) return;
+    setState(() {
+      _placesByGroup[groupId] = places;
+      _catsByGroup[groupId] = cats;
+      _sectionLoading[groupId] = false;
+    });
   }
 
   Future<void> _createCategory(FamilyGroup group) async {

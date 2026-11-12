@@ -87,6 +87,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   final Set<String> _registeredPersonImages = {};
   List<NamedPlace> _namedPlaces = const [];
   bool _savingPlace = false;
+  /// Mapa amplio por defecto: panel de integrantes oculto.
+  bool _membersPanelVisible = false;
   Timer? _placeSyncTimer;
 
   Timer? _publishTimer;
@@ -2052,44 +2054,141 @@ class _MapShellScreenState extends State<MapShellScreen>
     );
   }
 
+  Widget _buildMembersPanel() {
+    return Material(
+      color: AppColors.surface,
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  ),
+                )
+              : _members.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          AppStrings.mapMembersEmpty,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: _members.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final m = _members[i];
+                        final isSelf =
+                            m.userId.trim().toLowerCase() == _myUid &&
+                                _myUid.isNotEmpty;
+                        return MemberCard(
+                          name: m.label,
+                          photoUrl: m.photoUrl,
+                          isSelf: isSelf,
+                          shareStatusLabel: _shareFor(m),
+                          onTap: () {
+                            final loc = _locationsByUser[m.userId];
+                            final c = _mapController;
+                            if (loc == null || c == null) return;
+                            unawaited(
+                              c.animateCamera(
+                                CameraUpdate.newLatLngZoom(
+                                  LatLng(loc.lat, loc.lon),
+                                  _myLocationZoom,
+                                ),
+                              ),
+                            );
+                          },
+                          onMessage: isSelf
+                              ? null
+                              : () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => DirectChatScreen(
+                                        peerUserId: m.userId,
+                                        peerName: m.label,
+                                        peerPhotoUrl: m.photoUrl,
+                                      ),
+                                    ),
+                                  );
+                                },
+                        );
+                      },
+                    ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final sosBanner = _buildSosBanner();
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       children: [
         ?sosBanner,
+        // Franja DELGADA de branding (nombre del programa).
+        Material(
+          color: scheme.primary,
+          child: SafeArea(
+            bottom: false,
+            child: SizedBox(
+              height: 32,
+              child: Center(
+                child: Text(
+                  AppStrings.appName,
+                  style: TextStyle(
+                    color: scheme.onPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        // Selector de grupo compacto (sin chat).
         Material(
           color: Colors.white,
           elevation: 1,
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 4, 4),
+            child: SizedBox(
+              height: 40,
               child: Row(
                 children: [
                   Text(
                     AppStrings.mapGroupSelector,
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: Theme.of(context).textTheme.labelLarge,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: _groupsList.isEmpty
                         ? Text(
                             AppStrings.mapNoGroup,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context)
                                 .textTheme
                                 .bodyMedium
                                 ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                                  color: scheme.onSurfaceVariant,
                                 ),
                           )
                         : DropdownButtonHideUnderline(
                             child: DropdownButton<FamilyGroup>(
                               isExpanded: true,
                               value: _selected,
-                              // GF-17: nombre en una línea (ellipsis); sin chat aquí.
+                              // GF-17: una línea + ellipsis.
                               selectedItemBuilder: (context) {
                                 return _groupsList
                                     .map(
@@ -2122,6 +2221,21 @@ class _MapShellScreenState extends State<MapShellScreen>
                           ),
                   ),
                   IconButton(
+                    tooltip: _membersPanelVisible
+                        ? AppStrings.mapHideMembersTooltip
+                        : AppStrings.mapShowMembersTooltip,
+                    onPressed: () {
+                      setState(
+                        () => _membersPanelVisible = !_membersPanelVisible,
+                      );
+                    },
+                    icon: Icon(
+                      _membersPanelVisible
+                          ? Icons.people_alt
+                          : Icons.people_outline,
+                    ),
+                  ),
+                  IconButton(
                     tooltip: AppStrings.retry,
                     onPressed: _loading ? null : _load,
                     icon: const Icon(Icons.refresh),
@@ -2131,85 +2245,15 @@ class _MapShellScreenState extends State<MapShellScreen>
             ),
           ),
         ),
+        // Mapa amplio: ocupa todo el resto (miembros ocultos por defecto).
         Expanded(
-          flex: 3,
           child: _buildMapPane(context),
         ),
-        Expanded(
-          flex: 2,
-          child: Material(
-            color: AppColors.surface,
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ),
-                      )
-                    : _members.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Text(
-                                AppStrings.mapMembersEmpty,
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: _members.length,
-                            separatorBuilder: (_, _) =>
-                                const Divider(height: 1),
-                            itemBuilder: (context, i) {
-                              final m = _members[i];
-                              final isSelf = m.userId.trim().toLowerCase() ==
-                                      _myUid &&
-                                  _myUid.isNotEmpty;
-                              return MemberCard(
-                                name: m.label,
-                                photoUrl: m.photoUrl,
-                                isSelf: isSelf,
-                                shareStatusLabel: _shareFor(m),
-                                onTap: () {
-                                  final loc = _locationsByUser[m.userId];
-                                  final c = _mapController;
-                                  if (loc == null || c == null) return;
-                                  unawaited(
-                                    c.animateCamera(
-                                      CameraUpdate.newLatLngZoom(
-                                        LatLng(loc.lat, loc.lon),
-                                        _myLocationZoom,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                onMessage: isSelf
-                                    ? null
-                                    : () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                            builder: (_) => DirectChatScreen(
-                                              peerUserId: m.userId,
-                                              peerName: m.label,
-                                              peerPhotoUrl: m.photoUrl,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                              );
-                            },
-                          ),
+        if (_membersPanelVisible)
+          SizedBox(
+            height: MediaQuery.sizeOf(context).height * 0.28,
+            child: _buildMembersPanel(),
           ),
-        ),
       ],
     );
   }
