@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
+import '../../chat/screens/direct_chat_screen.dart';
 import '../../chat/screens/group_chat_screen.dart';
 import '../../location/consent_service.dart';
 import '../exit_pin_service.dart';
@@ -509,6 +510,19 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               photoUrl: m.photoUrl,
                               isSelf: m.userId == uid,
                               shareStatusLabel: _shareLabelFor(m),
+                              onMessage: m.userId == uid
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => DirectChatScreen(
+                                            peerUserId: m.userId,
+                                            peerName: m.label,
+                                            peerPhotoUrl: m.photoUrl,
+                                          ),
+                                        ),
+                                      );
+                                    },
                             ),
                             const Divider(height: 1),
                           ],

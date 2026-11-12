@@ -369,4 +369,18 @@ abstract final class AppStrings {
     final preview = text.length > 80 ? '${text.substring(0, 77)}…' : text;
     return '$sender: $preview';
   }
+
+  static const dmAction = 'Mensaje';
+  static const dmHint = 'Mensaje privado…';
+  static const dmEmpty =
+      'Aún no hay mensajes privados. Escribe el primero.';
+  static String dmTitleFor(String peerName) => 'Chat · $peerName';
+  static const dmPushTitle = 'Mensaje privado — GPS-FMRA';
+  static const dmMissingSql =
+      'Falta aplicar el SQL de mensajes 1:1. '
+      'SQL Editor → pega todo supabase/migrations/'
+      '20261102282000_direct_messages.sql → Run '
+      '(direct_messages_ok = true). Guía: docs/DM_ES.md';
+  static const dmSelfDisabled =
+      'No puedes enviarte un mensaje a ti mismo.';
 }

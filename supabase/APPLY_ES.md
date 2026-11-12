@@ -57,10 +57,14 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    14. `supabase/migrations/20261102281000_group_messages_realtime.sql`
       (**APPLY si chat OK pero sin alertas:** asegura publication Realtime.
       Éxito: `group_messages_realtime_ok = true`.)
+   15. `supabase/migrations/20261102282000_direct_messages.sql`
+      (**APPLY para mensajes 1:1 / DM:** tabla `direct_messages` + RLS +
+      Realtime. Éxito: `direct_messages_ok = true` y
+      `direct_messages_realtime_ok = true`. Guía: `docs/DM_ES.md`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,
-   `device_push_tokens`, `sos_acks`, `group_messages`.
+   `device_push_tokens`, `sos_acks`, `group_messages`, `direct_messages`.
 5. En **Storage → Buckets** confirma el bucket **`avatars`** (público).
 6. En **Database → Functions** confirma `accept_invitation(text)`,
    `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,

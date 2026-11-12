@@ -11,6 +11,7 @@ import '../../../core/config/env.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/supabase/supabase_bootstrap.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../chat/screens/direct_chat_screen.dart';
 import '../../chat/screens/group_chat_screen.dart';
 import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
@@ -1621,12 +1622,13 @@ class _MapShellScreenState extends State<MapShellScreen>
                                 const Divider(height: 1),
                             itemBuilder: (context, i) {
                               final m = _members[i];
+                              final isSelf = m.userId.trim().toLowerCase() ==
+                                      _myUid &&
+                                  _myUid.isNotEmpty;
                               return MemberCard(
                                 name: m.label,
                                 photoUrl: m.photoUrl,
-                                isSelf: m.userId.trim().toLowerCase() ==
-                                        _myUid &&
-                                    _myUid.isNotEmpty,
+                                isSelf: isSelf,
                                 shareStatusLabel: _shareFor(m),
                                 onTap: () {
                                   final loc = _locationsByUser[m.userId];
@@ -1641,6 +1643,19 @@ class _MapShellScreenState extends State<MapShellScreen>
                                     ),
                                   );
                                 },
+                                onMessage: isSelf
+                                    ? null
+                                    : () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder: (_) => DirectChatScreen(
+                                              peerUserId: m.userId,
+                                              peerName: m.label,
+                                              peerPhotoUrl: m.photoUrl,
+                                            ),
+                                          ),
+                                        );
+                                      },
                               );
                             },
                           ),

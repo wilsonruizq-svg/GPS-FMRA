@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Fila compacta de integrante: foto (o inicial), nombre y un solo estado corto.
+/// Fila compacta de integrante: foto, nombre, estado; opcional DM.
 class MemberCard extends StatelessWidget {
   const MemberCard({
     super.key,
@@ -12,6 +12,7 @@ class MemberCard extends StatelessWidget {
     this.photoUrl,
     this.isSelf = false,
     this.onTap,
+    this.onMessage,
   });
 
   final String name;
@@ -19,6 +20,7 @@ class MemberCard extends StatelessWidget {
   final String? photoUrl;
   final bool isSelf;
   final VoidCallback? onTap;
+  final VoidCallback? onMessage;
 
   bool get _hasPhoto => photoUrl != null && photoUrl!.trim().isNotEmpty;
 
@@ -32,7 +34,7 @@ class MemberCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
               CircleAvatar(
@@ -92,7 +94,15 @@ class MemberCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
+              if (onMessage != null && !isSelf)
+                IconButton(
+                  tooltip: AppStrings.dmAction,
+                  onPressed: onMessage,
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  color: AppColors.deepBlue,
+                )
+              else
+                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
             ],
           ),
         ),
