@@ -103,7 +103,7 @@ flutter build apk --debug
 copy /Y "build\app\outputs\flutter-apk\app-debug.apk" "APK\gps-fmra-debug.apk"
 ```
 
-Opcional: copia fechada `APK\gps-fmra-debug-AAAA-MM-DD.apk`.  
+Solo ese archivo (sin copias `-01`/`-02`).  
 `APK\` y `*.apk` están en `.gitignore` — no subir binarios a Git.
 
 ## Análisis

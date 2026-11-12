@@ -17,7 +17,7 @@ Detalle: `docs/SOS_ACKS_ES.md`.
 
 ## Prueba con 2 teléfonos
 
-1. Instala `APK/gps-fmra-debug-01.apk` y `02` (mismo grupo).
+1. Instala `APK/gps-fmra-debug.apk` en ambos teléfonos (mismo grupo).
 2. Ambos en pestaña **Mapa**, grupo seleccionado.
 3. Teléfono A: botón rojo **SOS** → confirmar.
 4. A: banner rojo **SOS de {nombre}** + texto de pendientes + **Cancelar alerta**.

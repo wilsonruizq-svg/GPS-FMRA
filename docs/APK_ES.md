@@ -8,8 +8,7 @@ D:\APPS PROYECTOS\GPS-FMRA\APK\
 
 | Archivo | Uso |
 |---------|-----|
-| `APK\gps-fmra-debug.apk` | Último debug (nombre fijo) |
-| `APK\gps-fmra-debug-AAAA-MM-DD.apk` | Copia fechada (opcional) |
+| `APK\gps-fmra-debug.apk` | Único APK debug (nombre fijo) |
 
 No uses `dist\` ni dejes APKs sueltos en la raíz del repo.
 

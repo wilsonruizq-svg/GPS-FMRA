@@ -22,7 +22,7 @@ Guía completa abajo. Checklist corto para Wilson:
 | 6 | Secret en Supabase | `FIREBASE_SERVICE_ACCOUNT_JSON` = contenido del JSON |
 | 7 | SQL tokens (si falta) | `supabase/migrations/20261102270000_device_push_tokens.sql` → Success |
 | 8 | Deploy Edge Function | `npx supabase functions deploy notify-sos` |
-| 9 | Rebuild APKs | Tras el JSON: `flutter build apk --debug` → `APK\gps-fmra-debug-01.apk` / `02` |
+| 9 | Rebuild APK | Tras el JSON: `flutter build apk --debug` → `APK\gps-fmra-debug.apk` |
 | 10 | Probar 2 teléfonos | Mismo grupo; B lanza SOS; A recibe push (app en segundo plano) |
 
 **Estado actual del repo:** el código ya está cableado (`PushService` →
@@ -115,8 +115,7 @@ Tras colocar `google-services.json`:
 cd "D:\APPS PROYECTOS\GPS-FMRA"
 flutter pub get
 flutter build apk --debug
-copy /Y "build\app\outputs\flutter-apk\app-debug.apk" "APK\gps-fmra-debug-01.apk"
-copy /Y "build\app\outputs\flutter-apk\app-debug.apk" "APK\gps-fmra-debug-02.apk"
+copy /Y "build\app\outputs\flutter-apk\app-debug.apk" "APK\gps-fmra-debug.apk"
 ```
 
 Instala **01** y **02** en dos teléfonos. En Android 13+ acepta el permiso

@@ -24,7 +24,7 @@ Sin este SQL, **Aceptar** del compañero falla al registrar el ack
 
 ## Prueba rápida (2 teléfonos)
 
-1. Instala `APK/gps-fmra-debug-01.apk` y `02`, mismo grupo.
+1. Instala `APK/gps-fmra-debug.apk` en ambos teléfonos, mismo grupo.
 2. A envía SOS → banner rojo con pendientes.
 3. B pulsa **Aceptar** → banner de B desaparece; A ve `1/1` o deja de
    mostrar a B como pendiente.

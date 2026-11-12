@@ -1,7 +1,7 @@
 # Retest rápido — Perfil, foto y SOS
 
 Tras APPLY de migraciones (ver `supabase/APPLY_ES.md` ítems 7–9) e instalar
-`APK\gps-fmra-debug-01.apk` / `02`.
+`APK\gps-fmra-debug.apk`.
 
 ## SQL exacto para Wilson (Dashboard → SQL Editor)
 
