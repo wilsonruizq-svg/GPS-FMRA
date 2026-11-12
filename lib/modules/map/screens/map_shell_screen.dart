@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,6 +23,7 @@ import '../../location/location_fix_filter.dart';
 import '../../location/location_share_service.dart';
 import '../../places/named_places_service.dart';
 import '../../places/whatsapp_share.dart';
+import '../../profiles/avatar_compress.dart';
 import '../../sos/sos_service.dart';
 import '../person_marker_bitmaps.dart';
 
@@ -1507,7 +1510,46 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
 
     final nameController = TextEditingController();
+    final descController = TextEditingController();
     var shareWithGroup = false;
+    Uint8List? photoBytes;
+    String? selectedCategoryId;
+    List<PlaceCategory> categories = const [];
+    var categoriesLoaded = false;
+    final picker = ImagePicker();
+    final groupIdForCats = _selected?.id;
+
+    Future<void> pickPhoto(ImageSource source, void Function(void Function()) setLocal) async {
+      try {
+        final file = await picker.pickImage(
+          source: source,
+          maxWidth: 1600,
+          maxHeight: 1600,
+          imageQuality: 88,
+        );
+        if (file == null) return;
+        final raw = await file.readAsBytes();
+        final compressed = AvatarCompress.compress(raw);
+        setLocal(() => photoBytes = compressed);
+      } catch (e) {
+        debugPrint('place photo pick: $e');
+      }
+    }
+
+    Future<void> ensureCategories(void Function(void Function()) setLocal) async {
+      if (categoriesLoaded || groupIdForCats == null) return;
+      try {
+        final list = await _places.listCategories(groupIdForCats);
+        setLocal(() {
+          categories = list;
+          categoriesLoaded = true;
+        });
+      } catch (e) {
+        debugPrint('load place categories: $e');
+        setLocal(() => categoriesLoaded = true);
+      }
+    }
+
     // null = cancel; 'save' | 'wa'
     final action = await showDialog<String>(
       context: context,
@@ -1521,6 +1563,7 @@ class _MapShellScreenState extends State<MapShellScreen>
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     TextField(
                       controller: nameController,
@@ -1532,6 +1575,58 @@ class _MapShellScreenState extends State<MapShellScreen>
                       ),
                       maxLength: 80,
                     ),
+                    TextField(
+                      controller: descController,
+                      textCapitalization: TextCapitalization.sentences,
+                      maxLines: 2,
+                      maxLength: 280,
+                      decoration: const InputDecoration(
+                        labelText: AppStrings.mapSavePlaceDescLabel,
+                        hintText: AppStrings.mapSavePlaceDescHint,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      AppStrings.mapSavePlacePhoto,
+                      style: Theme.of(ctx).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    if (photoBytes != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          photoBytes!,
+                          height: 120,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              unawaited(pickPhoto(ImageSource.camera, setLocal)),
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          label: const Text(AppStrings.mapSavePlacePhotoCamera),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: () => unawaited(
+                            pickPhoto(ImageSource.gallery, setLocal),
+                          ),
+                          icon: const Icon(Icons.photo_outlined),
+                          label: const Text(AppStrings.mapSavePlacePhotoGallery),
+                        ),
+                        if (photoBytes != null)
+                          TextButton(
+                            onPressed: () =>
+                                setLocal(() => photoBytes = null),
+                            child: const Text(AppStrings.mapSavePlacePhotoClear),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
@@ -1541,7 +1636,10 @@ class _MapShellScreenState extends State<MapShellScreen>
                             : Icons.radio_button_checked,
                       ),
                       title: const Text(AppStrings.mapSavePlaceOnlyMe),
-                      onTap: () => setLocal(() => shareWithGroup = false),
+                      onTap: () => setLocal(() {
+                        shareWithGroup = false;
+                        selectedCategoryId = null;
+                      }),
                     ),
                     ListTile(
                       dense: true,
@@ -1552,8 +1650,34 @@ class _MapShellScreenState extends State<MapShellScreen>
                             : Icons.radio_button_off,
                       ),
                       title: const Text(AppStrings.mapSavePlaceShareGroup),
-                      onTap: () => setLocal(() => shareWithGroup = true),
+                      onTap: () {
+                        setLocal(() => shareWithGroup = true);
+                        unawaited(ensureCategories(setLocal));
+                      },
                     ),
+                    if (shareWithGroup) ...[
+                      const SizedBox(height: 4),
+                      DropdownButtonFormField<String?>(
+                        initialValue: selectedCategoryId,
+                        decoration: const InputDecoration(
+                          labelText: AppStrings.mapSavePlaceCategoryLabel,
+                          helperText: AppStrings.mapSavePlaceCategoryHint,
+                        ),
+                        items: [
+                          const DropdownMenuItem<String?>(
+                            value: null,
+                            child: Text(AppStrings.mapSavePlaceCategoryNone),
+                          ),
+                          for (final c in categories)
+                            DropdownMenuItem<String?>(
+                              value: c.id,
+                              child: Text(c.name),
+                            ),
+                        ],
+                        onChanged: (v) =>
+                            setLocal(() => selectedCategoryId = v),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1581,9 +1705,12 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     // Capturar datos YA; no usar ctx del diálogo. No dispose aún (ruta animando).
     final name = nameController.text.trim();
+    final description = descController.text.trim();
+    final photoJpeg = photoBytes;
     if (action == null) {
       await _waitAfterDialogClosed();
       nameController.dispose();
+      descController.dispose();
       return;
     }
 
@@ -1592,11 +1719,13 @@ class _MapShellScreenState extends State<MapShellScreen>
     final lon = fix.longitude;
     final groupIdForSave = shareWithGroup ? _selected?.id : null;
     final wantGroup = shareWithGroup;
+    final categoryIdForSave = wantGroup ? selectedCategoryId : null;
 
     // Crítico (assert 6281): route deactivated → _dependents.isEmpty.
     // Cero setState / MapLibre hasta que el diálogo termine de morir.
     await _waitAfterDialogClosed();
     nameController.dispose();
+    descController.dispose();
     if (!mounted) return;
 
     void toast(String text, {int seconds = 4}) {
@@ -1637,13 +1766,16 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       debugPrint(
         'named_places save: name=$placeName share=$wantGroup '
-        'group=$groupIdForSave lat=$lat lon=$lon',
+        'group=$groupIdForSave lat=$lat lon=$lon photo=${photoJpeg != null}',
       );
-      final created = await _places.create(
+      final created = await _places.createWithOptionalPhoto(
         name: placeName,
         lat: lat,
         lon: lon,
         groupId: groupIdForSave,
+        description: description.isEmpty ? null : description,
+        categoryId: categoryIdForSave,
+        photoJpeg: photoJpeg,
       );
       debugPrint('named_places save ok id=${created.id}');
       // Lista en memoria; NO setState aquí (_namedPlaces no pinta Flutter UI).

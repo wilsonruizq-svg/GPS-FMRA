@@ -63,6 +63,14 @@ abstract final class AppStrings {
   static const mapSavePlaceTitle = 'Guardar este lugar';
   static const mapSavePlaceNameLabel = 'Nombre del lugar';
   static const mapSavePlaceNameHint = 'Ej. Casa, Trabajo, Parque';
+  static const mapSavePlaceDescLabel = 'Detalle / descripción';
+  static const mapSavePlaceDescHint =
+      'Ej. Restaurante El Patio, menú familiar…';
+  static const mapSavePlacePhoto = 'Foto de referencia';
+  static const mapSavePlacePhotoAdd = 'Agregar foto';
+  static const mapSavePlacePhotoCamera = 'Cámara';
+  static const mapSavePlacePhotoGallery = 'Galería';
+  static const mapSavePlacePhotoClear = 'Quitar foto';
   static const mapSavePlaceOnlyMe = 'Solo yo';
   static const mapSavePlaceShareGroup = 'Compartir con el grupo';
   static const mapSavePlaceSave = 'Guardar';
@@ -78,8 +86,34 @@ abstract final class AppStrings {
   static const mapSavePlaceError =
       'No se pudo guardar el lugar. Revisa la conexión.';
   static const mapSavePlaceApply =
-      'Falta APPLY SQL: 20261102284200_named_places_rpc.sql '
-      '(save_named_place_ok = true). Guía: docs/PLACES_ES.md';
+      'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
+      '(named_places_photos_ok = true). Guía: docs/PLACES_ES.md';
+  static const groupsPlacesTitle = 'Ubicaciones';
+  static const groupsPlacesEmpty =
+      'Sin ubicaciones aún. Crea una categoría (ej. Restaurantes) '
+      'y guarda lugares desde el Mapa con “Compartir con el grupo”.';
+  static const groupsPlacesDelete = 'Eliminar ubicación';
+  static const groupsPlacesDeleted = 'Ubicación eliminada.';
+  static const groupsPlacesDeleteConfirm =
+      '¿Eliminar esta ubicación del grupo?';
+  static const groupsPlacesOpenMap = 'Ver en mapa';
+  static const groupsPlacesUncategorized = 'Sin categoría';
+  static const groupsPlacesSectionHint = 'Toca para ver ubicaciones';
+  static const groupsCategoryCreateTitle = 'Nueva categoría';
+  static const groupsCategoryCreateAction = 'Nueva carpeta';
+  static const groupsCategoryNameLabel = 'Nombre';
+  static const groupsCategoryNameHint = 'Ej. Restaurantes, Negocios';
+  static String groupsCategoryCreated(String name) =>
+      'Categoría creada: $name';
+  static const groupsCategoryDelete = 'Eliminar categoría';
+  static String groupsCategoryDeleteConfirm(String name) =>
+      '¿Eliminar la categoría «$name»? Las ubicaciones quedan sin carpeta.';
+  static const groupsCategoryEmpty = 'Sin ubicaciones en esta carpeta.';
+  static String groupsCategoryPlaceCount(int n) =>
+      n == 1 ? '1 ubicación' : '$n ubicaciones';
+  static const mapSavePlaceCategoryLabel = 'Categoría / carpeta';
+  static const mapSavePlaceCategoryHint = 'Elige o crea desde Grupos';
+  static const mapSavePlaceCategoryNone = 'Sin categoría';
   static const mapLocationDenied =
       'Necesitamos el permiso de ubicación para centrar el mapa.';
   static const mapLocationDeniedForever =

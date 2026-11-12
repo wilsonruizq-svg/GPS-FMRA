@@ -1,7 +1,35 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
+
+class PlaceCategory {
+  const PlaceCategory({
+    required this.id,
+    required this.groupId,
+    required this.name,
+    required this.createdBy,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String groupId;
+  final String name;
+  final String createdBy;
+  final DateTime createdAt;
+
+  factory PlaceCategory.fromMap(Map<String, dynamic> map) {
+    return PlaceCategory(
+      id: map['id'].toString(),
+      groupId: map['group_id'].toString(),
+      name: (map['name'] as String?)?.trim() ?? 'Categoría',
+      createdBy: map['created_by'].toString(),
+      createdAt: DateTime.parse(map['created_at'].toString()).toUtc(),
+    );
+  }
+}
 
 class NamedPlace {
   const NamedPlace({
@@ -12,17 +40,24 @@ class NamedPlace {
     required this.lon,
     required this.createdAt,
     this.groupId,
+    this.description,
+    this.photoPath,
+    this.categoryId,
   });
 
   final String id;
   final String ownerId;
   final String? groupId;
+  final String? categoryId;
   final String name;
+  final String? description;
+  final String? photoPath;
   final double lat;
   final double lon;
   final DateTime createdAt;
 
   bool get isShared => groupId != null && groupId!.trim().isNotEmpty;
+  bool get hasPhoto => photoPath != null && photoPath!.trim().isNotEmpty;
 
   factory NamedPlace.fromMap(Map<String, dynamic> map) {
     double asDouble(Object? v) {
@@ -30,25 +65,28 @@ class NamedPlace {
       return double.parse(v.toString());
     }
 
-    DateTime asTime(Object? v) {
-      if (v is DateTime) return v.toUtc();
-      return DateTime.parse(v.toString()).toUtc();
-    }
-
     return NamedPlace(
       id: map['id'].toString(),
       ownerId: map['owner_id'].toString(),
       groupId: map['group_id']?.toString(),
+      categoryId: map['category_id']?.toString(),
       name: (map['name'] as String?)?.trim() ?? 'Lugar',
+      description: (map['description'] as String?)?.trim(),
+      photoPath: (map['photo_path'] as String?)?.trim(),
       lat: asDouble(map['lat']),
       lon: asDouble(map['lon']),
-      createdAt: asTime(map['created_at']),
+      createdAt: DateTime.parse(map['created_at'].toString()).toUtc(),
     );
   }
 }
 
 class NamedPlacesService {
   NamedPlacesService({SupabaseClient? client}) : _client = client;
+
+  static const photoBucket = 'place-photos';
+  static const _placeSelect =
+      'id, owner_id, group_id, category_id, name, description, photo_path, '
+      'lat, lon, created_at';
 
   final SupabaseClient? _client;
   SupabaseClient get _sb => _client ?? supabase;
@@ -59,12 +97,21 @@ class NamedPlacesService {
     return id;
   }
 
+  String? publicPhotoUrl(String? path, {bool cacheBust = false}) {
+    final p = path?.trim();
+    if (p == null || p.isEmpty) return null;
+    final url = _sb.storage.from(photoBucket).getPublicUrl(p);
+    if (!cacheBust) return url;
+    final bust = DateTime.now().millisecondsSinceEpoch;
+    return '$url${url.contains('?') ? '&' : '?'}v=$bust';
+  }
+
   Future<List<NamedPlace>> listVisible({String? groupId}) async {
     final uid = _uid;
     final gid = groupId?.trim();
     final rows = await _sb
         .from('named_places')
-        .select('id, owner_id, group_id, name, lat, lon, created_at')
+        .select(_placeSelect)
         .order('created_at', ascending: false)
         .limit(120);
 
@@ -78,12 +125,78 @@ class NamedPlacesService {
         .toList();
   }
 
-  /// Guarda vía RPC `save_named_place` (security definer). Sin sync de mapa.
+  Future<List<NamedPlace>> listForGroup(String groupId) async {
+    final gid = groupId.trim();
+    if (gid.isEmpty) return const [];
+    final rows = await _sb
+        .from('named_places')
+        .select(_placeSelect)
+        .eq('group_id', gid)
+        .order('created_at', ascending: false)
+        .limit(120);
+
+    return (rows as List)
+        .map((e) => NamedPlace.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<List<PlaceCategory>> listCategories(String groupId) async {
+    final gid = groupId.trim();
+    if (gid.isEmpty) return const [];
+    final rows = await _sb
+        .from('place_categories')
+        .select('id, group_id, name, created_by, created_at')
+        .eq('group_id', gid)
+        .order('name', ascending: true);
+
+    return (rows as List)
+        .map((e) => PlaceCategory.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+  }
+
+  Future<PlaceCategory> createCategory({
+    required String groupId,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('El nombre de la categoría no puede estar vacío.');
+    }
+    try {
+      final row = await _sb.rpc(
+        'create_place_category',
+        params: {
+          'p_group_id': groupId.trim(),
+          'p_name': trimmed,
+        },
+      );
+      if (row is Map) {
+        return PlaceCategory.fromMap(Map<String, dynamic>.from(row));
+      }
+      throw StateError('Respuesta vacía de create_place_category.');
+    } on PostgrestException catch (e) {
+      if (looksLikeMissingPhotoColumns(e) || looksLikeMissingRpc(e)) {
+        throw StateError(
+          'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
+          '(named_places_photos_ok = true). Guía: docs/PLACES_ES.md',
+        );
+      }
+      throw StateError(e.message);
+    }
+  }
+
+  Future<void> deleteCategory(String categoryId) async {
+    await _sb.from('place_categories').delete().eq('id', categoryId);
+  }
+
   Future<NamedPlace> create({
     required String name,
     required double lat,
     required double lon,
     String? groupId,
+    String? description,
+    String? photoPath,
+    String? categoryId,
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
@@ -92,9 +205,15 @@ class NamedPlacesService {
     if (trimmed.length > 80) {
       throw ArgumentError('El nombre es demasiado largo (máx. 80).');
     }
+    final desc = description?.trim();
+    if (desc != null && desc.length > 280) {
+      throw ArgumentError('La descripción es demasiado larga (máx. 280).');
+    }
 
     final gid = groupId?.trim();
     final groupArg = (gid != null && gid.isNotEmpty) ? gid : null;
+    final photo = photoPath?.trim();
+    final cat = categoryId?.trim();
 
     try {
       final row = await _sb.rpc(
@@ -104,6 +223,9 @@ class NamedPlacesService {
           'p_lat': lat,
           'p_lon': lon,
           'p_group_id': groupArg,
+          'p_description': (desc != null && desc.isNotEmpty) ? desc : null,
+          'p_photo_path': (photo != null && photo.isNotEmpty) ? photo : null,
+          'p_category_id': (cat != null && cat.isNotEmpty) ? cat : null,
         },
       );
       if (row is Map) {
@@ -118,12 +240,12 @@ class NamedPlacesService {
     } on PostgrestException catch (e) {
       debugPrint(
         'save_named_place PostgrestException: '
-        'code=${e.code} message=${e.message} details=${e.details} hint=${e.hint}',
+        'code=${e.code} message=${e.message} details=${e.details}',
       );
-      if (looksLikeMissingRpc(e)) {
+      if (looksLikeMissingRpc(e) || looksLikeMissingPhotoColumns(e)) {
         throw StateError(
-          'Falta APPLY SQL: 20261102284200_named_places_rpc.sql '
-          '(save_named_place_ok = true). Guía: docs/PLACES_ES.md',
+          'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
+          '(named_places_photos_ok = true). Guía: docs/PLACES_ES.md',
         );
       }
       throw StateError(
@@ -131,23 +253,99 @@ class NamedPlacesService {
           e.message,
           if (e.code != null && e.code!.isNotEmpty) 'code=${e.code}',
           if (e.details != null) 'details=${e.details}',
-          if (e.hint != null) 'hint=${e.hint}',
         ].join(' · '),
       );
     } catch (e) {
-      debugPrint('save_named_place: $e');
-      if (looksLikeMissingRpc(e)) {
+      if (looksLikeMissingRpc(e) || looksLikeMissingPhotoColumns(e)) {
         throw StateError(
-          'Falta APPLY SQL: 20261102284200_named_places_rpc.sql '
-          '(save_named_place_ok = true). Guía: docs/PLACES_ES.md',
+          'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
+          '(named_places_photos_ok = true). Guía: docs/PLACES_ES.md',
         );
       }
       rethrow;
     }
   }
 
+  Future<NamedPlace> createWithOptionalPhoto({
+    required String name,
+    required double lat,
+    required double lon,
+    String? groupId,
+    String? description,
+    String? categoryId,
+    Uint8List? photoJpeg,
+  }) async {
+    final created = await create(
+      name: name,
+      lat: lat,
+      lon: lon,
+      groupId: groupId,
+      description: description,
+      categoryId: categoryId,
+    );
+    if (photoJpeg == null || photoJpeg.isEmpty) return created;
+    try {
+      return await attachPhoto(placeId: created.id, jpegBytes: photoJpeg);
+    } catch (e) {
+      debugPrint('place photo upload after create: $e');
+      return created;
+    }
+  }
+
+  Future<NamedPlace> attachPhoto({
+    required String placeId,
+    required Uint8List jpegBytes,
+  }) async {
+    final uid = _uid;
+    final path = '$uid/$placeId.jpg';
+    await _sb.storage.from(photoBucket).uploadBinary(
+          path,
+          jpegBytes,
+          fileOptions: const FileOptions(
+            upsert: true,
+            contentType: 'image/jpeg',
+          ),
+        );
+    final rows = await _sb
+        .from('named_places')
+        .update({'photo_path': path})
+        .eq('id', placeId)
+        .eq('owner_id', uid)
+        .select(_placeSelect)
+        .limit(1);
+    if (rows.isNotEmpty) {
+      return NamedPlace.fromMap(Map<String, dynamic>.from(rows.first as Map));
+    }
+    return NamedPlace(
+      id: placeId,
+      ownerId: uid,
+      name: '',
+      lat: 0,
+      lon: 0,
+      createdAt: DateTime.now().toUtc(),
+      photoPath: path,
+    );
+  }
+
   Future<void> delete(String id) async {
-    await _sb.from('named_places').delete().eq('id', id).eq('owner_id', _uid);
+    final uid = _uid;
+    try {
+      final rows = await _sb
+          .from('named_places')
+          .select('photo_path, owner_id')
+          .eq('id', id)
+          .limit(1);
+      if (rows.isNotEmpty) {
+        final map = Map<String, dynamic>.from(rows.first as Map);
+        final path = (map['photo_path'] as String?)?.trim();
+        final owner = map['owner_id']?.toString();
+        if (path != null && path.isNotEmpty && owner == uid) {
+          await _sb.storage.from(photoBucket).remove([path]);
+        }
+      }
+    } catch (_) {}
+
+    await _sb.from('named_places').delete().eq('id', id);
   }
 
   static bool looksLikeMissingTable(Object error) {
@@ -163,12 +361,26 @@ class NamedPlacesService {
 
   static bool looksLikeMissingRpc(Object error) {
     final s = error.toString().toLowerCase();
-    return s.contains('save_named_place') &&
+    return (s.contains('save_named_place') ||
+            s.contains('create_place_category') ||
+            s.contains('place_categories')) &&
         (s.contains('pgrst202') ||
             s.contains('could not find') ||
             s.contains('404') ||
             s.contains('does not exist') ||
             s.contains('schema cache') ||
             s.contains('function'));
+  }
+
+  static bool looksLikeMissingPhotoColumns(Object error) {
+    final s = error.toString().toLowerCase();
+    return s.contains('photo_path') ||
+        s.contains('description') ||
+        s.contains('category_id') ||
+        s.contains('place_categories') ||
+        s.contains('p_description') ||
+        s.contains('p_photo_path') ||
+        s.contains('p_category_id') ||
+        s.contains('place-photos');
   }
 }

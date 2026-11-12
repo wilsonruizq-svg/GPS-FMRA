@@ -1,35 +1,34 @@
-# Lugares con nombre (pin guardado)
+# Lugares con foto + categorías (carpetas)
 
-Guarda la ubicación GPS actual con un nombre y, si quieres, la
-comparte con el grupo o por WhatsApp.
+Guarda la ubicación GPS con **nombre**, **detalle** y **foto**.  
+Si eliges **Compartir con el grupo**, todos los miembros la ven en la
+pestaña **Grupos**, **debajo** del grupo familiar (no dentro de
+“Ver integrantes”).
 
-## APPLY obligatorio (Wilson) — para que **Guardar** funcione
+Las **categorías** (Restaurantes, Negocios…) organizan ubicaciones y son
+independientes del grupo de tracking familiar.
 
-Supabase → proyecto `dgmzewsxbnwxjpnrtgyb` → **SQL Editor** → New query.
+## APPLY (Wilson) — SQL Editor
 
-### 1) Tabla (si aún no):
+Proyecto `dgmzewsxbnwxjpnrtgyb` → **SQL Editor** → New query.
 
-Archivo: `supabase/migrations/20261102284000_named_places.sql`  
-Éxito: `named_places_ok = true`
+1. Si falta la tabla base: `20261102284000_named_places.sql`
+2. **Obligatorio ahora:**  
+   `supabase/migrations/20261102284300_named_places_photos.sql`  
+   → Run completo.  
+   Éxito: **`named_places_photos_ok = true`**
 
-### 2) RPC (obligatorio para la app actual):
+Crea:
 
-Archivo: `supabase/migrations/20261102284200_named_places_rpc.sql`  
+- `place_categories` (carpetas por `family_group`)
+- columnas `description`, `photo_path`, `category_id` en `named_places`
+- RPC `save_named_place` + `create_place_category`
+- bucket Storage **`place-photos`**
 
-O pega este SQL:
+## Uso
 
-```sql
--- Ver archivo completo en el repo; éxito:
--- save_named_place_ok = true
-```
-
-Éxito: **`save_named_place_ok = true`**
-
-Sin el RPC, Guardar muestra aviso de APPLY (WhatsApp sigue funcionando).
-
-## Cómo usarlo
-
-1. Mapa → botón **marcador**.
-2. Nombre (ej. Casa).
-3. Solo yo / Compartir con el grupo.
-4. **Guardar** (nube + pin) o **WhatsApp** (texto + enlace mapas).
+1. **Grupos** → debajo del grupo familiar → **Nueva carpeta** (ej. Restaurantes).
+2. **Mapa** → marcador → nombre + detalle + foto → Compartir con el grupo →
+   elige categoría → Guardar.
+3. En **Grupos**, debajo del grupo: carpetas desplegables con foto/título/detalle.
+4. Papelera para eliminar ubicación o categoría.
