@@ -1315,8 +1315,8 @@ class _MapShellScreenState extends State<MapShellScreen>
                 SymbolOptions(
                   geometry: pinGeometry,
                   iconImage: iconName,
-                  // ~40% más pequeñas que la primera versión (0.95/1.05).
-                  iconSize: isSelf ? 0.57 : 0.63,
+                  // Estilo Material anterior, ~6 mm, sin círculo.
+                  iconSize: PersonMarkerBitmaps.mapIconSizeCompensated,
                   iconAnchor: 'bottom',
                 ),
               );
@@ -1329,7 +1329,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                 SymbolOptions(
                   geometry: pinGeometry,
                   iconImage: iconName,
-                  iconSize: isSelf ? 0.57 : 0.63,
+                  iconSize: PersonMarkerBitmaps.mapIconSizeCompensated,
                 ),
               );
             } catch (_) {}
@@ -1620,26 +1620,32 @@ class _MapShellScreenState extends State<MapShellScreen>
       debugPrint('named_places save ok id=${created.id}');
       // Persisted: update local list WITHOUT touching MapLibre yet.
       _namedPlaces = [created, ..._namedPlaces.where((p) => p.id != created.id)];
+      if (mounted) setState(() {});
       toast(
         wantGroup
             ? AppStrings.mapSavePlaceShared
             : AppStrings.mapSavePlaceSaved,
       );
-      // Sync pines mucho después — fuera del ciclo del diálogo.
+      // Sync pines mucho después — fuera del ciclo del diálogo (assert 6281).
       _placeSyncTimer?.cancel();
-      _placeSyncTimer = Timer(const Duration(milliseconds: 600), () {
+      _placeSyncTimer = Timer(const Duration(milliseconds: 900), () async {
         if (!mounted) return;
-        unawaited(_syncPlaceMarkersSafe());
+        await _syncPlaceMarkersSafe();
+        if (!mounted) return;
+        await Future<void>.delayed(const Duration(milliseconds: 900));
+        if (!mounted) return;
+        await _loadNamedPlaces();
       });
     } catch (e, st) {
       debugPrint('named_places save ERROR: $e\n$st');
+      final raw = e.toString().replaceFirst(RegExp(r'^Bad state:\s*'), '');
       final msg = NamedPlacesService.looksLikeMissingRpc(e) ||
-              e.toString().contains('Falta APPLY SQL')
-          ? e.toString().replaceFirst('Bad state: ', '')
+              raw.contains('Falta APPLY SQL')
+          ? raw
           : NamedPlacesService.looksLikeMissingTable(e)
               ? AppStrings.mapSavePlaceApply
-              : '${AppStrings.mapSavePlaceError}\n$e';
-      toast(msg, seconds: 10);
+              : '${AppStrings.mapSavePlaceError}\n$raw';
+      toast(msg, seconds: 12);
     } finally {
       _savingPlace = false;
       if (mounted) setState(() {});

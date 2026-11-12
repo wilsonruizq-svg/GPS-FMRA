@@ -3,12 +3,15 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-/// Silueta tipo señalética (cabeza redonda + cuerpo único). Sin círculo de fondo.
-/// Referencia: media/map-person-silhouette.png
+/// Figuritas Material woman/man (estilo anterior). Sin círculo blanco.
 class PersonMarkerBitmaps {
   PersonMarkerBitmaps._();
 
   static final Map<String, Uint8List> _cache = {};
+
+  /// Lienzo 192 px. Antes ~0.57–0.63 (grandes); ~6 mm ≈ 0.34.
+  static const imagePx = 192;
+  static const mapIconSizeCompensated = 0.34;
 
   static String imageName({
     required bool female,
@@ -16,75 +19,58 @@ class PersonMarkerBitmaps {
   }) {
     final g = female ? 'f' : 'm';
     final hex = colorHex.replaceAll('#', '').toUpperCase();
-    return 'person_v4_${g}_$hex';
+    return 'person_v6_${g}_$hex';
   }
 
   static Future<Uint8List> png({
     required bool female,
     required Color color,
-    double logicalSize = 96,
   }) async {
     final argb =
         ((color.a * 255).round() << 24) |
         ((color.r * 255).round() << 16) |
         ((color.g * 255).round() << 8) |
         (color.b * 255).round();
-    final key =
-        'v4_${female ? 'f' : 'm'}_${argb.toRadixString(16)}_${logicalSize.round()}';
+    final key = 'v6_${female ? 'f' : 'm'}_${argb.toRadixString(16)}';
     final cached = _cache[key];
     if (cached != null) return cached;
 
-    final dpr = 2.0;
-    final size = logicalSize * dpr;
+    const double size = imagePx * 1.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
+    // Lienzo transparente — sin círculo blanco.
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size, size),
+      Paint()..color = const Color(0x00000000),
+    );
 
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-
-    final cx = size / 2;
-    // Proporciones tipo pictograma: cabeza separada + torso cónico.
-    final headR = size * (female ? 0.145 : 0.15);
-    final headCy = size * 0.22;
-    final gap = size * 0.035;
-    final bodyTop = headCy + headR + gap;
-    final bodyBottom = size * 0.92;
-    // Hombros redondeados; mujer un poco más estrecha arriba / base similar.
-    final shoulderW = size * (female ? 0.52 : 0.56);
-    final baseW = size * (female ? 0.22 : 0.20);
-
-    // Cabeza (círculo separado).
-    canvas.drawCircle(Offset(cx, headCy), headR, paint);
-
-    // Cuerpo: un solo bloque con hombros redondeados y base plana.
-    final body = Path()
-      ..moveTo(cx - shoulderW / 2, bodyTop + size * 0.08)
-      ..quadraticBezierTo(
-        cx - shoulderW / 2,
-        bodyTop,
-        cx - shoulderW / 2 + size * 0.08,
-        bodyTop,
-      )
-      ..lineTo(cx + shoulderW / 2 - size * 0.08, bodyTop)
-      ..quadraticBezierTo(
-        cx + shoulderW / 2,
-        bodyTop,
-        cx + shoulderW / 2,
-        bodyTop + size * 0.08,
-      )
-      ..lineTo(cx + baseW / 2, bodyBottom)
-      ..lineTo(cx - baseW / 2, bodyBottom)
-      ..close();
-    canvas.drawPath(body, paint);
+    final icon = female ? Icons.woman : Icons.man;
+    final painter = TextPainter(textDirection: TextDirection.ltr);
+    painter.text = TextSpan(
+      text: String.fromCharCode(icon.codePoint),
+      style: TextStyle(
+        fontSize: size * 0.78,
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+        color: color,
+        height: 1,
+      ),
+    );
+    painter.layout();
+    painter.paint(
+      canvas,
+      Offset(
+        (size - painter.width) / 2,
+        (size - painter.height) / 2 - size * 0.02,
+      ),
+    );
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.round(), size.round());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     if (bytes == null) {
-      throw StateError('No se pudo generar silueta PNG.');
+      throw StateError('No se pudo generar figurita PNG.');
     }
     final out = bytes.buffer.asUint8List();
     _cache[key] = out;

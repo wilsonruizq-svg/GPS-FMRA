@@ -112,7 +112,28 @@ class NamedPlacesService {
       if (row is List && row.isNotEmpty && row.first is Map) {
         return NamedPlace.fromMap(Map<String, dynamic>.from(row.first as Map));
       }
-      throw StateError('Respuesta vacía de save_named_place.');
+      throw StateError(
+        'Respuesta vacía de save_named_place (${row.runtimeType}).',
+      );
+    } on PostgrestException catch (e) {
+      debugPrint(
+        'save_named_place PostgrestException: '
+        'code=${e.code} message=${e.message} details=${e.details} hint=${e.hint}',
+      );
+      if (looksLikeMissingRpc(e)) {
+        throw StateError(
+          'Falta APPLY SQL: 20261102284200_named_places_rpc.sql '
+          '(save_named_place_ok = true). Guía: docs/PLACES_ES.md',
+        );
+      }
+      throw StateError(
+        [
+          e.message,
+          if (e.code != null && e.code!.isNotEmpty) 'code=${e.code}',
+          if (e.details != null) 'details=${e.details}',
+          if (e.hint != null) 'hint=${e.hint}',
+        ].join(' · '),
+      );
     } catch (e) {
       debugPrint('save_named_place: $e');
       if (looksLikeMissingRpc(e)) {
