@@ -59,7 +59,6 @@ class NamedPlacesService {
     return id;
   }
 
-  /// Lugares visibles por RLS; en mapa: propios + del grupo actual.
   Future<List<NamedPlace>> listVisible({String? groupId}) async {
     final uid = _uid;
     final gid = groupId?.trim();
@@ -79,6 +78,7 @@ class NamedPlacesService {
         .toList();
   }
 
+  /// Guarda vía RPC `save_named_place` (security definer). Sin sync de mapa.
   Future<NamedPlace> create({
     required String name,
     required double lat,
@@ -96,7 +96,6 @@ class NamedPlacesService {
     final gid = groupId?.trim();
     final groupArg = (gid != null && gid.isNotEmpty) ? gid : null;
 
-    // 1) RPC security definer (si Wilson aplicó 20261102284200_…_rpc.sql).
     try {
       final row = await _sb.rpc(
         'save_named_place',
@@ -110,49 +109,17 @@ class NamedPlacesService {
       if (row is Map) {
         return NamedPlace.fromMap(Map<String, dynamic>.from(row));
       }
-    } catch (e) {
-      final s = e.toString().toLowerCase();
-      final missingRpc = s.contains('save_named_place') &&
-          (s.contains('pgrst202') ||
-              s.contains('could not find') ||
-              s.contains('404') ||
-              s.contains('does not exist'));
-      if (!missingRpc) {
-        // RPC existe pero falló de verdad.
-        debugPrint('save_named_place rpc: $e');
-        rethrow;
+      if (row is List && row.isNotEmpty && row.first is Map) {
+        return NamedPlace.fromMap(Map<String, dynamic>.from(row.first as Map));
       }
-    }
-
-    // 2) Fallback insert directo.
-    final payload = <String, dynamic>{
-      'owner_id': _uid,
-      'name': trimmed,
-      'lat': lat,
-      'lon': lon,
-    };
-    if (groupArg != null) {
-      payload['group_id'] = groupArg;
-    }
-
-    try {
-      final row = await _sb
-          .from('named_places')
-          .insert(payload)
-          .select('id, owner_id, group_id, name, lat, lon, created_at')
-          .single();
-      return NamedPlace.fromMap(Map<String, dynamic>.from(row));
+      throw StateError('Respuesta vacía de save_named_place.');
     } catch (e) {
-      final mine = await _sb
-          .from('named_places')
-          .select('id, owner_id, group_id, name, lat, lon, created_at')
-          .eq('owner_id', _uid)
-          .eq('name', trimmed)
-          .order('created_at', ascending: false)
-          .limit(1);
-      final list = mine as List;
-      if (list.isNotEmpty) {
-        return NamedPlace.fromMap(Map<String, dynamic>.from(list.first as Map));
+      debugPrint('save_named_place: $e');
+      if (looksLikeMissingRpc(e)) {
+        throw StateError(
+          'Falta APPLY SQL: 20261102284200_named_places_rpc.sql '
+          '(save_named_place_ok = true). Guía: docs/PLACES_ES.md',
+        );
       }
       rethrow;
     }
@@ -171,5 +138,16 @@ class NamedPlacesService {
             s.contains('schema cache') ||
             s.contains('could not find') ||
             s.contains('pgrst205'));
+  }
+
+  static bool looksLikeMissingRpc(Object error) {
+    final s = error.toString().toLowerCase();
+    return s.contains('save_named_place') &&
+        (s.contains('pgrst202') ||
+            s.contains('could not find') ||
+            s.contains('404') ||
+            s.contains('does not exist') ||
+            s.contains('schema cache') ||
+            s.contains('function'));
   }
 }

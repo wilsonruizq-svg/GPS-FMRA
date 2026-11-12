@@ -3,8 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-/// Figuritas mujer/hombre coloreadas para pines MapLibre (`addImage`).
-/// Dibujo vectorial (sin depender de glifos Material Icons).
+/// Siluetas humanas (sin círculo de fondo) para pines MapLibre.
 class PersonMarkerBitmaps {
   PersonMarkerBitmaps._();
 
@@ -16,7 +15,7 @@ class PersonMarkerBitmaps {
   }) {
     final g = female ? 'f' : 'm';
     final hex = colorHex.replaceAll('#', '').toUpperCase();
-    return 'person_${g}_$hex';
+    return 'person_v3_${g}_$hex';
   }
 
   static Future<Uint8List> png({
@@ -29,7 +28,8 @@ class PersonMarkerBitmaps {
         ((color.r * 255).round() << 16) |
         ((color.g * 255).round() << 8) |
         (color.b * 255).round();
-    final key = '${female ? 'f' : 'm'}_${argb.toRadixString(16)}_${logicalSize.round()}';
+    final key =
+        'v3_${female ? 'f' : 'm'}_${argb.toRadixString(16)}_${logicalSize.round()}';
     final cached = _cache[key];
     if (cached != null) return cached;
 
@@ -37,101 +37,139 @@ class PersonMarkerBitmaps {
     final size = logicalSize * dpr;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    final cx = size / 2;
-
-    // Halo blanco.
-    canvas.drawCircle(
-      Offset(cx, size / 2),
-      size * 0.46,
-      Paint()
-        ..color = const Color(0xF2FFFFFF)
-        ..style = PaintingStyle.fill,
+    // Lienzo transparente — solo silueta.
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size, size),
+      Paint()..color = const Color(0x00000000),
     );
 
-    final paint = Paint()
+    final cx = size / 2;
+    final fill = Paint()
       ..color = color
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
+    final outline = Paint()
+      ..color = const Color(0xFFFFFFFF)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size * 0.035
+      ..strokeJoin = StrokeJoin.round
+      ..isAntiAlias = true;
 
-    // Cabeza
-    final headR = size * 0.12;
-    final headY = size * 0.28;
-    canvas.drawCircle(Offset(cx, headY), headR, paint);
-
-    if (female) {
-      // Vestido (triángulo)
-      final path = Path()
-        ..moveTo(cx, headY + headR * 0.9)
-        ..lineTo(cx - size * 0.22, size * 0.72)
-        ..lineTo(cx + size * 0.22, size * 0.72)
-        ..close();
-      canvas.drawPath(path, paint);
-      // Piernas
-      final leg = Paint()
-        ..color = color
-        ..strokeWidth = size * 0.05
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke;
-      canvas.drawLine(
-        Offset(cx - size * 0.07, size * 0.72),
-        Offset(cx - size * 0.07, size * 0.86),
-        leg,
-      );
-      canvas.drawLine(
-        Offset(cx + size * 0.07, size * 0.72),
-        Offset(cx + size * 0.07, size * 0.86),
-        leg,
-      );
-    } else {
-      // Torso
-      final bodyTop = headY + headR * 0.85;
-      final bodyBottom = size * 0.62;
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTRB(cx - size * 0.1, bodyTop, cx + size * 0.1, bodyBottom),
-          Radius.circular(size * 0.03),
-        ),
-        paint,
-      );
-      final stroke = Paint()
-        ..color = color
-        ..strokeWidth = size * 0.055
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke;
-      // Brazos
-      canvas.drawLine(
-        Offset(cx - size * 0.1, bodyTop + size * 0.08),
-        Offset(cx - size * 0.22, bodyTop + size * 0.2),
-        stroke,
-      );
-      canvas.drawLine(
-        Offset(cx + size * 0.1, bodyTop + size * 0.08),
-        Offset(cx + size * 0.22, bodyTop + size * 0.2),
-        stroke,
-      );
-      // Piernas
-      canvas.drawLine(
-        Offset(cx - size * 0.05, bodyBottom),
-        Offset(cx - size * 0.08, size * 0.86),
-        stroke,
-      );
-      canvas.drawLine(
-        Offset(cx + size * 0.05, bodyBottom),
-        Offset(cx + size * 0.08, size * 0.86),
-        stroke,
-      );
-    }
+    final path = female ? _femalePath(size, cx) : _malePath(size, cx);
+    canvas.drawPath(path, outline);
+    canvas.drawPath(path, fill);
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.round(), size.round());
     final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
     image.dispose();
     if (bytes == null) {
-      throw StateError('No se pudo generar figurita PNG.');
+      throw StateError('No se pudo generar silueta PNG.');
     }
     final out = bytes.buffer.asUint8List();
     _cache[key] = out;
     return out;
+  }
+
+  /// Hombre: cabeza + torso + brazos + piernas (proporciones naturales).
+  static Path _malePath(double size, double cx) {
+    final headR = size * 0.11;
+    final headCy = size * 0.22;
+    final shoulderY = headCy + headR + size * 0.02;
+    final hipY = size * 0.58;
+    final footY = size * 0.92;
+    final shoulderW = size * 0.28;
+    final hipW = size * 0.16;
+    final armOut = size * 0.34;
+    final armY = size * 0.48;
+
+    final p = Path();
+    // Cabeza
+    p.addOval(Rect.fromCircle(center: Offset(cx, headCy), radius: headR));
+    // Cuello + torso (trapecio suave)
+    p.moveTo(cx - size * 0.05, shoulderY);
+    p.lineTo(cx - shoulderW / 2, shoulderY + size * 0.04);
+    p.lineTo(cx - hipW / 2, hipY);
+    p.lineTo(cx + hipW / 2, hipY);
+    p.lineTo(cx + shoulderW / 2, shoulderY + size * 0.04);
+    p.lineTo(cx + size * 0.05, shoulderY);
+    p.close();
+    // Brazo izquierdo
+    p.moveTo(cx - shoulderW / 2 + size * 0.02, shoulderY + size * 0.06);
+    p.lineTo(cx - armOut, armY);
+    p.lineTo(cx - armOut + size * 0.04, armY + size * 0.03);
+    p.lineTo(cx - shoulderW / 2 + size * 0.06, shoulderY + size * 0.12);
+    p.close();
+    // Brazo derecho
+    p.moveTo(cx + shoulderW / 2 - size * 0.02, shoulderY + size * 0.06);
+    p.lineTo(cx + armOut, armY);
+    p.lineTo(cx + armOut - size * 0.04, armY + size * 0.03);
+    p.lineTo(cx + shoulderW / 2 - size * 0.06, shoulderY + size * 0.12);
+    p.close();
+    // Pierna izquierda
+    p.moveTo(cx - hipW / 2, hipY);
+    p.lineTo(cx - size * 0.12, footY);
+    p.lineTo(cx - size * 0.04, footY);
+    p.lineTo(cx - size * 0.02, hipY);
+    p.close();
+    // Pierna derecha
+    p.moveTo(cx + hipW / 2, hipY);
+    p.lineTo(cx + size * 0.12, footY);
+    p.lineTo(cx + size * 0.04, footY);
+    p.lineTo(cx + size * 0.02, hipY);
+    p.close();
+    return p;
+  }
+
+  /// Mujer: cabeza + torso/vestido + brazos + piernas.
+  static Path _femalePath(double size, double cx) {
+    final headR = size * 0.105;
+    final headCy = size * 0.21;
+    final shoulderY = headCy + headR + size * 0.015;
+    final waistY = size * 0.48;
+    final hemY = size * 0.72;
+    final footY = size * 0.92;
+    final shoulderW = size * 0.24;
+    final waistW = size * 0.12;
+    final hemW = size * 0.34;
+    final armOut = size * 0.32;
+    final armY = size * 0.46;
+
+    final p = Path();
+    p.addOval(Rect.fromCircle(center: Offset(cx, headCy), radius: headR));
+    // Torso + falda (silueta única)
+    p.moveTo(cx - size * 0.04, shoulderY);
+    p.lineTo(cx - shoulderW / 2, shoulderY + size * 0.03);
+    p.lineTo(cx - waistW / 2, waistY);
+    p.lineTo(cx - hemW / 2, hemY);
+    p.lineTo(cx + hemW / 2, hemY);
+    p.lineTo(cx + waistW / 2, waistY);
+    p.lineTo(cx + shoulderW / 2, shoulderY + size * 0.03);
+    p.lineTo(cx + size * 0.04, shoulderY);
+    p.close();
+    // Brazos
+    p.moveTo(cx - shoulderW / 2 + size * 0.02, shoulderY + size * 0.05);
+    p.lineTo(cx - armOut, armY);
+    p.lineTo(cx - armOut + size * 0.04, armY + size * 0.03);
+    p.lineTo(cx - shoulderW / 2 + size * 0.05, shoulderY + size * 0.1);
+    p.close();
+    p.moveTo(cx + shoulderW / 2 - size * 0.02, shoulderY + size * 0.05);
+    p.lineTo(cx + armOut, armY);
+    p.lineTo(cx + armOut - size * 0.04, armY + size * 0.03);
+    p.lineTo(cx + shoulderW / 2 - size * 0.05, shoulderY + size * 0.1);
+    p.close();
+    // Piernas bajo la falda
+    p.moveTo(cx - size * 0.07, hemY);
+    p.lineTo(cx - size * 0.1, footY);
+    p.lineTo(cx - size * 0.03, footY);
+    p.lineTo(cx - size * 0.02, hemY);
+    p.close();
+    p.moveTo(cx + size * 0.07, hemY);
+    p.lineTo(cx + size * 0.1, footY);
+    p.lineTo(cx + size * 0.03, footY);
+    p.lineTo(cx + size * 0.02, hemY);
+    p.close();
+    return p;
   }
 }
 
@@ -139,7 +177,6 @@ class PersonMarkerBitmaps {
 class PersonMarkerGender {
   PersonMarkerGender._();
 
-  /// `true` = figurita mujer; `false` = hombre.
   static bool isFemale({
     String? gender,
     String? displayName,
@@ -166,8 +203,7 @@ class PersonMarkerGender {
       'carolina', 'fernanda', 'monica', 'mónica', 'rosa', 'juana', 'adriana',
       'beatriz', 'catalina', 'veronica', 'verónica', 'natalia', 'sandra',
       'liliana', 'martha', 'marta', 'gloria', 'angela', 'ángela', 'teresa',
-      'pilar', 'ines', 'inés', 'jimena', 'ximena', 'manuela', 'juliana',
-      'lorena', 'vanessa', 'jessica', 'karen', 'nancy', 'elizabeth', 'luz',
+      'jimena', 'ximena', 'manuela', 'juliana', 'lorena', 'vanessa', 'luz',
     };
     if (femaleExact.contains(first)) return true;
 
@@ -177,8 +213,7 @@ class PersonMarkerGender {
       'alejandro', 'sebastian', 'sebastián', 'daniel', 'david', 'ricardo',
       'rafael', 'oscar', 'óscar', 'hector', 'héctor', 'ivan', 'iván', 'pablo',
       'sergio', 'martin', 'martín', 'eduardo', 'fernando', 'alberto', 'raul',
-      'raúl', 'roberto', 'julio', 'cesar', 'césar', 'gustavo', 'hugo',
-      'wilson', 'william', 'edgar', 'edwin', 'nelson', 'german', 'germán',
+      'raúl', 'roberto', 'julio', 'cesar', 'césar', 'wilson', 'william',
       'orlando', 'mauricio', 'javier', 'santiago', 'mateo', 'cristian',
     };
     if (maleExact.contains(first)) return false;

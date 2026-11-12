@@ -78,8 +78,8 @@ abstract final class AppStrings {
   static const mapSavePlaceError =
       'No se pudo guardar el lugar. Revisa la conexión.';
   static const mapSavePlaceApply =
-      'Falta APPLY SQL: 20261102284000_named_places.sql '
-      '(named_places_ok = true). Guía: docs/PLACES_ES.md';
+      'Falta APPLY SQL: 20261102284200_named_places_rpc.sql '
+      '(save_named_place_ok = true). Guía: docs/PLACES_ES.md';
   static const mapLocationDenied =
       'Necesitamos el permiso de ubicación para centrar el mapa.';
   static const mapLocationDeniedForever =
