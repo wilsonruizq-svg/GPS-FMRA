@@ -1,5 +1,6 @@
 package com.gpsfmra.gps_fmra
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity requerido por local_auth (huella / biometría).
+class MainActivity : FlutterFragmentActivity()

@@ -6,6 +6,8 @@ import '../../../core/theme/app_theme.dart';
 import '../../../app_shell.dart';
 import '../../profiles/profile_service.dart';
 import '../../push/push_service.dart';
+import '../biometric_unlock_service.dart';
+import 'biometric_unlock_screen.dart';
 import 'login_shell_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -45,12 +47,18 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (!mounted) return;
 
+    Widget next;
+    if (!signedIn) {
+      next = LoginShellScreen(supabaseReady: widget.supabaseReady);
+    } else if (await BiometricUnlockService().shouldGateWithBiometrics()) {
+      next = BiometricUnlockScreen(supabaseReady: widget.supabaseReady);
+    } else {
+      next = const AppShell();
+    }
+
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => signedIn
-            ? const AppShell()
-            : LoginShellScreen(supabaseReady: widget.supabaseReady),
-      ),
+      MaterialPageRoute<void>(builder: (_) => next),
     );
   }
 

@@ -8,6 +8,17 @@ abstract final class AppStrings {
   static const close = 'Cerrar';
   static const retry = 'Reintentar';
 
+  static const biometricTitle = 'Desbloqueo con huella';
+  static const biometricBody =
+      'Usa la huella o el desbloqueo del teléfono. '
+      'No pedimos la clave mientras tu sesión siga activa.';
+  static const biometricReason =
+      'Confirma tu identidad para abrir GPS-FMRA';
+  static const biometricRetry = 'Usar huella';
+  static const biometricFailed =
+      'No se pudo verificar. Intenta de nuevo o usa la contraseña.';
+  static const biometricUsePassword = 'Usar contraseña';
+
   static const loginTitle = 'Iniciar sesión';
   static const loginSubtitle =
       'Entra con tu cuenta para ver el mapa familiar.';

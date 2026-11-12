@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/auth_service.dart';
+import '../../auth/biometric_unlock_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
 import '../../groups/exit_pin_service.dart';
 import '../../groups/widgets/exit_pin_dialog.dart';
@@ -82,6 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       await _auth.signOut();
+      await BiometricUnlockService().clear();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(

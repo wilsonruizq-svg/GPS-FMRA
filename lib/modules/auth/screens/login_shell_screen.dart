@@ -7,6 +7,7 @@ import '../../profiles/profile_service.dart';
 import '../../push/push_service.dart';
 import '../auth_error_message.dart';
 import '../auth_service.dart';
+import '../biometric_unlock_service.dart';
 
 /// Login / registro email-password contra Supabase (si está configurado).
 class LoginShellScreen extends StatefulWidget {
@@ -89,6 +90,8 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
           displayName: displayName.isEmpty ? null : displayName,
         );
         await PushService().syncTokenAfterLogin();
+        // Tras la primera clave, las siguientes aperturas usan huella.
+        await BiometricUnlockService().enableAfterPasswordLogin();
         if (!mounted) return;
         _goConsent();
       } else {
@@ -96,6 +99,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
         if (!mounted) return;
         await _profiles.ensureOwnProfile();
         await PushService().syncTokenAfterLogin();
+        await BiometricUnlockService().enableAfterPasswordLogin();
         if (!mounted) return;
         _goConsent();
       }
