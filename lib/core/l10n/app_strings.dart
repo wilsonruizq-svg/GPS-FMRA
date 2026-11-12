@@ -248,12 +248,15 @@ abstract final class AppStrings {
   static const historyTitle = 'Historial';
   static const historyConsentNote =
       'Solo ves historial de quienes comparten contigo (consentimiento activo). '
-      'Tus puntos se guardan al compartir en el mapa. '
+      'Se guarda como máximo cada 5 minutos y no se duplica si estás quieto. '
+      'Toca una fila para ver el punto en el mapa. '
       'SQL: 20261102272000_location_history.sql';
   static const historyEmpty =
       'Aún no hay puntos de historial visibles. '
       'Comparte ubicación en el mapa unos minutos y aplica el SQL de historial '
       'si aún no lo corriste.';
+  static const historyOpenOnMap = 'Ver en mapa';
+  static const historyRecenterTooltip = 'Centrar en el punto';
 
   static const exitPinTitle = 'PIN de salida';
   static const exitPinSetAction = 'Configurar PIN de salida';

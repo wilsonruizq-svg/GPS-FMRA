@@ -4,6 +4,7 @@ import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../groups/groups_service.dart';
 import '../location_share_service.dart';
+import 'history_point_map_screen.dart';
 
 /// Lista mínima de historial GPS del grupo (consent-first vía RLS/RPC).
 class LocationHistoryScreen extends StatefulWidget {
@@ -184,6 +185,10 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
                                 const Divider(height: 1),
                             itemBuilder: (context, i) {
                               final p = _points[i];
+                              final when = _fmt(p.recordedAt);
+                              final coords =
+                                  '${p.lat.toStringAsFixed(5)}, '
+                                  '${p.lon.toStringAsFixed(5)}';
                               return ListTile(
                                 leading: CircleAvatar(
                                   backgroundColor: AppColors.deepBlue
@@ -194,11 +199,23 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
                                   ),
                                 ),
                                 title: Text(p.label),
-                                subtitle: Text(
-                                  '${_fmt(p.recordedAt)}  ·  '
-                                  '${p.lat.toStringAsFixed(5)}, '
-                                  '${p.lon.toStringAsFixed(5)}',
+                                subtitle: Text('$when  ·  $coords'),
+                                trailing: const Icon(
+                                  Icons.map_outlined,
+                                  color: AppColors.deepBlue,
                                 ),
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => HistoryPointMapScreen(
+                                        lat: p.lat,
+                                        lon: p.lon,
+                                        title: p.label,
+                                        subtitle: '$when · $coords',
+                                      ),
+                                    ),
+                                  );
+                                },
                               );
                             },
                           ),

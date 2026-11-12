@@ -82,6 +82,18 @@ class LocationShareService {
   final SupabaseClient? _client;
   final ConsentService _consent;
 
+  /// Historial: como máximo 1 fila cada 5 minutos (el live sigue en heartbeat).
+  static const historyMinInterval = Duration(minutes: 5);
+
+  /// Si se movió menos que esto vs el último historial, no se guarda duplicado.
+  static const historySamePlaceMeters = 5.0;
+
+  /// Estado compartido entre instancias (MapShell puede recrear el service).
+  static DateTime? _lastHistoryAt;
+  static double? _lastHistoryLat;
+  static double? _lastHistoryLon;
+  static bool _historyHydrated = false;
+
   SupabaseClient get _sb => _client ?? supabase;
 
   String get _uid {
@@ -100,7 +112,8 @@ class LocationShareService {
   }
 
   /// Upsert de la ubicación actual. Solo debe llamarse con consentimiento activo.
-  /// También intenta append a `location_history` (best-effort; no tumba el live).
+  /// Historial: best-effort, máx. cada [historyMinInterval] y sin duplicar
+  /// el mismo punto estático.
   Future<void> publishPosition(Position pos) async {
     final now = DateTime.now().toUtc();
     final payload = {
@@ -115,7 +128,57 @@ class LocationShareService {
       payload,
       onConflict: 'user_id',
     );
+    await _maybeAppendHistory(pos, now);
+  }
+
+  Future<void> _hydrateLastHistoryIfNeeded() async {
+    if (_historyHydrated) return;
+    _historyHydrated = true;
     try {
+      final rows = await _sb
+          .from('location_history')
+          .select('lat, lon, recorded_at')
+          .eq('user_id', _uid)
+          .order('recorded_at', ascending: false)
+          .limit(1);
+      if (rows.isEmpty) return;
+      final row = Map<String, dynamic>.from(rows.first);
+      _lastHistoryLat = (row['lat'] as num?)?.toDouble();
+      _lastHistoryLon = (row['lon'] as num?)?.toDouble();
+      final raw = row['recorded_at'] as String?;
+      if (raw != null) {
+        _lastHistoryAt = DateTime.parse(raw).toUtc();
+      }
+    } catch (_) {
+      // Sin historial APPLY / red: el muestreo arranca en frío.
+    }
+  }
+
+  Future<void> _maybeAppendHistory(Position pos, DateTime now) async {
+    try {
+      await _hydrateLastHistoryIfNeeded();
+
+      final lastAt = _lastHistoryAt;
+      if (lastAt != null && now.difference(lastAt) < historyMinInterval) {
+        return;
+      }
+
+      final prevLat = _lastHistoryLat;
+      final prevLon = _lastHistoryLon;
+      if (prevLat != null && prevLon != null) {
+        final movedM = Geolocator.distanceBetween(
+          prevLat,
+          prevLon,
+          pos.latitude,
+          pos.longitude,
+        );
+        if (movedM < historySamePlaceMeters) {
+          // Estático: no duplicar. Avanza el reloj para no reintentar en loop.
+          _lastHistoryAt = now;
+          return;
+        }
+      }
+
       await _sb.from('location_history').insert({
         'user_id': _uid,
         'lat': pos.latitude,
@@ -123,6 +186,9 @@ class LocationShareService {
         'accuracy_m': pos.accuracy.isFinite ? pos.accuracy : null,
         'recorded_at': now.toIso8601String(),
       });
+      _lastHistoryAt = now;
+      _lastHistoryLat = pos.latitude;
+      _lastHistoryLon = pos.longitude;
     } catch (_) {
       // Historial aún no APPLY / red: el mapa en vivo sigue OK.
     }
