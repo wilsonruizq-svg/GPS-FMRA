@@ -125,6 +125,49 @@ class NamedPlacesService {
         .toList();
   }
 
+  /// Todas las filas que RLS deja ver (sin filtrar en cliente).
+  /// Incluye propias (cualquier group_id / Solo yo) y compartidas del grupo.
+  Future<List<NamedPlace>> listAllAccessible() async {
+    List<NamedPlace> parse(List rows) {
+      final out = <NamedPlace>[];
+      for (final raw in rows) {
+        try {
+          out.add(
+            NamedPlace.fromMap(Map<String, dynamic>.from(raw as Map)),
+          );
+        } catch (e) {
+          debugPrint('listAllAccessible skip row: $e');
+        }
+      }
+      return out;
+    }
+
+    try {
+      final rows = await _sb
+          .from('named_places')
+          .select(_placeSelect)
+          .order('created_at', ascending: false)
+          .limit(200);
+      return parse(rows as List);
+    } catch (e) {
+      debugPrint('listAllAccessible full select: $e');
+    }
+
+    // Fallback: todo lo del usuario (con o sin group_id).
+    try {
+      final rows = await _sb
+          .from('named_places')
+          .select('id, owner_id, group_id, name, lat, lon, created_at')
+          .eq('owner_id', _uid)
+          .order('created_at', ascending: false)
+          .limit(200);
+      return parse(rows as List);
+    } catch (e) {
+      debugPrint('listAllAccessible owner fallback: $e');
+      return const [];
+    }
+  }
+
   Future<List<NamedPlace>> listForGroup(String groupId) async {
     final gid = groupId.trim();
     if (gid.isEmpty) return const [];
