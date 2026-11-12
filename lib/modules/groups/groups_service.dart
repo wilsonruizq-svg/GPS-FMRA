@@ -119,6 +119,7 @@ class GroupsService {
   }
 
   Future<List<FamilyGroup>> listMyGroups() async {
+    // 1) Membresías activas del usuario
     final memberships = await _sb
         .from('group_memberships')
         .select('group_id')
@@ -126,13 +127,31 @@ class GroupsService {
         .eq('status', 'active');
 
     final groupIds = (memberships as List)
-        .map((e) => (e as Map)['group_id']?.toString())
+        .map((e) => Map<String, dynamic>.from(e as Map)['group_id']?.toString())
         .whereType<String>()
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
 
-    if (groupIds.isEmpty) return const [];
+    if (groupIds.isEmpty) {
+      // Fallback: grupos que creé (por si memberships no responde)
+      try {
+        final owned = await _sb
+            .from('family_groups')
+            .select('id, name, created_by, status')
+            .eq('created_by', _uid)
+            .eq('status', 'active')
+            .order('created_at');
+        return (owned as List)
+            .map(
+              (e) => FamilyGroup.fromMap(Map<String, dynamic>.from(e as Map)),
+            )
+            .where((g) => g.id.isNotEmpty && g.name.isNotEmpty)
+            .toList();
+      } catch (_) {
+        return const [];
+      }
+    }
 
     final rows = await _sb
         .from('family_groups')
@@ -141,10 +160,31 @@ class GroupsService {
         .eq('status', 'active')
         .order('created_at');
 
-    return (rows as List)
+    var list = (rows as List)
         .map((e) => FamilyGroup.fromMap(Map<String, dynamic>.from(e as Map)))
         .where((g) => g.id.isNotEmpty && g.name.isNotEmpty)
         .toList();
+
+    // Si inFilter no devolvió filas, intenta uno a uno.
+    if (list.isEmpty && groupIds.isNotEmpty) {
+      final recovered = <FamilyGroup>[];
+      for (final id in groupIds) {
+        try {
+          final row = await _sb
+              .from('family_groups')
+              .select('id, name, created_by, status')
+              .eq('id', id)
+              .maybeSingle();
+          if (row != null) {
+            recovered.add(
+              FamilyGroup.fromMap(Map<String, dynamic>.from(row)),
+            );
+          }
+        } catch (_) {}
+      }
+      list = recovered;
+    }
+    return list;
   }
 
   /// Inserta el grupo; el trigger añade al creador como `group_admin`.

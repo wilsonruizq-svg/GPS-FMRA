@@ -100,9 +100,14 @@ class _AppShellState extends State<AppShell> {
             : AppBar(title: Text(_titles[_index])),
         body: IndexedStack(
           index: _index,
+          sizing: StackFit.expand,
           children: [
             const MapShellScreen(),
-            GroupsScreen(key: _groupsKey),
+            // Material+expand: evita body en blanco (antes Scaffold anidado).
+            ColoredBox(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: GroupsScreen(key: _groupsKey),
+            ),
             const SettingsScreen(),
           ],
         ),

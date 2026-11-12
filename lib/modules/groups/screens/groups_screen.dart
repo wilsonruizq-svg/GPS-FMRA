@@ -8,8 +8,8 @@ import '../groups_service.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
-/// Lista de grupos familiares. Debajo de cada uno: carpetas/ubicaciones.
-/// State público para que [AppShell] pueda forzar reload al abrir la pestaña.
+/// Lista de grupos familiares + ubicaciones debajo.
+/// Sin Scaffold propio (AppShell ya lo trae) — evita body en blanco.
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
@@ -29,7 +29,6 @@ class GroupsScreenState extends State<GroupsScreen>
   final Map<String, List<PlaceCategory>> _catsByGroup = {};
   final Map<String, List<NamedPlace>> _placesByGroup = {};
   final Map<String, bool> _sectionLoading = {};
-  final Set<String> _openCats = {};
 
   @override
   bool get wantKeepAlive => true;
@@ -40,7 +39,6 @@ class GroupsScreenState extends State<GroupsScreen>
     unawaited(reload());
   }
 
-  /// Llamado desde AppShell al seleccionar la pestaña Grupos.
   Future<void> reload() => _refresh();
 
   Future<void> _refresh() async {
@@ -51,11 +49,13 @@ class GroupsScreenState extends State<GroupsScreen>
     });
     try {
       final groups = await _service.listMyGroups();
+      debugPrint('GroupsScreen: listMyGroups → ${groups.length}');
       var solo = const <NamedPlace>[];
       try {
         solo = await _places.listSoloMine();
+        debugPrint('GroupsScreen: listSoloMine → ${solo.length}');
       } catch (e) {
-        debugPrint('listSoloMine in refresh: $e');
+        debugPrint('listSoloMine: $e');
       }
       if (!mounted) return;
       setState(() {
@@ -66,6 +66,14 @@ class GroupsScreenState extends State<GroupsScreen>
       for (final g in groups) {
         unawaited(_loadSection(g.id));
       }
+      if (groups.isEmpty && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se encontraron grupos familiares.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e, st) {
       debugPrint('GroupsScreen._refresh ERROR: $e\n$st');
       if (!mounted) return;
@@ -73,6 +81,12 @@ class GroupsScreenState extends State<GroupsScreen>
         _error = e.toString();
         _loading = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al cargar Grupos: $e'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
     }
   }
 
@@ -83,11 +97,13 @@ class GroupsScreenState extends State<GroupsScreen>
     var places = const <NamedPlace>[];
     try {
       places = await _places.listForGroup(groupId);
+      debugPrint('listForGroup($groupId) → ${places.length}');
     } catch (e, st) {
       debugPrint('listForGroup($groupId): $e\n$st');
     }
     try {
       cats = await _places.listCategories(groupId);
+      debugPrint('listCategories($groupId) → ${cats.length}');
     } catch (e, st) {
       debugPrint('listCategories($groupId): $e\n$st');
     }
@@ -171,7 +187,7 @@ class GroupsScreenState extends State<GroupsScreen>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text(AppStrings.groupsPlacesDeleted)),
       );
-      await _loadSection(group.id);
+      await _refresh();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -242,7 +258,6 @@ class GroupsScreenState extends State<GroupsScreen>
     );
     controller.dispose();
     if (name == null || name.isEmpty) return;
-
     try {
       final group = await _service.createGroup(name);
       if (!mounted) return;
@@ -383,17 +398,8 @@ class GroupsScreenState extends State<GroupsScreen>
                 data: Theme.of(context)
                     .copyWith(dividerColor: Colors.transparent),
                 child: ExpansionTile(
-                  key: PageStorageKey<String>('cat_${cat.id}'),
+                  key: ValueKey('cat_${cat.id}'),
                   initiallyExpanded: true,
-                  onExpansionChanged: (open) {
-                    setState(() {
-                      if (open) {
-                        _openCats.add(cat.id);
-                      } else {
-                        _openCats.remove(cat.id);
-                      }
-                    });
-                  },
                   leading: const Icon(Icons.folder_outlined),
                   title: Text(cat.name),
                   subtitle: Text(
@@ -514,137 +520,176 @@ class GroupsScreenState extends State<GroupsScreen>
     );
   }
 
+  Widget _buildBody() {
+    if (_loading) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: const [
+          SizedBox(height: 120),
+          Center(child: CircularProgressIndicator()),
+          SizedBox(height: 16),
+          Center(child: Text('Cargando grupos…')),
+        ],
+      );
+    }
+    if (_error != null) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 40,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _refresh,
+            child: const Text(AppStrings.retry),
+          ),
+        ],
+      );
+    }
+    if (_groups.isEmpty) {
+      return ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(28, 48, 28, 140),
+        children: [
+          Icon(
+            Icons.groups_outlined,
+            size: 56,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            AppStrings.groupsEmpty,
+            style: Theme.of(context).textTheme.bodyLarge,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 28),
+          FilledButton.icon(
+            onPressed: _createGroup,
+            icon: const Icon(Icons.add),
+            label: const Text(AppStrings.groupsCreateAction),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _joinWithCode,
+            icon: const Icon(Icons.vpn_key_outlined),
+            label: const Text(AppStrings.groupsJoinAction),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _refresh,
+            icon: const Icon(Icons.refresh),
+            label: const Text(AppStrings.retry),
+          ),
+        ],
+      );
+    }
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.only(bottom: 96),
+      children: [
+        for (var i = 0; i < _groups.length; i++) ...[
+          if (i > 0) const Divider(height: 1),
+          _buildGroupBlock(_groups[i], showSolo: i == 0),
+        ],
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text(
+            AppStrings.groupsAlreadyMemberHint,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final showCreateJoinFab = !_loading && _error == null && _groups.isEmpty;
+    final empty = !_loading && _error == null && _groups.isEmpty;
 
-    // primary: false — AppShell ya trae Scaffold/AppBar; evita pelear el layout.
-    return Scaffold(
-      primary: false,
-      floatingActionButton: showCreateJoinFab
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'join_invite',
-                  onPressed: _joinWithCode,
-                  icon: const Icon(Icons.vpn_key_outlined),
-                  label: const Text(AppStrings.groupsJoinAction),
-                ),
-                const SizedBox(height: 12),
-                FloatingActionButton.extended(
-                  heroTag: 'create_group',
-                  onPressed: _createGroup,
-                  icon: const Icon(Icons.add),
-                  label: const Text(AppStrings.groupsCreateAction),
-                ),
-              ],
-            )
-          : FloatingActionButton(
-              heroTag: 'groups_refresh',
-              tooltip: AppStrings.retry,
-              onPressed: _loading ? null : _refresh,
-              child: const Icon(Icons.refresh),
-            ),
-      body: RefreshIndicator(
-        onRefresh: _refresh,
-        child: _loading
-            ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 120),
-                  Center(child: CircularProgressIndicator()),
-                ],
-              )
-            : _error != null
-                ? ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(24),
+    // SIN Scaffold anidado: el body del AppShell da el tamaño.
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          RefreshIndicator(
+            onRefresh: _refresh,
+            child: _buildBody(),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: empty
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Icon(
-                        Icons.error_outline,
-                        size: 40,
-                        color: Theme.of(context).colorScheme.error,
+                      FloatingActionButton.extended(
+                        heroTag: 'join_invite',
+                        onPressed: _joinWithCode,
+                        icon: const Icon(Icons.vpn_key_outlined),
+                        label: const Text(AppStrings.groupsJoinAction),
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton(
-                        onPressed: _refresh,
-                        child: const Text(AppStrings.retry),
+                      FloatingActionButton.extended(
+                        heroTag: 'create_group',
+                        onPressed: _createGroup,
+                        icon: const Icon(Icons.add),
+                        label: const Text(AppStrings.groupsCreateAction),
                       ),
                     ],
                   )
-                : _groups.isEmpty
-                    ? ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(28, 48, 28, 140),
-                        children: [
-                          Icon(
-                            Icons.groups_outlined,
-                            size: 56,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            AppStrings.groupsEmpty,
-                            style: Theme.of(context).textTheme.bodyLarge,
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 28),
-                          FilledButton.icon(
-                            onPressed: _createGroup,
-                            icon: const Icon(Icons.add),
-                            label: const Text(AppStrings.groupsCreateAction),
-                          ),
-                          const SizedBox(height: 20),
-                          OutlinedButton.icon(
-                            onPressed: _joinWithCode,
-                            icon: const Icon(Icons.vpn_key_outlined),
-                            label: const Text(AppStrings.groupsJoinAction),
-                          ),
-                        ],
-                      )
-                    : ListView(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.only(bottom: 88),
-                        children: [
-                          for (var i = 0; i < _groups.length; i++) ...[
-                            if (i > 0) const Divider(height: 1),
-                            // Solo yo: una sola sección bajo el primer grupo.
-                            _buildGroupBlock(
-                              _groups[i],
-                              showSolo: i == 0,
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 8,
-                            ),
-                            child: Text(
-                              AppStrings.groupsAlreadyMemberHint,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                : FloatingActionButton(
+                    heroTag: 'groups_refresh',
+                    tooltip: AppStrings.retry,
+                    onPressed: _loading
+                        ? null
+                        : () async {
+                            try {
+                              await _refresh();
+                              if (!mounted) return;
+                              final n = _groups.length;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    n == 0
+                                        ? 'Sin grupos (0). Desliza o reintenta.'
+                                        : 'Grupos cargados: $n',
                                   ),
-                            ),
-                          ),
-                        ],
-                      ),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('$e')),
+                              );
+                            }
+                          },
+                    child: _loading
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.refresh),
+                  ),
+          ),
+        ],
       ),
     );
   }
