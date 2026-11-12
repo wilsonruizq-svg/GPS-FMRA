@@ -3,7 +3,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-/// Siluetas humanas (sin círculo de fondo) para pines MapLibre.
+/// Silueta tipo señalética (cabeza redonda + cuerpo único). Sin círculo de fondo.
+/// Referencia: media/map-person-silhouette.png
 class PersonMarkerBitmaps {
   PersonMarkerBitmaps._();
 
@@ -15,7 +16,7 @@ class PersonMarkerBitmaps {
   }) {
     final g = female ? 'f' : 'm';
     final hex = colorHex.replaceAll('#', '').toUpperCase();
-    return 'person_v3_${g}_$hex';
+    return 'person_v4_${g}_$hex';
   }
 
   static Future<Uint8List> png({
@@ -29,7 +30,7 @@ class PersonMarkerBitmaps {
         ((color.g * 255).round() << 8) |
         (color.b * 255).round();
     final key =
-        'v3_${female ? 'f' : 'm'}_${argb.toRadixString(16)}_${logicalSize.round()}';
+        'v4_${female ? 'f' : 'm'}_${argb.toRadixString(16)}_${logicalSize.round()}';
     final cached = _cache[key];
     if (cached != null) return cached;
 
@@ -37,27 +38,46 @@ class PersonMarkerBitmaps {
     final size = logicalSize * dpr;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-    // Lienzo transparente — solo silueta.
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size, size),
-      Paint()..color = const Color(0x00000000),
-    );
 
-    final cx = size / 2;
-    final fill = Paint()
+    final paint = Paint()
       ..color = color
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;
-    final outline = Paint()
-      ..color = const Color(0xFFFFFFFF)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size * 0.035
-      ..strokeJoin = StrokeJoin.round
-      ..isAntiAlias = true;
 
-    final path = female ? _femalePath(size, cx) : _malePath(size, cx);
-    canvas.drawPath(path, outline);
-    canvas.drawPath(path, fill);
+    final cx = size / 2;
+    // Proporciones tipo pictograma: cabeza separada + torso cónico.
+    final headR = size * (female ? 0.145 : 0.15);
+    final headCy = size * 0.22;
+    final gap = size * 0.035;
+    final bodyTop = headCy + headR + gap;
+    final bodyBottom = size * 0.92;
+    // Hombros redondeados; mujer un poco más estrecha arriba / base similar.
+    final shoulderW = size * (female ? 0.52 : 0.56);
+    final baseW = size * (female ? 0.22 : 0.20);
+
+    // Cabeza (círculo separado).
+    canvas.drawCircle(Offset(cx, headCy), headR, paint);
+
+    // Cuerpo: un solo bloque con hombros redondeados y base plana.
+    final body = Path()
+      ..moveTo(cx - shoulderW / 2, bodyTop + size * 0.08)
+      ..quadraticBezierTo(
+        cx - shoulderW / 2,
+        bodyTop,
+        cx - shoulderW / 2 + size * 0.08,
+        bodyTop,
+      )
+      ..lineTo(cx + shoulderW / 2 - size * 0.08, bodyTop)
+      ..quadraticBezierTo(
+        cx + shoulderW / 2,
+        bodyTop,
+        cx + shoulderW / 2,
+        bodyTop + size * 0.08,
+      )
+      ..lineTo(cx + baseW / 2, bodyBottom)
+      ..lineTo(cx - baseW / 2, bodyBottom)
+      ..close();
+    canvas.drawPath(body, paint);
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.round(), size.round());
@@ -69,107 +89,6 @@ class PersonMarkerBitmaps {
     final out = bytes.buffer.asUint8List();
     _cache[key] = out;
     return out;
-  }
-
-  /// Hombre: cabeza + torso + brazos + piernas (proporciones naturales).
-  static Path _malePath(double size, double cx) {
-    final headR = size * 0.11;
-    final headCy = size * 0.22;
-    final shoulderY = headCy + headR + size * 0.02;
-    final hipY = size * 0.58;
-    final footY = size * 0.92;
-    final shoulderW = size * 0.28;
-    final hipW = size * 0.16;
-    final armOut = size * 0.34;
-    final armY = size * 0.48;
-
-    final p = Path();
-    // Cabeza
-    p.addOval(Rect.fromCircle(center: Offset(cx, headCy), radius: headR));
-    // Cuello + torso (trapecio suave)
-    p.moveTo(cx - size * 0.05, shoulderY);
-    p.lineTo(cx - shoulderW / 2, shoulderY + size * 0.04);
-    p.lineTo(cx - hipW / 2, hipY);
-    p.lineTo(cx + hipW / 2, hipY);
-    p.lineTo(cx + shoulderW / 2, shoulderY + size * 0.04);
-    p.lineTo(cx + size * 0.05, shoulderY);
-    p.close();
-    // Brazo izquierdo
-    p.moveTo(cx - shoulderW / 2 + size * 0.02, shoulderY + size * 0.06);
-    p.lineTo(cx - armOut, armY);
-    p.lineTo(cx - armOut + size * 0.04, armY + size * 0.03);
-    p.lineTo(cx - shoulderW / 2 + size * 0.06, shoulderY + size * 0.12);
-    p.close();
-    // Brazo derecho
-    p.moveTo(cx + shoulderW / 2 - size * 0.02, shoulderY + size * 0.06);
-    p.lineTo(cx + armOut, armY);
-    p.lineTo(cx + armOut - size * 0.04, armY + size * 0.03);
-    p.lineTo(cx + shoulderW / 2 - size * 0.06, shoulderY + size * 0.12);
-    p.close();
-    // Pierna izquierda
-    p.moveTo(cx - hipW / 2, hipY);
-    p.lineTo(cx - size * 0.12, footY);
-    p.lineTo(cx - size * 0.04, footY);
-    p.lineTo(cx - size * 0.02, hipY);
-    p.close();
-    // Pierna derecha
-    p.moveTo(cx + hipW / 2, hipY);
-    p.lineTo(cx + size * 0.12, footY);
-    p.lineTo(cx + size * 0.04, footY);
-    p.lineTo(cx + size * 0.02, hipY);
-    p.close();
-    return p;
-  }
-
-  /// Mujer: cabeza + torso/vestido + brazos + piernas.
-  static Path _femalePath(double size, double cx) {
-    final headR = size * 0.105;
-    final headCy = size * 0.21;
-    final shoulderY = headCy + headR + size * 0.015;
-    final waistY = size * 0.48;
-    final hemY = size * 0.72;
-    final footY = size * 0.92;
-    final shoulderW = size * 0.24;
-    final waistW = size * 0.12;
-    final hemW = size * 0.34;
-    final armOut = size * 0.32;
-    final armY = size * 0.46;
-
-    final p = Path();
-    p.addOval(Rect.fromCircle(center: Offset(cx, headCy), radius: headR));
-    // Torso + falda (silueta única)
-    p.moveTo(cx - size * 0.04, shoulderY);
-    p.lineTo(cx - shoulderW / 2, shoulderY + size * 0.03);
-    p.lineTo(cx - waistW / 2, waistY);
-    p.lineTo(cx - hemW / 2, hemY);
-    p.lineTo(cx + hemW / 2, hemY);
-    p.lineTo(cx + waistW / 2, waistY);
-    p.lineTo(cx + shoulderW / 2, shoulderY + size * 0.03);
-    p.lineTo(cx + size * 0.04, shoulderY);
-    p.close();
-    // Brazos
-    p.moveTo(cx - shoulderW / 2 + size * 0.02, shoulderY + size * 0.05);
-    p.lineTo(cx - armOut, armY);
-    p.lineTo(cx - armOut + size * 0.04, armY + size * 0.03);
-    p.lineTo(cx - shoulderW / 2 + size * 0.05, shoulderY + size * 0.1);
-    p.close();
-    p.moveTo(cx + shoulderW / 2 - size * 0.02, shoulderY + size * 0.05);
-    p.lineTo(cx + armOut, armY);
-    p.lineTo(cx + armOut - size * 0.04, armY + size * 0.03);
-    p.lineTo(cx + shoulderW / 2 - size * 0.05, shoulderY + size * 0.1);
-    p.close();
-    // Piernas bajo la falda
-    p.moveTo(cx - size * 0.07, hemY);
-    p.lineTo(cx - size * 0.1, footY);
-    p.lineTo(cx - size * 0.03, footY);
-    p.lineTo(cx - size * 0.02, hemY);
-    p.close();
-    p.moveTo(cx + size * 0.07, hemY);
-    p.lineTo(cx + size * 0.1, footY);
-    p.lineTo(cx + size * 0.03, footY);
-    p.lineTo(cx + size * 0.02, hemY);
-    p.close();
-    return p;
   }
 }
 
