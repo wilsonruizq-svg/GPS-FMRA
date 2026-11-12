@@ -12,6 +12,9 @@ comparte con el grupo.
 4. Si **Guardar** falla (RLS) aunque el paso 3 fue OK, corre también:
    `supabase/migrations/20261102284100_named_places_rls_fix.sql`
    → `named_places_rls_ok = true`.
+5. Recomendado (RPC estable): 
+   `supabase/migrations/20261102284200_named_places_rpc.sql`
+   → `save_named_place_ok = true`.
 
 ## Cómo usarlo en la app
 

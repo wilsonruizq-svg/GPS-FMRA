@@ -71,6 +71,9 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    18. `supabase/migrations/20261102284100_named_places_rls_fix.sql`
       (**APPLY si Guardar lugar falla con RLS:** reafirma policies.
       Éxito: `named_places_rls_ok = true`.)
+   19. `supabase/migrations/20261102284200_named_places_rpc.sql`
+      (**APPLY recomendado:** RPC `save_named_place`. Éxito:
+      `save_named_place_ok = true`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,

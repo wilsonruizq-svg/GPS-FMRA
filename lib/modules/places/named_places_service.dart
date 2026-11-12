@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
@@ -92,20 +93,48 @@ class NamedPlacesService {
       throw ArgumentError('El nombre es demasiado largo (máx. 80).');
     }
 
+    final gid = groupId?.trim();
+    final groupArg = (gid != null && gid.isNotEmpty) ? gid : null;
+
+    // 1) RPC security definer (si Wilson aplicó 20261102284200_…_rpc.sql).
+    try {
+      final row = await _sb.rpc(
+        'save_named_place',
+        params: {
+          'p_name': trimmed,
+          'p_lat': lat,
+          'p_lon': lon,
+          'p_group_id': groupArg,
+        },
+      );
+      if (row is Map) {
+        return NamedPlace.fromMap(Map<String, dynamic>.from(row));
+      }
+    } catch (e) {
+      final s = e.toString().toLowerCase();
+      final missingRpc = s.contains('save_named_place') &&
+          (s.contains('pgrst202') ||
+              s.contains('could not find') ||
+              s.contains('404') ||
+              s.contains('does not exist'));
+      if (!missingRpc) {
+        // RPC existe pero falló de verdad.
+        debugPrint('save_named_place rpc: $e');
+        rethrow;
+      }
+    }
+
+    // 2) Fallback insert directo.
     final payload = <String, dynamic>{
       'owner_id': _uid,
       'name': trimmed,
       'lat': lat,
       'lon': lon,
-      // Explícito null = Solo yo (evita basura / omitir columna).
-      'group_id': null,
     };
-    final gid = groupId?.trim();
-    if (gid != null && gid.isNotEmpty) {
-      payload['group_id'] = gid;
+    if (groupArg != null) {
+      payload['group_id'] = groupArg;
     }
 
-    // Prefer=representation: si .single() falla por RLS RETURNING, reintenta listando.
     try {
       final row = await _sb
           .from('named_places')
@@ -114,7 +143,6 @@ class NamedPlacesService {
           .single();
       return NamedPlace.fromMap(Map<String, dynamic>.from(row));
     } catch (e) {
-      // Insert pudo aplicar aunque el RETURNING/.single falle.
       final mine = await _sb
           .from('named_places')
           .select('id, owner_id, group_id, name, lat, lon, created_at')

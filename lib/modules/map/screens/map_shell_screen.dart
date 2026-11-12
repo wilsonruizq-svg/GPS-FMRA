@@ -271,10 +271,10 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       final list = await _places.listVisible(groupId: _selected?.id);
       if (!mounted) return;
-      // Actualizar lista sin rebuild antes de tocar MapLibre (evita assert ~6281).
       _namedPlaces = list;
-      await _syncPlaceMarkers();
-      if (mounted) setState(() {});
+      // MapLibre + InheritedWidget: nunca sincronizar en el mismo frame
+      // que cierra el diálogo (framework.dart:6281 _dependents.isEmpty).
+      await _syncPlaceMarkersAfterFrame();
     } catch (e) {
       if (NamedPlacesService.looksLikeMissingTable(e)) {
         debugPrint('named_places: falta APPLY SQL');
@@ -282,6 +282,27 @@ class _MapShellScreenState extends State<MapShellScreen>
         debugPrint('named_places load: $e');
       }
     }
+  }
+
+  Future<void> _syncPlaceMarkersAfterFrame() async {
+    if (!mounted) return;
+    final done = Completer<void>();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        if (!mounted) return;
+        await _syncPlaceMarkers();
+      } catch (e) {
+        debugPrint('syncPlaceMarkers deferred: $e');
+      } finally {
+        if (mounted) {
+          setState(() {});
+        }
+        if (!done.isCompleted) done.complete();
+      }
+    });
+    // Empuja un frame si el motor está idle.
+    WidgetsBinding.instance.scheduleFrame();
+    await done.future;
   }
 
   Future<Map<String, MemberLocation>> _fetchLocationsMap(
@@ -1535,17 +1556,30 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     final name = nameController.text.trim();
     nameController.dispose();
-    if (action == null || !mounted) return;
+    if (action == null) return;
+
+    // Locals: no usar contexto del diálogo tras pop; fijar GPS/grupo ahora.
     final placeName = name.isEmpty ? 'Mi ubicación' : name;
+    final lat = fix.latitude;
+    final lon = fix.longitude;
+    final groupIdForSave = shareWithGroup ? _selected?.id : null;
+    final wantGroup = shareWithGroup;
+
+    // Esperar a que la ruta del AlertDialog termine de desactivar InheritedWidgets.
+    await Future<void>.delayed(Duration.zero);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return;
+
+    final messenger = ScaffoldMessenger.maybeOf(context);
 
     if (action == 'wa') {
       final ok = await WhatsAppShare.sharePlace(
         name: placeName,
-        lat: fix.latitude,
-        lon: fix.longitude,
+        lat: lat,
+        lon: lon,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger?.showSnackBar(
         SnackBar(
           content: Text(
             ok
@@ -1559,36 +1593,39 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     if (action != 'save') return;
 
-    if (shareWithGroup && _selected == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+    if (wantGroup && (groupIdForSave == null || groupIdForSave.isEmpty)) {
+      messenger?.showSnackBar(
         const SnackBar(content: Text(AppStrings.mapSavePlaceNeedGroup)),
       );
       return;
     }
 
-    setState(() => _savingPlace = true);
+    if (mounted) setState(() => _savingPlace = true);
     try {
       debugPrint(
-        'named_places save: name=$placeName share=$shareWithGroup '
-        'group=${_selected?.id} lat=${fix.latitude} lon=${fix.longitude}',
+        'named_places save: name=$placeName share=$wantGroup '
+        'group=$groupIdForSave lat=$lat lon=$lon',
       );
       final created = await _places.create(
         name: placeName,
-        lat: fix.latitude,
-        lon: fix.longitude,
-        groupId: shareWithGroup ? _selected?.id : null,
+        lat: lat,
+        lon: lon,
+        groupId: groupIdForSave,
       );
       debugPrint('named_places save ok id=${created.id}');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger?.showSnackBar(
         SnackBar(
           content: Text(
-            shareWithGroup
+            wantGroup
                 ? AppStrings.mapSavePlaceShared
                 : AppStrings.mapSavePlaceSaved,
           ),
         ),
       );
+      // Otro frame libre antes de mutar el mapa.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
       await _loadNamedPlaces();
     } catch (e, st) {
       debugPrint('named_places save ERROR: $e\n$st');
@@ -1596,7 +1633,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       final msg = NamedPlacesService.looksLikeMissingTable(e)
           ? AppStrings.mapSavePlaceApply
           : '${AppStrings.mapSavePlaceError}\n$e';
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger?.showSnackBar(
         SnackBar(
           content: Text(msg),
           duration: const Duration(seconds: 8),
