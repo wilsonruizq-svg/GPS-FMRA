@@ -19,6 +19,7 @@ import '../../location/consent_service.dart';
 import '../../location/location_fix_filter.dart';
 import '../../location/location_share_service.dart';
 import '../../places/named_places_service.dart';
+import '../../places/whatsapp_share.dart';
 import '../../sos/sos_service.dart';
 import '../person_marker_bitmaps.dart';
 
@@ -1237,10 +1238,15 @@ class _MapShellScreenState extends State<MapShellScreen>
           gender: member?.gender,
           displayName: member?.displayName ?? nameById[userId],
         );
-        final iconName = await _ensurePersonImage(
-          female: female,
-          colorHex: color,
-        );
+        String? iconName;
+        try {
+          iconName = await _ensurePersonImage(
+            female: female,
+            colorHex: color,
+          );
+        } catch (e) {
+          debugPrint('person marker image: $e');
+        }
         final label = nameById[userId] ??
             (isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember);
         final accRadius = _accuracyRadiusPx(loc);
@@ -1274,31 +1280,33 @@ class _MapShellScreenState extends State<MapShellScreen>
           } catch (_) {}
         }
 
-        final existingFigure = _figuresByUser[userId];
-        if (existingFigure == null) {
-          try {
-            final figure = await controller.addSymbol(
-              SymbolOptions(
-                geometry: pinGeometry,
-                iconImage: iconName,
-                // ~40% más pequeñas que la primera versión (0.95/1.05).
-                iconSize: isSelf ? 0.57 : 0.63,
-                iconAnchor: 'bottom',
-              ),
-            );
-            _figuresByUser[userId] = figure;
-          } catch (_) {}
-        } else {
-          try {
-            await controller.updateSymbol(
-              existingFigure,
-              SymbolOptions(
-                geometry: pinGeometry,
-                iconImage: iconName,
-                iconSize: isSelf ? 0.57 : 0.63,
-              ),
-            );
-          } catch (_) {}
+        if (iconName != null) {
+          final existingFigure = _figuresByUser[userId];
+          if (existingFigure == null) {
+            try {
+              final figure = await controller.addSymbol(
+                SymbolOptions(
+                  geometry: pinGeometry,
+                  iconImage: iconName,
+                  // ~40% más pequeñas que la primera versión (0.95/1.05).
+                  iconSize: isSelf ? 0.57 : 0.63,
+                  iconAnchor: 'bottom',
+                ),
+              );
+              _figuresByUser[userId] = figure;
+            } catch (_) {}
+          } else {
+            try {
+              await controller.updateSymbol(
+                existingFigure,
+                SymbolOptions(
+                  geometry: pinGeometry,
+                  iconImage: iconName,
+                  iconSize: isSelf ? 0.57 : 0.63,
+                ),
+              );
+            } catch (_) {}
+          }
         }
 
         final existingLabel = _labelsByUser[userId];
@@ -1439,7 +1447,8 @@ class _MapShellScreenState extends State<MapShellScreen>
         fix = null;
       }
     }
-    if (fix == null || !mounted) {
+    if (!mounted) return;
+    if (fix == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text(AppStrings.mapSavePlaceNeedGps)),
       );
@@ -1448,54 +1457,64 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     final nameController = TextEditingController();
     var shareWithGroup = false;
-    final saved = await showDialog<bool>(
+    // null = cancel; true = guardar; 'wa' = WhatsApp
+    final action = await showDialog<String>(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
             return AlertDialog(
               title: const Text(AppStrings.mapSavePlaceTitle),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    autofocus: true,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      labelText: AppStrings.mapSavePlaceNameLabel,
-                      hintText: AppStrings.mapSavePlaceNameHint,
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: AppStrings.mapSavePlaceNameLabel,
+                        hintText: AppStrings.mapSavePlaceNameHint,
+                      ),
+                      maxLength: 80,
                     ),
-                    maxLength: 80,
-                  ),
-                  const SizedBox(height: 8),
-                  SegmentedButton<bool>(
-                    segments: const [
-                      ButtonSegment(
-                        value: false,
-                        label: Text(AppStrings.mapSavePlaceOnlyMe),
-                        icon: Icon(Icons.lock_outline, size: 18),
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        shareWithGroup
+                            ? Icons.radio_button_off
+                            : Icons.radio_button_checked,
                       ),
-                      ButtonSegment(
-                        value: true,
-                        label: Text(AppStrings.mapSavePlaceShareGroup),
-                        icon: Icon(Icons.groups_outlined, size: 18),
+                      title: const Text(AppStrings.mapSavePlaceOnlyMe),
+                      onTap: () => setLocal(() => shareWithGroup = false),
+                    ),
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        shareWithGroup
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
                       ),
-                    ],
-                    selected: {shareWithGroup},
-                    onSelectionChanged: (s) {
-                      setLocal(() => shareWithGroup = s.first);
-                    },
-                  ),
-                ],
+                      title: const Text(AppStrings.mapSavePlaceShareGroup),
+                      onTap: () => setLocal(() => shareWithGroup = true),
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(ctx, false),
+                  onPressed: () => Navigator.pop(ctx),
                   child: const Text(AppStrings.cancel),
                 ),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'wa'),
+                  child: const Text(AppStrings.mapSavePlaceWhatsApp),
+                ),
                 FilledButton(
-                  onPressed: () => Navigator.pop(ctx, true),
+                  onPressed: () => Navigator.pop(ctx, 'save'),
                   child: const Text(AppStrings.mapSavePlaceSave),
                 ),
               ],
@@ -1507,8 +1526,29 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     final name = nameController.text.trim();
     nameController.dispose();
-    if (saved != true || !mounted) return;
-    if (name.isEmpty) return;
+    if (action == null || !mounted) return;
+    final placeName = name.isEmpty ? 'Mi ubicación' : name;
+
+    if (action == 'wa') {
+      final ok = await WhatsAppShare.sharePlace(
+        name: placeName,
+        lat: fix.latitude,
+        lon: fix.longitude,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            ok
+                ? AppStrings.mapSavePlaceWhatsAppOk
+                : AppStrings.mapSavePlaceWhatsAppError,
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (action != 'save') return;
 
     if (shareWithGroup && _selected == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1520,7 +1560,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     setState(() => _savingPlace = true);
     try {
       await _places.create(
-        name: name,
+        name: placeName,
         lat: fix.latitude,
         lon: fix.longitude,
         groupId: shareWithGroup ? _selected?.id : null,

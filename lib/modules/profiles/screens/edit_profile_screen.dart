@@ -340,34 +340,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                   ),
                   const SizedBox(height: 8),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'auto',
-                        label: Text(AppStrings.profileGenderUnset),
-                        icon: Icon(Icons.auto_awesome_outlined, size: 18),
+                  // ListTile evita asserts de SegmentedButton en pantallas chicas.
+                  for (final opt in const [
+                    (null, AppStrings.profileGenderUnset),
+                    ('female', AppStrings.profileGenderFemale),
+                    ('male', AppStrings.profileGenderMale),
+                  ])
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      enabled: !_saving,
+                      leading: Icon(
+                        _gender == opt.$1
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
                       ),
-                      ButtonSegment(
-                        value: 'female',
-                        label: Text(AppStrings.profileGenderFemale),
-                        icon: Icon(Icons.woman, size: 18),
-                      ),
-                      ButtonSegment(
-                        value: 'male',
-                        label: Text(AppStrings.profileGenderMale),
-                        icon: Icon(Icons.man, size: 18),
-                      ),
-                    ],
-                    selected: {_gender ?? 'auto'},
-                    onSelectionChanged: _saving
-                        ? null
-                        : (set) {
-                            final v = set.first;
-                            setState(() {
-                              _gender = v == 'auto' ? null : v;
-                            });
-                          },
-                  ),
+                      title: Text(opt.$2),
+                      onTap: _saving
+                          ? null
+                          : () => setState(() => _gender = opt.$1),
+                    ),
                   const SizedBox(height: 12),
                   Text(
                     '${AppStrings.profileEmailReadonly}: '

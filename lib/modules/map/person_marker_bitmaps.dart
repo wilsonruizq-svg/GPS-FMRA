@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 /// Figuritas mujer/hombre coloreadas para pines MapLibre (`addImage`).
+/// Dibujo vectorial (sin depender de glifos Material Icons).
 class PersonMarkerBitmaps {
   PersonMarkerBitmaps._();
 
@@ -23,9 +24,12 @@ class PersonMarkerBitmaps {
     required Color color,
     double logicalSize = 96,
   }) async {
-    final key =
-        '${female ? 'f' : 'm'}_${color.toARGB32().toRadixString(16)}_'
-        '${logicalSize.round()}';
+    final argb =
+        ((color.a * 255).round() << 24) |
+        ((color.r * 255).round() << 16) |
+        ((color.g * 255).round() << 8) |
+        (color.b * 255).round();
+    final key = '${female ? 'f' : 'm'}_${argb.toRadixString(16)}_${logicalSize.round()}';
     final cached = _cache[key];
     if (cached != null) return cached;
 
@@ -33,30 +37,90 @@ class PersonMarkerBitmaps {
     final size = logicalSize * dpr;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
+    final cx = size / 2;
 
-    // Halo blanco para contraste sobre el mapa.
-    final halo = Paint()
-      ..color = const Color(0xF2FFFFFF)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(size / 2, size / 2), size * 0.46, halo);
+    // Halo blanco.
+    canvas.drawCircle(
+      Offset(cx, size / 2),
+      size * 0.46,
+      Paint()
+        ..color = const Color(0xF2FFFFFF)
+        ..style = PaintingStyle.fill,
+    );
 
-    final icon = female ? Icons.woman : Icons.man;
-    final painter = TextPainter(textDirection: TextDirection.ltr);
-    painter.text = TextSpan(
-      text: String.fromCharCode(icon.codePoint),
-      style: TextStyle(
-        fontSize: size * 0.78,
-        fontFamily: icon.fontFamily,
-        package: icon.fontPackage,
-        color: color,
-        height: 1,
-      ),
-    );
-    painter.layout();
-    painter.paint(
-      canvas,
-      Offset((size - painter.width) / 2, (size - painter.height) / 2 - size * 0.02),
-    );
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    // Cabeza
+    final headR = size * 0.12;
+    final headY = size * 0.28;
+    canvas.drawCircle(Offset(cx, headY), headR, paint);
+
+    if (female) {
+      // Vestido (triángulo)
+      final path = Path()
+        ..moveTo(cx, headY + headR * 0.9)
+        ..lineTo(cx - size * 0.22, size * 0.72)
+        ..lineTo(cx + size * 0.22, size * 0.72)
+        ..close();
+      canvas.drawPath(path, paint);
+      // Piernas
+      final leg = Paint()
+        ..color = color
+        ..strokeWidth = size * 0.05
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(
+        Offset(cx - size * 0.07, size * 0.72),
+        Offset(cx - size * 0.07, size * 0.86),
+        leg,
+      );
+      canvas.drawLine(
+        Offset(cx + size * 0.07, size * 0.72),
+        Offset(cx + size * 0.07, size * 0.86),
+        leg,
+      );
+    } else {
+      // Torso
+      final bodyTop = headY + headR * 0.85;
+      final bodyBottom = size * 0.62;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(cx - size * 0.1, bodyTop, cx + size * 0.1, bodyBottom),
+          Radius.circular(size * 0.03),
+        ),
+        paint,
+      );
+      final stroke = Paint()
+        ..color = color
+        ..strokeWidth = size * 0.055
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke;
+      // Brazos
+      canvas.drawLine(
+        Offset(cx - size * 0.1, bodyTop + size * 0.08),
+        Offset(cx - size * 0.22, bodyTop + size * 0.2),
+        stroke,
+      );
+      canvas.drawLine(
+        Offset(cx + size * 0.1, bodyTop + size * 0.08),
+        Offset(cx + size * 0.22, bodyTop + size * 0.2),
+        stroke,
+      );
+      // Piernas
+      canvas.drawLine(
+        Offset(cx - size * 0.05, bodyBottom),
+        Offset(cx - size * 0.08, size * 0.86),
+        stroke,
+      );
+      canvas.drawLine(
+        Offset(cx + size * 0.05, bodyBottom),
+        Offset(cx + size * 0.08, size * 0.86),
+        stroke,
+      );
+    }
 
     final picture = recorder.endRecording();
     final image = await picture.toImage(size.round(), size.round());
@@ -92,7 +156,7 @@ class PersonMarkerGender {
 
   static bool _inferFemaleFromName(String? raw) {
     final name = (raw ?? '').trim().toLowerCase();
-    if (name.isEmpty) return false; // fallback sensible: figurita hombre
+    if (name.isEmpty) return false;
     final first = name.split(RegExp(r'\s+')).first;
 
     const femaleExact = {
@@ -104,12 +168,6 @@ class PersonMarkerGender {
       'liliana', 'martha', 'marta', 'gloria', 'angela', 'ángela', 'teresa',
       'pilar', 'ines', 'inés', 'jimena', 'ximena', 'manuela', 'juliana',
       'lorena', 'vanessa', 'jessica', 'karen', 'nancy', 'elizabeth', 'luz',
-      'esperanza', 'consuelo', 'dolores', 'mercedes', 'susana', 'silvia',
-      'yvonne', 'yolanda', 'ruth', 'esther', 'ester', 'irene', 'olga',
-      'norma', 'rita', 'aurora', 'blanca', 'cecilia', 'doris', 'edna',
-      'fabiola', 'gina', 'helena', 'irma', 'johanna', 'karina', 'lidia',
-      'magdalena', 'nubia', 'ofelia', 'petra', 'rebeca', 'sonia', 'tatiana',
-      'ursula', 'úrsula', 'viviana', 'wendy', 'yesenia', 'zulema', 'wilsona',
     };
     if (femaleExact.contains(first)) return true;
 
@@ -121,15 +179,11 @@ class PersonMarkerGender {
       'sergio', 'martin', 'martín', 'eduardo', 'fernando', 'alberto', 'raul',
       'raúl', 'roberto', 'julio', 'cesar', 'césar', 'gustavo', 'hugo',
       'wilson', 'william', 'edgar', 'edwin', 'nelson', 'german', 'germán',
-      'orlando', 'mauricio', 'javier', 'ernesto', 'tomas', 'tomás', 'nicolas',
-      'nicolás', 'santiago', 'mateo', 'samuel', 'benjamin', 'benjamín',
-      'cristian', 'christian', 'jonathan', 'kevin', 'bryan', 'brandon',
+      'orlando', 'mauricio', 'javier', 'santiago', 'mateo', 'cristian',
     };
     if (maleExact.contains(first)) return false;
 
-    // Terminaciones frecuentes en español (heurística débil).
     if (first.endsWith('a') &&
-        !first.endsWith('ista') &&
         !const {'joshua', 'elias', 'elías', 'matias', 'matías', 'jonas', 'jonás'}
             .contains(first)) {
       return true;

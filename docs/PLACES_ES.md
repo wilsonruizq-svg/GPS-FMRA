@@ -15,6 +15,6 @@ comparte con el grupo.
 1. En **Mapa**, toca el botón de **marcador** (junto a SOS / Mi ubicación).
 2. Escribe un nombre (ej. «Casa», «Trabajo»).
 3. Elige **Solo yo** o **Compartir con el grupo**.
-4. Guardar. Aparece el pin con el nombre en el mapa.
+4. **Guardar** (pin en el mapa) o **WhatsApp** (abre chat con nombre + enlace de mapas).
 
-Sin el SQL, la app mostrará aviso de APPLY.
+Sin el SQL, la app mostrará aviso de APPLY al guardar en la nube.

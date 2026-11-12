@@ -66,11 +66,15 @@ abstract final class AppStrings {
   static const mapSavePlaceOnlyMe = 'Solo yo';
   static const mapSavePlaceShareGroup = 'Compartir con el grupo';
   static const mapSavePlaceSave = 'Guardar';
+  static const mapSavePlaceWhatsApp = 'WhatsApp';
   static const mapSavePlaceNeedGps = 'No hay GPS aún. Activa ubicación e inténtalo.';
   static const mapSavePlaceNeedGroup =
       'Elige un grupo para compartir el lugar.';
   static const mapSavePlaceSaved = 'Lugar guardado.';
   static const mapSavePlaceShared = 'Lugar compartido con el grupo.';
+  static const mapSavePlaceWhatsAppOk = 'Abriendo WhatsApp…';
+  static const mapSavePlaceWhatsAppError =
+      'No se pudo abrir WhatsApp. ¿Está instalado?';
   static const mapSavePlaceError =
       'No se pudo guardar el lugar. Revisa la conexión.';
   static const mapSavePlaceApply =
