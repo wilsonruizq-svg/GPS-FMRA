@@ -59,6 +59,23 @@ abstract final class AppStrings {
   static const mapMembersEmpty =
       'No hay integrantes. Crea un grupo en la pestaña Grupos.';
   static const mapMyLocationTooltip = 'Mi ubicación';
+  static const mapSavePlaceTooltip = 'Guardar ubicación con nombre';
+  static const mapSavePlaceTitle = 'Guardar este lugar';
+  static const mapSavePlaceNameLabel = 'Nombre del lugar';
+  static const mapSavePlaceNameHint = 'Ej. Casa, Trabajo, Parque';
+  static const mapSavePlaceOnlyMe = 'Solo yo';
+  static const mapSavePlaceShareGroup = 'Compartir con el grupo';
+  static const mapSavePlaceSave = 'Guardar';
+  static const mapSavePlaceNeedGps = 'No hay GPS aún. Activa ubicación e inténtalo.';
+  static const mapSavePlaceNeedGroup =
+      'Elige un grupo para compartir el lugar.';
+  static const mapSavePlaceSaved = 'Lugar guardado.';
+  static const mapSavePlaceShared = 'Lugar compartido con el grupo.';
+  static const mapSavePlaceError =
+      'No se pudo guardar el lugar. Revisa la conexión.';
+  static const mapSavePlaceApply =
+      'Falta APPLY SQL: 20261102284000_named_places.sql '
+      '(named_places_ok = true). Guía: docs/PLACES_ES.md';
   static const mapLocationDenied =
       'Necesitamos el permiso de ubicación para centrar el mapa.';
   static const mapLocationDeniedForever =

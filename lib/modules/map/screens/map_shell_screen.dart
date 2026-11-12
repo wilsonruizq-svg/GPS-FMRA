@@ -18,6 +18,7 @@ import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
 import '../../location/location_fix_filter.dart';
 import '../../location/location_share_service.dart';
+import '../../places/named_places_service.dart';
 import '../../sos/sos_service.dart';
 import '../person_marker_bitmaps.dart';
 
@@ -50,6 +51,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   final _groups = GroupsService();
   final _consent = ConsentService();
   final _locationShare = LocationShareService();
+  final _places = NamedPlacesService();
   final _sos = SosService();
   final _fixFilter = const LocationFixFilter();
 
@@ -76,7 +78,11 @@ class _MapShellScreenState extends State<MapShellScreen>
   final Map<String, Symbol> _figuresByUser = {};
   final Map<String, Circle> _accuracyByUser = {};
   final Map<String, Symbol> _labelsByUser = {};
+  final Map<String, Circle> _placeCirclesById = {};
+  final Map<String, Symbol> _placeLabelsById = {};
   final Set<String> _registeredPersonImages = {};
+  List<NamedPlace> _namedPlaces = const [];
+  bool _savingPlace = false;
 
   Timer? _publishTimer;
   Timer? _pollTimer;
@@ -213,6 +219,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       });
       _maybeAutoCenter();
       await _syncMarkers();
+      await _loadNamedPlaces();
       _restartSharingLoop();
       _restartRealtimeAndPoll();
     } catch (e) {
@@ -250,11 +257,27 @@ class _MapShellScreenState extends State<MapShellScreen>
       });
       _maybeAutoCenter();
       await _syncMarkers();
+      await _loadNamedPlaces();
       _restartSharingLoop();
       _restartRealtimeAndPoll();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = e.toString());
+    }
+  }
+
+  Future<void> _loadNamedPlaces() async {
+    try {
+      final list = await _places.listVisible(groupId: _selected?.id);
+      if (!mounted) return;
+      setState(() => _namedPlaces = list);
+      await _syncPlaceMarkers();
+    } catch (e) {
+      if (NamedPlacesService.looksLikeMissingTable(e)) {
+        debugPrint('named_places: falta APPLY SQL');
+      } else {
+        debugPrint('named_places load: $e');
+      }
     }
   }
 
@@ -444,6 +467,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     await _ensureMarkerImages();
     _maybeAutoCenter();
     await _syncMarkers();
+    await _syncPlaceMarkers();
   }
 
   Future<void> _ensureMarkerImages() async {
@@ -1316,6 +1340,213 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
+  Future<void> _syncPlaceMarkers() async {
+    final controller = _mapController;
+    if (controller == null || !_styleReady) return;
+
+    final desired = {for (final p in _namedPlaces) p.id: p};
+    final stale = [
+      ..._placeCirclesById.keys,
+      ..._placeLabelsById.keys,
+    ].where((id) => !desired.containsKey(id)).toSet();
+    for (final id in stale) {
+      final c = _placeCirclesById.remove(id);
+      final l = _placeLabelsById.remove(id);
+      if (c != null) {
+        try {
+          await controller.removeCircle(c);
+        } catch (_) {}
+      }
+      if (l != null) {
+        try {
+          await controller.removeSymbol(l);
+        } catch (_) {}
+      }
+    }
+
+    for (final place in desired.values) {
+      final geometry = LatLng(place.lat, place.lon);
+      const color = '#6A1B9A';
+      final existing = _placeCirclesById[place.id];
+      if (existing == null) {
+        try {
+          final circle = await controller.addCircle(
+            CircleOptions(
+              geometry: geometry,
+              circleRadius: 8,
+              circleColor: color,
+              circleOpacity: 0.9,
+              circleStrokeWidth: 2,
+              circleStrokeColor: '#FFFFFF',
+            ),
+          );
+          _placeCirclesById[place.id] = circle;
+        } catch (_) {}
+      } else {
+        try {
+          await controller.updateCircle(
+            existing,
+            CircleOptions(geometry: geometry, circleColor: color),
+          );
+        } catch (_) {}
+      }
+
+      final existingLabel = _placeLabelsById[place.id];
+      final label = place.isShared ? 'Grupo · ${place.name}' : place.name;
+      if (existingLabel == null) {
+        try {
+          final symbol = await controller.addSymbol(
+            SymbolOptions(
+              geometry: geometry,
+              textField: label,
+              textSize: 11,
+              textColor: '#4A148C',
+              textHaloColor: '#FFFFFF',
+              textHaloWidth: 1.3,
+              textOffset: const Offset(0, 1.3),
+              textAnchor: 'top',
+            ),
+          );
+          _placeLabelsById[place.id] = symbol;
+        } catch (_) {}
+      } else {
+        try {
+          await controller.updateSymbol(
+            existingLabel,
+            SymbolOptions(geometry: geometry, textField: label),
+          );
+        } catch (_) {}
+      }
+    }
+  }
+
+  Future<void> _onSavePlacePressed() async {
+    if (_savingPlace) return;
+    Position? fix = _lastAcceptedFix;
+    if (fix == null) {
+      final ok = await _ensureOsPermission(
+        requestIfNeeded: true,
+        showFeedback: true,
+      );
+      if (!ok || !mounted) return;
+      try {
+        fix = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+          ),
+        );
+      } catch (_) {
+        fix = null;
+      }
+    }
+    if (fix == null || !mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.mapSavePlaceNeedGps)),
+      );
+      return;
+    }
+
+    final nameController = TextEditingController();
+    var shareWithGroup = false;
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              title: const Text(AppStrings.mapSavePlaceTitle),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: AppStrings.mapSavePlaceNameLabel,
+                      hintText: AppStrings.mapSavePlaceNameHint,
+                    ),
+                    maxLength: 80,
+                  ),
+                  const SizedBox(height: 8),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        label: Text(AppStrings.mapSavePlaceOnlyMe),
+                        icon: Icon(Icons.lock_outline, size: 18),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        label: Text(AppStrings.mapSavePlaceShareGroup),
+                        icon: Icon(Icons.groups_outlined, size: 18),
+                      ),
+                    ],
+                    selected: {shareWithGroup},
+                    onSelectionChanged: (s) {
+                      setLocal(() => shareWithGroup = s.first);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text(AppStrings.cancel),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text(AppStrings.mapSavePlaceSave),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final name = nameController.text.trim();
+    nameController.dispose();
+    if (saved != true || !mounted) return;
+    if (name.isEmpty) return;
+
+    if (shareWithGroup && _selected == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.mapSavePlaceNeedGroup)),
+      );
+      return;
+    }
+
+    setState(() => _savingPlace = true);
+    try {
+      await _places.create(
+        name: name,
+        lat: fix.latitude,
+        lon: fix.longitude,
+        groupId: shareWithGroup ? _selected?.id : null,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            shareWithGroup
+                ? AppStrings.mapSavePlaceShared
+                : AppStrings.mapSavePlaceSaved,
+          ),
+        ),
+      );
+      await _loadNamedPlaces();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = NamedPlacesService.looksLikeMissingTable(e)
+          ? AppStrings.mapSavePlaceApply
+          : AppStrings.mapSavePlaceError;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (mounted) setState(() => _savingPlace = false);
+    }
+  }
+
   Widget _buildMapPane(BuildContext context) {
     if (!_cameraResolved || _initialCamera == null) {
       return const ColoredBox(
@@ -1371,6 +1602,21 @@ class _MapShellScreenState extends State<MapShellScreen>
                           letterSpacing: 0.5,
                         ),
                       ),
+              ),
+              const SizedBox(height: 12),
+              FloatingActionButton.small(
+                heroTag: 'map_save_place',
+                tooltip: AppStrings.mapSavePlaceTooltip,
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.deepBlue,
+                onPressed: _savingPlace ? null : _onSavePlacePressed,
+                child: _savingPlace
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add_location_alt_outlined),
               ),
               const SizedBox(height: 12),
               FloatingActionButton.small(

@@ -65,6 +65,9 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY para figuritas mujer/hombre:** columna `profiles.gender`
       (`female`|`male`). Éxito: `profiles_gender_ok = true`. Sin esto la app
       estima por el nombre.)
+   17. `supabase/migrations/20261102284000_named_places.sql`
+      (**APPLY para lugares con nombre:** tabla `named_places` + RLS.
+      Éxito: `named_places_ok = true`. Guía: `docs/PLACES_ES.md`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,
