@@ -8,8 +8,8 @@ import '../groups_service.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
-/// Lista de grupos familiares + ubicaciones debajo.
-/// Sin Scaffold propio (AppShell ya lo trae) — evita body en blanco.
+/// Lista de grupos + ubicaciones. Misma idea que el Mapa: Column/Expanded
+/// (sin Stack/Scaffold anidado → evita body altura 0).
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
@@ -29,6 +29,11 @@ class GroupsScreenState extends State<GroupsScreen>
   final Map<String, List<PlaceCategory>> _catsByGroup = {};
   final Map<String, List<NamedPlace>> _placesByGroup = {};
   final Map<String, bool> _sectionLoading = {};
+
+  /// Para FAB del AppShell.
+  bool get isLoading => _loading;
+  int get groupCount => _groups.length;
+  bool get isEmpty => !_loading && _error == null && _groups.isEmpty;
 
   @override
   bool get wantKeepAlive => true;
@@ -53,7 +58,6 @@ class GroupsScreenState extends State<GroupsScreen>
       var solo = const <NamedPlace>[];
       try {
         solo = await _places.listSoloMine();
-        debugPrint('GroupsScreen: listSoloMine → ${solo.length}');
       } catch (e) {
         debugPrint('listSoloMine: $e');
       }
@@ -66,14 +70,6 @@ class GroupsScreenState extends State<GroupsScreen>
       for (final g in groups) {
         unawaited(_loadSection(g.id));
       }
-      if (groups.isEmpty && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No se encontraron grupos familiares.'),
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
     } catch (e, st) {
       debugPrint('GroupsScreen._refresh ERROR: $e\n$st');
       if (!mounted) return;
@@ -81,12 +77,6 @@ class GroupsScreenState extends State<GroupsScreen>
         _error = e.toString();
         _loading = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al cargar Grupos: $e'),
-          duration: const Duration(seconds: 6),
-        ),
-      );
     }
   }
 
@@ -97,15 +87,13 @@ class GroupsScreenState extends State<GroupsScreen>
     var places = const <NamedPlace>[];
     try {
       places = await _places.listForGroup(groupId);
-      debugPrint('listForGroup($groupId) → ${places.length}');
-    } catch (e, st) {
-      debugPrint('listForGroup($groupId): $e\n$st');
+    } catch (e) {
+      debugPrint('listForGroup($groupId): $e');
     }
     try {
       cats = await _places.listCategories(groupId);
-      debugPrint('listCategories($groupId) → ${cats.length}');
-    } catch (e, st) {
-      debugPrint('listCategories($groupId): $e\n$st');
+    } catch (e) {
+      debugPrint('listCategories($groupId): $e');
     }
     if (!mounted) return;
     setState(() {
@@ -520,12 +508,12 @@ class GroupsScreenState extends State<GroupsScreen>
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildScrollBody() {
     if (_loading) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         children: const [
-          SizedBox(height: 120),
+          SizedBox(height: 80),
           Center(child: CircularProgressIndicator()),
           SizedBox(height: 16),
           Center(child: Text('Cargando grupos…')),
@@ -559,7 +547,7 @@ class GroupsScreenState extends State<GroupsScreen>
     if (_groups.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(28, 48, 28, 140),
+        padding: const EdgeInsets.fromLTRB(28, 32, 28, 120),
         children: [
           Icon(
             Icons.groups_outlined,
@@ -583,12 +571,6 @@ class GroupsScreenState extends State<GroupsScreen>
             onPressed: _joinWithCode,
             icon: const Icon(Icons.vpn_key_outlined),
             label: const Text(AppStrings.groupsJoinAction),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: _refresh,
-            icon: const Icon(Icons.refresh),
-            label: const Text(AppStrings.retry),
           ),
         ],
       );
@@ -618,79 +600,34 @@ class GroupsScreenState extends State<GroupsScreen>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final empty = !_loading && _error == null && _groups.isEmpty;
-
-    // SIN Scaffold anidado: el body del AppShell da el tamaño.
-    return Material(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          RefreshIndicator(
-            onRefresh: _refresh,
-            child: _buildBody(),
-          ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: empty
-                ? Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      FloatingActionButton.extended(
-                        heroTag: 'join_invite',
-                        onPressed: _joinWithCode,
-                        icon: const Icon(Icons.vpn_key_outlined),
-                        label: const Text(AppStrings.groupsJoinAction),
-                      ),
-                      const SizedBox(height: 12),
-                      FloatingActionButton.extended(
-                        heroTag: 'create_group',
-                        onPressed: _createGroup,
-                        icon: const Icon(Icons.add),
-                        label: const Text(AppStrings.groupsCreateAction),
-                      ),
-                    ],
-                  )
-                : FloatingActionButton(
-                    heroTag: 'groups_refresh',
-                    tooltip: AppStrings.retry,
-                    onPressed: _loading
-                        ? null
-                        : () async {
-                            try {
-                              await _refresh();
-                              if (!mounted) return;
-                              final n = _groups.length;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    n == 0
-                                        ? 'Sin grupos (0). Desliza o reintenta.'
-                                        : 'Grupos cargados: $n',
-                                  ),
-                                  duration: const Duration(seconds: 2),
-                                ),
-                              );
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('$e')),
-                              );
-                            }
-                          },
-                    child: _loading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.refresh),
+    // Igual que MapShellScreen: Column llena el body del AppShell.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Franja siempre visible → confirma que el body tiene altura.
+        Material(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(
+              _loading
+                  ? 'Cargando grupos…'
+                  : _error != null
+                      ? 'Error al cargar grupos'
+                      : 'Mis grupos (${_groups.length})',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
+            ),
           ),
-        ],
-      ),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _refresh,
+            child: _buildScrollBody(),
+          ),
+        ),
+      ],
     );
   }
 }

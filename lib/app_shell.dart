@@ -46,13 +46,44 @@ class _AppShellState extends State<AppShell> {
 
   void _onTabSelected(int i) {
     setState(() => _index = i);
-    // Al volver al Mapa, asegurar listener de alertas de chat.
     if (i == 0) {
       unawaited(ChatAlertService.instance.ensureRunning());
     }
-    // Grupos: forzar recarga al entrar (evita lista vacía por carga temprana).
     if (i == 1) {
       unawaited(_groupsKey.currentState?.reload() ?? Future<void>.value());
+    }
+  }
+
+  Future<void> _onGroupsRefreshFab() async {
+    final state = _groupsKey.currentState;
+    if (state == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Grupos: pantalla no lista. Reabre la pestaña.')),
+      );
+      return;
+    }
+    try {
+      await state.reload();
+      if (!mounted) return;
+      final n = state.groupCount;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            n == 0
+                ? 'Grupos cargados: 0 (si el Mapa sí ve familia, reporta).'
+                : 'Grupos cargados: $n',
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      // Fuerza rebuild del shell (FAB / body).
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error Grupos: $e')),
+      );
     }
   }
 
@@ -85,6 +116,42 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Widget? _groupsFab() {
+    if (_index != 1) return null;
+    final gs = _groupsKey.currentState;
+    final empty = gs?.isEmpty ?? false;
+    final loading = gs?.isLoading ?? false;
+    if (empty) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'join_invite',
+            onPressed: () {
+              // Trigger via navigating - GroupsScreen handles join when empty UI shown
+              unawaited(_onGroupsRefreshFab());
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text(AppStrings.retry),
+          ),
+        ],
+      );
+    }
+    return FloatingActionButton(
+      heroTag: 'groups_refresh',
+      tooltip: AppStrings.retry,
+      onPressed: loading ? null : _onGroupsRefreshFab,
+      child: loading
+          ? const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.refresh),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -94,23 +161,20 @@ class _AppShellState extends State<AppShell> {
         _onRootBack();
       },
       child: Scaffold(
-        // Mapa a pantalla completa (sin AppBar); Grupos/Ajustes conservan título.
         appBar: _index == 0
             ? null
             : AppBar(title: Text(_titles[_index])),
+        // Un solo Scaffold: body = IndexedStack (como el Mapa).
         body: IndexedStack(
           index: _index,
           sizing: StackFit.expand,
           children: [
             const MapShellScreen(),
-            // Material+expand: evita body en blanco (antes Scaffold anidado).
-            ColoredBox(
-              color: Theme.of(context).scaffoldBackgroundColor,
-              child: GroupsScreen(key: _groupsKey),
-            ),
+            GroupsScreen(key: _groupsKey),
             const SettingsScreen(),
           ],
         ),
+        floatingActionButton: _groupsFab(),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: _onTabSelected,
