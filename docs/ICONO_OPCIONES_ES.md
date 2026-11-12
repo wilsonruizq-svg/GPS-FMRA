@@ -1,42 +1,31 @@
-# Icono launcher — opciones (pendiente de confirmación)
+# Icono launcher — GPS-FMRA
 
-**No finalizar** el icono hasta que Wilson confirme (**E / F / G**
-recomendados, o A–D / tweak). El APK actual usa un icono **provisional**
-(`logo-gps-fmra-v2.jpg`) — Wilson nota que se ve “tipo foundation”; las
-nuevas **E/F/G** son **cuadrado con esquinas redondeadas (squircle)**.
+## Icono elegido (Wilson)
 
-## Nuevas (elegir una)
+Fuente confirmada:
 
-| Opción | Archivo (repo) | Store |
-|--------|----------------|-------|
-| **E** pin | `assets/branding/icon-opciones/icon-e-pin.jpg` | `media/icon-opciones/icon-e-pin.jpg` |
-| **F** radar | `assets/branding/icon-opciones/icon-f-radar.jpg` | `media/icon-opciones/icon-f-radar.jpg` |
-| **G** monogram | `assets/branding/icon-opciones/icon-g-monogram.jpg` | `media/icon-opciones/icon-g-monogram.jpg` |
+`assets/branding/gps-fmra-launcher-icon.png`
 
-### Resumen visual
-
-- **E — Pin:** Squircle azul oscuro, pin cian con borde blanco + texto **GPS**.
-- **F — Radar:** Squircle azul con retícula/radar, pin rojo al centro + **FMRA**.
-- **G — Monograma:** Squircle oscuro, letra **G** formando pin (punta roja) + **GPS-FMRA**.
-
-## Anteriores (A–D)
-
-| Opción | Archivo |
-|--------|---------|
-| **A** | `icon-opcion-a.jpg` — escudo + familia + pin (círculo) |
-| **B** | `icon-opcion-b.jpg` — pin grande + grupo (círculo) |
-| **B-rounded** | `icon-opcion-b-rounded.jpg` — B en squircle |
-| **C** | `icon-opcion-c.jpg` — escudo + badge SOS |
-| **D** | `icon-opcion-d.jpg` — escudo tipográfico |
-
-## Cómo aplicar **cuando Wilson confirme** (aún no)
+Mipmaps Android generados con:
 
 ```bash
 cd "D:\APPS PROYECTOS\GPS-FMRA"
-dart run tool/generate_launcher_icons.dart --option e   # o f / g
-flutter build apk --debug
-# copiar a APK\gps-fmra-debug-01.apk y 02
+dart run tool/generate_launcher_icons.dart --source assets/branding/gps-fmra-launcher-icon.png
 ```
 
-Respuesta esperada: **E**, **F**, **G**, o “refinar …”.  
-Hasta entonces el launcher **no se bloquea** con ninguna opción.
+Se aplicará en la **próxima** compilación / APK (`flutter build` / `flutter run`).
+No hace falta regenerar a mano salvo que cambie la PNG fuente.
+
+## Opciones históricas (archivo)
+
+| Opción | Archivo |
+|--------|---------|
+| **E** pin | `assets/branding/icon-opciones/icon-e-pin.jpg` |
+| **F** radar | `assets/branding/icon-opciones/icon-f-radar.jpg` |
+| **G** monogram | `assets/branding/icon-opciones/icon-g-monogram.jpg` |
+| A–D | `icon-opcion-a.jpg` … `d.jpg` / `b-rounded` |
+| Provisional viejo | `assets/branding/logo-gps-fmra-v2.jpg` |
+
+```bash
+dart run tool/generate_launcher_icons.dart --option e   # solo si se vuelve a una opción
+```

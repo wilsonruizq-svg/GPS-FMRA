@@ -5,7 +5,7 @@
 //   dart run tool/generate_launcher_icons.dart --option a|b|c|d|b-rounded|e|f|g
 //   dart run tool/generate_launcher_icons.dart --source path/to/logo.jpg
 //
-// NO finalizar launcher hasta confirmación de Wilson (ver docs/ICONO_OPCIONES_ES.md).
+// Fuente por defecto: icono confirmado por Wilson (docs/ICONO_OPCIONES_ES.md).
 import 'dart:io';
 
 import 'package:image/image.dart' as img;
@@ -16,7 +16,7 @@ void main(List<String> args) {
     stderr.writeln('Falta ${logoPath.path}');
     stderr.writeln(
       'Opciones: --option a|b|b-rounded|c|d|e|f|g  o  --source <archivo>  '
-      '(default: assets/branding/logo-gps-fmra-v2.jpg — provisional)',
+      '(default: assets/branding/gps-fmra-launcher-icon.png)',
     );
     exit(1);
   }
@@ -156,8 +156,8 @@ String _resolveSource(List<String> args) {
       return _optionPath(a.substring('--option='.length));
     }
   }
-  // Provisional hasta que Wilson elija (E/F/G preferidos: squircle).
-  return 'assets/branding/logo-gps-fmra-v2.jpg';
+  // Icono confirmado por Wilson (próximo APK).
+  return 'assets/branding/gps-fmra-launcher-icon.png';
 }
 
 String _optionPath(String raw) {
