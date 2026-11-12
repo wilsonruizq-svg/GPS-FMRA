@@ -1,15 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../places/named_places_service.dart';
 import '../groups_service.dart';
+import '../widgets/member_card.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
-/// Lista de grupos + ubicaciones.
+/// Lista de grupos: tap → expandir miembros + ubicaciones debajo.
 ///
 /// AppShell monta solo esta pestaña (sin IndexedStack+MapLibre encima).
 class GroupsScreen extends StatefulWidget {
@@ -29,7 +31,9 @@ class GroupsScreenState extends State<GroupsScreen> {
   List<NamedPlace> _soloPlaces = const [];
   final Map<String, List<PlaceCategory>> _catsByGroup = {};
   final Map<String, List<NamedPlace>> _placesByGroup = {};
+  final Map<String, List<GroupMember>> _membersByGroup = {};
   final Map<String, bool> _sectionLoading = {};
+  final Set<String> _expandedIds = {};
 
   /// Para FAB del AppShell.
   bool get isLoading => _loading;
@@ -37,6 +41,8 @@ class GroupsScreenState extends State<GroupsScreen> {
   bool get isEmpty => !_loading && _error == null && _groups.isEmpty;
   String? get firstGroupName =>
       _groups.isEmpty ? null : _groups.first.name;
+
+  String? get _uid => Supabase.instance.client.auth.currentUser?.id;
 
   @override
   void initState() {
@@ -62,9 +68,17 @@ class GroupsScreenState extends State<GroupsScreen> {
         debugPrint('listSoloMine: $e');
       }
       if (!mounted) return;
+      // Primer grupo expandido por defecto para que se vean miembros/lugares.
+      final expanded = Set<String>.from(_expandedIds);
+      if (groups.isNotEmpty && expanded.isEmpty) {
+        expanded.add(groups.first.id);
+      }
       setState(() {
         _groups = groups;
         _soloPlaces = solo;
+        _expandedIds
+          ..clear()
+          ..addAll(expanded.where((id) => groups.any((g) => g.id == id)));
         _loading = false;
       });
       for (final g in groups) {
@@ -85,6 +99,12 @@ class GroupsScreenState extends State<GroupsScreen> {
     setState(() => _sectionLoading[groupId] = true);
     var cats = const <PlaceCategory>[];
     var places = const <NamedPlace>[];
+    var members = const <GroupMember>[];
+    try {
+      members = await _service.listMembers(groupId);
+    } catch (e) {
+      debugPrint('listMembers($groupId): $e');
+    }
     try {
       places = await _places.listForGroup(groupId);
     } catch (e) {
@@ -97,10 +117,20 @@ class GroupsScreenState extends State<GroupsScreen> {
     }
     if (!mounted) return;
     setState(() {
+      _membersByGroup[groupId] = members;
       _placesByGroup[groupId] = places;
       _catsByGroup[groupId] = cats;
       _sectionLoading[groupId] = false;
     });
+  }
+
+  Future<void> _openGroupDetail(FamilyGroup group) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GroupDetailScreen(group: group),
+      ),
+    );
+    await _refresh();
   }
 
   Future<void> _createCategory(FamilyGroup group) async {
@@ -468,53 +498,158 @@ class GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
+  Widget _membersSection(FamilyGroup group) {
+    final loading = _sectionLoading[group.id] == true;
+    final members = _membersByGroup[group.id];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  AppStrings.groupsMembersSection,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.deepBlue,
+                      ),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => unawaited(_openGroupDetail(group)),
+                icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+                label: const Text(AppStrings.groupsOpenDetail),
+              ),
+            ],
+          ),
+          if (loading && (members == null || members.isEmpty))
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: 12),
+                  Text(AppStrings.groupsMembersLoading),
+                ],
+              ),
+            )
+          else if (members == null || members.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                AppStrings.groupsMembersEmpty,
+                style: TextStyle(color: AppColors.midBlue),
+              ),
+            )
+          else
+            for (final m in members)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: MemberCard(
+                  name: m.label,
+                  photoUrl: m.photoUrl,
+                  isSelf: m.userId == _uid,
+                  shareStatusLabel: m.isAdmin
+                      ? AppStrings.groupsYouAreAdmin
+                      : AppStrings.groupsYouAreMember,
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleGroup(FamilyGroup group) {
+    final open = !_expandedIds.contains(group.id);
+    setState(() {
+      if (open) {
+        _expandedIds.add(group.id);
+      } else {
+        _expandedIds.remove(group.id);
+      }
+    });
+    if (open) {
+      unawaited(_loadSection(group.id));
+    }
+  }
+
   Widget _buildGroupBlock(FamilyGroup group, {required bool showSolo}) {
+    final expanded = _expandedIds.contains(group.id);
     return Material(
       color: Colors.white,
       elevation: 1,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 10,
-            ),
-            leading: CircleAvatar(
-              backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
-              child: const Icon(
-                Icons.family_restroom,
-                color: AppColors.deepBlue,
+          // Nombre siempre visible; tap → muestra/oculta MIEMBROS.
+          InkWell(
+            onTap: () => _toggleGroup(group),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+                    child: const Icon(
+                      Icons.family_restroom,
+                      color: AppColors.deepBlue,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          group.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                            color: AppColors.deepBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          expanded
+                              ? 'Ocultar integrantes'
+                              : AppStrings.groupsTapMembers,
+                          style: const TextStyle(
+                            color: AppColors.midBlue,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    expanded ? Icons.expand_less : Icons.expand_more,
+                    color: AppColors.deepBlue,
+                    size: 28,
+                  ),
+                ],
               ),
             ),
-            title: Text(
-              group.name,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-                color: AppColors.deepBlue,
-              ),
-            ),
-            subtitle: const Text(
-              AppStrings.groupsTapMembers,
-              style: TextStyle(color: AppColors.midBlue),
-            ),
-            trailing: const Icon(
-              Icons.chevron_right,
-              color: AppColors.deepBlue,
-            ),
-            onTap: () async {
-              await Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => GroupDetailScreen(group: group),
-                ),
-              );
-              await _refresh();
-            },
           ),
+          // UBICACIONES siempre debajo del nombre (no solo al expandir).
           ColoredBox(
             color: AppColors.surface,
-            child: _locationsBelowGroup(group, showSolo: showSolo),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (expanded) ...[
+                  const Divider(height: 1),
+                  _membersSection(group),
+                ],
+                const Divider(height: 1),
+                _locationsBelowGroup(group, showSolo: showSolo),
+              ],
+            ),
           ),
         ],
       ),

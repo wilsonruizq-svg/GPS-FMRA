@@ -152,7 +152,11 @@ abstract final class AppStrings {
   static const groupsNameLabel = 'Nombre del grupo';
   static const groupsNameHint = 'Ej. Familia Ruiz';
   static const groupsCreatedPrefix = 'Grupo creado:';
-  static const groupsTapMembers = 'Ver integrantes e invitar';
+  static const groupsTapMembers = 'Toca para ver integrantes';
+  static const groupsMembersSection = 'Integrantes';
+  static const groupsMembersEmpty = 'Sin integrantes visibles.';
+  static const groupsMembersLoading = 'Cargando integrantes…';
+  static const groupsOpenDetail = 'Invitar / administrar';
   static const groupsYouAreAdmin = 'Eres admin de este grupo';
   static const groupsYouAreMember = 'Eres integrante';
   static const groupsInviteHowTo =
