@@ -88,11 +88,12 @@ class ChatAlertService {
 
     _subscribeRealtime();
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 6), (_) {
+    // Fallback corto: Realtime es lo principal; poll ~2s si Realtime falla.
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       unawaited(_pollRecent());
     });
     unawaited(_pollRecent());
-    debugPrint('ChatAlertService: started (group+dm)');
+    debugPrint('ChatAlertService: started (group+dm, poll=2s)');
   }
 
   Future<void> stop() async {
@@ -142,7 +143,13 @@ class ChatAlertService {
           schema: 'public',
           table: 'group_messages',
           callback: (payload) {
-            unawaited(_handleGroupRaw(payload.newRecord, source: 'rt-group'));
+            unawaited(
+              _handleGroupRaw(
+                payload.newRecord,
+                source: 'rt-group',
+                enrichNames: false,
+              ),
+            );
           },
         )
         .subscribe((status, err) {
@@ -151,7 +158,8 @@ class ChatAlertService {
 
     _dmChannel = _dm.subscribeMine(
       onInsert: (msg) {
-        unawaited(_maybeAlertDm(msg, source: 'rt-dm'));
+        // Sin enrich en Realtime: alerta inmediata.
+        unawaited(_maybeAlertDm(msg, source: 'rt-dm', enrichNames: false));
       },
     );
   }
@@ -202,10 +210,15 @@ class ChatAlertService {
   Future<void> _handleGroupRaw(
     Map<String, dynamic> raw, {
     required String source,
+    bool enrichNames = true,
   }) async {
     try {
       final msg = GroupMessage.fromMap(Map<String, dynamic>.from(raw));
-      await _maybeAlertGroup(msg, source: source);
+      await _maybeAlertGroup(
+        msg,
+        source: source,
+        enrichNames: enrichNames,
+      );
     } catch (e) {
       debugPrint('ChatAlertService parse group ($source): $e');
     }
@@ -229,6 +242,7 @@ class ChatAlertService {
   Future<void> _maybeAlertGroup(
     GroupMessage msg, {
     required String source,
+    bool enrichNames = true,
   }) async {
     final id = msg.id.trim();
     if (!_markSeen(id)) return;
@@ -246,9 +260,11 @@ class ChatAlertService {
     }
 
     var enriched = msg;
-    try {
-      enriched = await _chat.enrich(msg);
-    } catch (_) {}
+    if (enrichNames) {
+      try {
+        enriched = await _chat.enrich(msg).timeout(const Duration(milliseconds: 400));
+      } catch (_) {}
+    }
 
     await _showAlert(
       title: AppStrings.chatPushTitle,
@@ -262,6 +278,7 @@ class ChatAlertService {
   Future<void> _maybeAlertDm(
     DirectMessage msg, {
     required String source,
+    bool enrichNames = true,
   }) async {
     final id = msg.id.trim();
     if (!_markSeen(id)) return;
@@ -282,9 +299,11 @@ class ChatAlertService {
     }
 
     var enriched = msg;
-    try {
-      enriched = await _dm.enrich(msg);
-    } catch (_) {}
+    if (enrichNames) {
+      try {
+        enriched = await _dm.enrich(msg).timeout(const Duration(milliseconds: 400));
+      } catch (_) {}
+    }
 
     await _showAlert(
       title: AppStrings.dmPushTitle,

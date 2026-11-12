@@ -1392,26 +1392,6 @@ class _MapShellScreenState extends State<MapShellScreen>
             ],
           ),
         ),
-        Positioned(
-          left: 12,
-          bottom: 12,
-          child: Material(
-            color: Colors.white.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(8),
-            elevation: 1,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Text(
-                Env.hasMapTilerKey
-                    ? AppStrings.mapEngineMapTiler
-                    : AppStrings.mapEngineLibre,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.deepBlue,
-                    ),
-              ),
-            ),
-          ),
-        ),
       ],
     );
   }

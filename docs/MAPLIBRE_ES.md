@@ -10,12 +10,11 @@ Google Maps queda **pausado** (billing Cloud). Guía antigua: [`GOOGLE_MAPS_ES.m
 2. `flutter pub get` → `flutter run` (o instala el APK debug desde `APK\gps-fmra-debug.apk`).
 3. Tras login, la pestaña **Mapa** pide permiso de ubicación al abrir y arranca centrada en tu GPS (`initialCameraPosition`). Solo usa Bogotá si no hay GPS/permiso.
 4. FAB **Mi ubicación**: vuelve a centrar (pide permiso OS si hace falta) y anima la cámara.
-5. Etiqueta inferior: «MapLibre · estilo libre (sin clave)».
-6. Pines de familiares: círculos MapLibre + etiqueta con nombre para
-   integrantes con consentimiento activo y fila en `location_updates`
-   (publicación ~20 s; Realtime + poll ~25 s). Cian = tú, rojo = otro.
-   Con 2+ fixes el mapa encuadra a todos. Si solo ves 1 pin con 2
-   miembros: APPLY `20261102240000_fix_peer_location_visibility.sql`
+5. Pines de familiares: figuritas (mujer/hombre) + etiqueta con nombre
+   (sin banner «MapLibre · estilo libre»). Consentimiento activo +
+   `location_updates` (Realtime + poll). Colores por integrante; spiderfy
+   si se solapan. Si solo ves 1 pin con 2 miembros: APPLY
+   `20261102240000_fix_peer_location_visibility.sql`
    (ver `supabase/APPLY_ES.md`) y vuelve a abrir Mapa en ambos teléfonos.
    Sin consentimiento, RLS oculta la ubicación.
 
