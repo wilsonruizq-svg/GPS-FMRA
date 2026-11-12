@@ -89,9 +89,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return AppStrings.memberShareUnknown;
   }
 
-  String _roleLabel(GroupMember m) =>
-      m.isAdmin ? AppStrings.memberRoleAdmin : AppStrings.memberRoleMember;
-
   Future<void> _copyInvite(InviteStub invite, {required bool asLink}) async {
     await Clipboard.setData(
       ClipboardData(text: asLink ? invite.linkStub : invite.plainToken),
@@ -497,11 +494,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           children: [
                             MemberCard(
                               name: m.label,
+                              photoUrl: m.photoUrl,
                               isSelf: m.userId == uid,
-                              shareStatusLabel:
-                                  '${_roleLabel(m)} · ${_shareLabelFor(m)}',
-                              lastUpdateLabel:
-                                  AppStrings.memberLastUpdateUnknown,
+                              shareStatusLabel: _shareLabelFor(m),
                             ),
                             const Divider(height: 1),
                           ],

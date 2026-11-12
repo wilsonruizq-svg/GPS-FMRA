@@ -3,47 +3,56 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Tarjeta mínima de integrante: nombre, estado de compartir, última actualización.
+/// Fila compacta de integrante: foto (o inicial), nombre y un solo estado corto.
 class MemberCard extends StatelessWidget {
   const MemberCard({
     super.key,
     required this.name,
     required this.shareStatusLabel,
-    this.lastUpdateLabel,
+    this.photoUrl,
     this.isSelf = false,
     this.onTap,
   });
 
   final String name;
   final String shareStatusLabel;
-  final String? lastUpdateLabel;
+  final String? photoUrl;
   final bool isSelf;
   final VoidCallback? onTap;
+
+  bool get _hasPhoto => photoUrl != null && photoUrl!.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final initial =
+        name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
     return Material(
       color: Colors.white,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 26,
+                radius: 22,
                 backgroundColor: AppColors.midBlue.withValues(alpha: 0.15),
+                foregroundImage:
+                    _hasPhoto ? NetworkImage(photoUrl!.trim()) : null,
+                onForegroundImageError: _hasPhoto
+                    ? (Object error, StackTrace? stackTrace) {}
+                    : null,
                 child: Text(
-                  name.isNotEmpty ? name.characters.first.toUpperCase() : '?',
-                  style: TextStyle(
+                  initial,
+                  style: const TextStyle(
                     color: AppColors.deepBlue,
                     fontWeight: FontWeight.w700,
-                    fontSize: 20,
+                    fontSize: 18,
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -68,19 +77,16 @@ class MemberCard extends StatelessWidget {
                             ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      shareStatusLabel,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.midBlue,
-                          ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      lastUpdateLabel ?? AppStrings.memberLastUpdateUnknown,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
+                      shareStatusLabel,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.midBlue,
                           ),
                     ),
                   ],

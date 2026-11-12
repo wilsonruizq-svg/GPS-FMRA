@@ -43,6 +43,7 @@ class GroupMember {
     required this.role,
     required this.status,
     this.displayName,
+    this.photoUrl,
   });
 
   final String membershipId;
@@ -51,6 +52,7 @@ class GroupMember {
   final String role;
   final String status;
   final String? displayName;
+  final String? photoUrl;
 
   String get label =>
       (displayName != null && displayName!.trim().isNotEmpty)
@@ -162,7 +164,8 @@ class GroupsService {
     final rows = await _sb
         .from('group_memberships')
         .select(
-          'id, group_id, user_id, role, status, profiles(display_name)',
+          'id, group_id, user_id, role, status, '
+          'profiles(display_name, photo_url)',
         )
         .eq('group_id', groupId)
         .eq('status', 'active')
@@ -172,8 +175,13 @@ class GroupsService {
       final e = Map<String, dynamic>.from(raw as Map);
       final profile = e['profiles'];
       String? displayName;
+      String? photoUrl;
       if (profile is Map) {
         displayName = profile['display_name'] as String?;
+        final rawUrl = profile['photo_url'] as String?;
+        if (rawUrl != null && rawUrl.trim().isNotEmpty) {
+          photoUrl = rawUrl.trim();
+        }
       }
       return GroupMember(
         membershipId: e['id'] as String,
@@ -182,6 +190,7 @@ class GroupsService {
         role: (e['role'] as String?) ?? 'member',
         status: (e['status'] as String?) ?? 'active',
         displayName: displayName,
+        photoUrl: photoUrl,
       );
     }).toList();
   }

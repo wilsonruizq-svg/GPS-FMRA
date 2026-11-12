@@ -306,7 +306,9 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   String _shareFor(GroupMember m) {
     final c = _consentsBySharer[m.userId];
-    if (m.userId == _myUid) {
+    final isSelf =
+        m.userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+    if (isSelf) {
       if (_myConsent?.isActive == true) return AppStrings.memberShareActive;
       if (_myConsent?.isPaused == true) return AppStrings.memberSharePaused;
       if (_myConsent?.status == 'revoked') return AppStrings.memberShareRevoked;
@@ -321,18 +323,6 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (c.isPaused) return AppStrings.memberSharePaused;
     if (c.status == 'revoked') return AppStrings.memberShareRevoked;
     return AppStrings.memberShareUnknown;
-  }
-
-  String _lastUpdateFor(GroupMember m) {
-    final loc = _locationsByUser[m.userId];
-    if (loc == null) return AppStrings.memberLastUpdateUnknown;
-    return AppStrings.memberLastUpdateAt(_formatClock(loc.recordedAt.toLocal()));
-  }
-
-  String _formatClock(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final min = dt.minute.toString().padLeft(2, '0');
-    return '$h:$min';
   }
 
   void _onMapCreated(MapLibreMapController controller) {
@@ -1537,9 +1527,11 @@ class _MapShellScreenState extends State<MapShellScreen>
                               final m = _members[i];
                               return MemberCard(
                                 name: m.label,
-                                isSelf: m.userId == _myUid,
+                                photoUrl: m.photoUrl,
+                                isSelf: m.userId.trim().toLowerCase() ==
+                                        _myUid &&
+                                    _myUid.isNotEmpty,
                                 shareStatusLabel: _shareFor(m),
-                                lastUpdateLabel: _lastUpdateFor(m),
                                 onTap: () {
                                   final loc = _locationsByUser[m.userId];
                                   final c = _mapController;

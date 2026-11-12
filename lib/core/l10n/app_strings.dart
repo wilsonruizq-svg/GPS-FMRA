@@ -70,8 +70,7 @@ abstract final class AppStrings {
   static const mapOpenSettings = 'Abrir ajustes';
   static const mapMarkerYou = 'Tú';
   static const mapMarkerMember = 'Integrante';
-  static const memberShareActiveNoFix =
-      'Compartiendo (sin señal reciente)';
+  static const memberShareActiveNoFix = 'Estado: Sin señal';
   static String memberLastUpdateAt(String time) =>
       'Última actualización: $time';
 
@@ -103,11 +102,11 @@ abstract final class AppStrings {
   static const memberYouSuffix = '(tú)';
   static const memberRoleAdmin = 'Admin del grupo';
   static const memberRoleMember = 'Integrante';
-  static const memberShareActive = 'Compartiendo ubicación';
-  static const memberSharePaused = 'Ubicación en pausa';
-  static const memberShareRevoked = 'Compartir revocado';
-  static const memberShareNone = 'Aún no compartes con este grupo';
-  static const memberShareUnknown = 'Estado de compartir: pendiente';
+  static const memberShareActive = 'Estado: Compartiendo';
+  static const memberSharePaused = 'Estado: En pausa';
+  static const memberShareRevoked = 'Estado: Revocado';
+  static const memberShareNone = 'Estado: Pendiente';
+  static const memberShareUnknown = 'Estado: Pendiente';
   static const memberLastUpdateUnknown = 'Última actualización: —';
 
   static const inviteAction = 'Invitar';
@@ -301,19 +300,30 @@ abstract final class AppStrings {
   static String sosBannerPeer(String name) => 'SOS de $name';
   static String sosBannerSelfNamed(String name) => 'SOS de $name';
   static const sosBannerSelf = 'Tu alerta SOS está activa.';
-  static const sosBannerDismissOwn = 'Cancelar alerta';
+  /// Solo emisor: anula el SOS en el servidor (no es el Aceptar del compañero).
+  static const sosBannerDismissOwn = 'Anular mi SOS';
+  static const sosAbortConfirmTitle = '¿Anular tu SOS?';
+  static const sosAbortConfirmBody =
+      'Se cancelará la alerta para todo el grupo. '
+      'Esto no es “Aceptar”: los compañeros usan Aceptar en su teléfono.';
+  static const sosAbortConfirmYes = 'Sí, anular';
   static const sosBannerAck = 'Aceptar';
   static const sosBannerAckHint =
       'Confirma que viste el SOS. El emisor espera a todo el grupo.';
-  static const sosAcknowledged = 'Alerta aceptada. El emisor verá tu confirmación.';
+  static const sosAcknowledged =
+      'Aceptado. Tu banner se ocultó; el emisor verá tu confirmación.';
   static const sosAcknowledgedAllDone =
-      'Alerta aceptada. Todos confirmaron: SOS cerrado.';
+      'Aceptado. Todos confirmaron: SOS cerrado.';
   static const sosAckError =
-      'No se pudo registrar Aceptar. Revisa la conexión o aplica '
-      '20261102273000_sos_acks.sql.';
+      'No se pudo guardar Aceptar en el servidor. '
+      'El banner se ocultó en este teléfono. '
+      'Confirma que aplicaste 20261102273000_sos_acks.sql.';
+  static const sosAckLoading = 'Cargando confirmaciones del grupo…';
   static const sosAckNoPeers =
       'No hay otros integrantes en el grupo para confirmar.';
   static const sosAckWaitingResolve = 'Todos aceptaron. Cerrando alerta…';
+  static const sosAckWaitingPeers =
+      'Esperando a que todos los compañeros pulsen Aceptar…';
   static String sosAckPendingList(
     int acked,
     int expected,
@@ -325,7 +335,7 @@ abstract final class AppStrings {
         : '';
     return 'Confirmaciones $acked/$expected. Pendiente: $names$more';
   }
-  static const sosCancelled = 'Alerta SOS cancelada.';
+  static const sosCancelled = 'SOS anulado.';
   static const sosSending = 'Enviando alerta…';
   static const sosPushTitle = 'SOS — GPS-FMRA';
   static const sosPushBodyFallback = 'Un integrante del grupo necesita ayuda.';
