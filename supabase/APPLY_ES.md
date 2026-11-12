@@ -54,6 +54,9 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
    13. `supabase/migrations/20261102280000_group_messages.sql`
       (**APPLY para chat del grupo:** tabla `group_messages` + RLS +
       Realtime. Éxito: `group_messages_ok = true`. Guía: `docs/CHAT_ES.md`.)
+   14. `supabase/migrations/20261102281000_group_messages_realtime.sql`
+      (**APPLY si chat OK pero sin alertas:** asegura publication Realtime.
+      Éxito: `group_messages_realtime_ok = true`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,

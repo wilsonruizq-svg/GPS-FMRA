@@ -40,12 +40,21 @@ class GroupMessage {
         photo = rawPhoto.trim();
       }
     }
+    final createdRaw = map['created_at'];
+    DateTime createdAt;
+    if (createdRaw is String && createdRaw.isNotEmpty) {
+      createdAt = DateTime.parse(createdRaw).toUtc();
+    } else if (createdRaw is DateTime) {
+      createdAt = createdRaw.toUtc();
+    } else {
+      createdAt = DateTime.now().toUtc();
+    }
     return GroupMessage(
-      id: '${map['id']}'.trim(),
-      groupId: '${map['group_id']}'.trim(),
-      senderId: '${map['sender_id']}'.trim(),
+      id: '${map['id'] ?? ''}'.trim(),
+      groupId: '${map['group_id'] ?? ''}'.trim(),
+      senderId: '${map['sender_id'] ?? ''}'.trim(),
       body: (map['body'] as String? ?? '').trim(),
-      createdAt: DateTime.parse(map['created_at'] as String).toUtc(),
+      createdAt: createdAt,
       senderName: name,
       senderPhotoUrl: photo,
     );

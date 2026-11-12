@@ -49,6 +49,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   void dispose() {
+    // Limpia mute (refcount) para que el Mapa vuelva a alertar.
     ChatAlertService.instance.muteGroup(null);
     unawaited(_chat.unsubscribe(_channel));
     _controller.dispose();

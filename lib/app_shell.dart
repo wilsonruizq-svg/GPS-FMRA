@@ -43,6 +43,14 @@ class _AppShellState extends State<AppShell> {
     super.dispose();
   }
 
+  void _onTabSelected(int i) {
+    setState(() => _index = i);
+    // Al volver al Mapa, asegurar listener de alertas de chat.
+    if (i == 0) {
+      unawaited(ChatAlertService.instance.ensureRunning());
+    }
+  }
+
   Future<void> _onRootBack() async {
     if (_exitGateBusy) return;
     _exitGateBusy = true;
@@ -92,7 +100,7 @@ class _AppShellState extends State<AppShell> {
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
+          onDestinationSelected: _onTabSelected,
           height: 72,
           destinations: const [
             NavigationDestination(

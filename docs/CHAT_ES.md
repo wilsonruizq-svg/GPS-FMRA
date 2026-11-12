@@ -30,8 +30,13 @@ Sin este SQL, abrir chat o enviar falla (tabla/API no visible).
 
 ## Alertas al llegar un mensaje
 
-**Con la app abierta (primer plano):** Realtime muestra notificación local
-Android + snackbar, aunque no estés en la pantalla de chat.
+**Con la app abierta (primer plano):** notificación local Android + snackbar
+aunque estés en **Mapa** (no hace falta abrir el chat). Usa Realtime y un
+**polling de respaldo** cada ~6 s.
+
+Si el chat envía OK pero **no hay alerta**, aplica también:
+`supabase/migrations/20261102281000_group_messages_realtime.sql`
+→ debe verse `group_messages_realtime_ok = true` (tabla en `supabase_realtime`).
 
 **App en segundo plano / cerrada:** requiere FCM (mismo secret que SOS):
 
