@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'core/l10n/app_strings.dart';
+import 'core/theme/app_theme.dart';
 import 'modules/chat/chat_alert_service.dart';
 import 'modules/groups/exit_pin_service.dart';
 import 'modules/groups/screens/groups_screen.dart';
@@ -12,7 +13,10 @@ import 'modules/map/screens/map_shell_screen.dart';
 import 'modules/settings/screens/settings_screen.dart';
 
 /// Navegación principal post-login: mapa, grupos, ajustes.
-/// El botón Atrás del sistema en la raíz pide el PIN de salida si aplica.
+///
+/// **No IndexedStack con MapLibre:** el platform view del mapa tapa el body
+/// de otras pestañas (header Flutter sí se ve; ListView queda en blanco).
+/// Solo montamos la pestaña activa.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -50,7 +54,10 @@ class _AppShellState extends State<AppShell> {
       unawaited(ChatAlertService.instance.ensureRunning());
     }
     if (i == 1) {
-      unawaited(_groupsKey.currentState?.reload() ?? Future<void>.value());
+      // Tras el frame: el State de Grupos ya está montado.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_groupsKey.currentState?.reload() ?? Future<void>.value());
+      });
     }
   }
 
@@ -59,7 +66,9 @@ class _AppShellState extends State<AppShell> {
     if (state == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Grupos: pantalla no lista. Reabre la pestaña.')),
+        const SnackBar(
+          content: Text('Grupos: pantalla no lista. Reabre la pestaña.'),
+        ),
       );
       return;
     }
@@ -67,17 +76,19 @@ class _AppShellState extends State<AppShell> {
       await state.reload();
       if (!mounted) return;
       final n = state.groupCount;
+      final name = state.firstGroupName;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             n == 0
                 ? 'Grupos cargados: 0 (si el Mapa sí ve familia, reporta).'
-                : 'Grupos cargados: $n',
+                : (name == null
+                    ? 'Grupos cargados: $n'
+                    : 'Grupos cargados: $n — $name'),
           ),
           duration: const Duration(seconds: 3),
         ),
       );
-      // Fuerza rebuild del shell (FAB / body).
       setState(() {});
     } catch (e) {
       if (!mounted) return;
@@ -119,37 +130,36 @@ class _AppShellState extends State<AppShell> {
   Widget? _groupsFab() {
     if (_index != 1) return null;
     final gs = _groupsKey.currentState;
-    final empty = gs?.isEmpty ?? false;
     final loading = gs?.isLoading ?? false;
-    if (empty) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'join_invite',
-            onPressed: () {
-              // Trigger via navigating - GroupsScreen handles join when empty UI shown
-              unawaited(_onGroupsRefreshFab());
-            },
-            icon: const Icon(Icons.refresh),
-            label: const Text(AppStrings.retry),
-          ),
-        ],
-      );
-    }
     return FloatingActionButton(
       heroTag: 'groups_refresh',
       tooltip: AppStrings.retry,
+      backgroundColor: AppColors.deepBlue,
+      foregroundColor: Colors.white,
       onPressed: loading ? null : _onGroupsRefreshFab,
       child: loading
           ? const SizedBox(
               width: 22,
               height: 22,
-              child: CircularProgressIndicator(strokeWidth: 2),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
             )
-          : const Icon(Icons.refresh),
+          : const Icon(Icons.refresh, color: Colors.white),
     );
+  }
+
+  Widget _bodyForIndex() {
+    switch (_index) {
+      case 0:
+        return const MapShellScreen();
+      case 1:
+        return GroupsScreen(key: _groupsKey);
+      case 2:
+      default:
+        return const SettingsScreen();
+    }
   }
 
   @override
@@ -161,19 +171,9 @@ class _AppShellState extends State<AppShell> {
         _onRootBack();
       },
       child: Scaffold(
-        appBar: _index == 0
-            ? null
-            : AppBar(title: Text(_titles[_index])),
-        // Un solo Scaffold: body = IndexedStack (como el Mapa).
-        body: IndexedStack(
-          index: _index,
-          sizing: StackFit.expand,
-          children: [
-            const MapShellScreen(),
-            GroupsScreen(key: _groupsKey),
-            const SettingsScreen(),
-          ],
-        ),
+        appBar: _index == 0 ? null : AppBar(title: Text(_titles[_index])),
+        // Una sola pestaña montada: evita que MapLibre tape Grupos/Ajustes.
+        body: _bodyForIndex(),
         floatingActionButton: _groupsFab(),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,

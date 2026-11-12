@@ -3,13 +3,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../places/named_places_service.dart';
 import '../groups_service.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
-/// Lista de grupos + ubicaciones. Misma idea que el Mapa: Column/Expanded
-/// (sin Stack/Scaffold anidado → evita body altura 0).
+/// Lista de grupos + ubicaciones.
+///
+/// AppShell monta solo esta pestaña (sin IndexedStack+MapLibre encima).
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
@@ -17,8 +19,7 @@ class GroupsScreen extends StatefulWidget {
   GroupsScreenState createState() => GroupsScreenState();
 }
 
-class GroupsScreenState extends State<GroupsScreen>
-    with AutomaticKeepAliveClientMixin {
+class GroupsScreenState extends State<GroupsScreen> {
   final _service = GroupsService();
   final _places = NamedPlacesService();
 
@@ -34,9 +35,8 @@ class GroupsScreenState extends State<GroupsScreen>
   bool get isLoading => _loading;
   int get groupCount => _groups.length;
   bool get isEmpty => !_loading && _error == null && _groups.isEmpty;
-
-  @override
-  bool get wantKeepAlive => true;
+  String? get firstGroupName =>
+      _groups.isEmpty ? null : _groups.first.name;
 
   @override
   void initState() {
@@ -469,42 +469,55 @@ class GroupsScreenState extends State<GroupsScreen>
   }
 
   Widget _buildGroupBlock(FamilyGroup group, {required bool showSolo}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 20,
-            vertical: 8,
-          ),
-          leading: CircleAvatar(
-            backgroundColor:
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-            child: Icon(
-              Icons.family_restroom,
-              color: Theme.of(context).colorScheme.primary,
+    return Material(
+      color: Colors.white,
+      elevation: 1,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 10,
             ),
-          ),
-          title: Text(
-            group.name,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 17,
-            ),
-          ),
-          subtitle: const Text(AppStrings.groupsTapMembers),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: () async {
-            await Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => GroupDetailScreen(group: group),
+            leading: CircleAvatar(
+              backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+              child: const Icon(
+                Icons.family_restroom,
+                color: AppColors.deepBlue,
               ),
-            );
-            await _refresh();
-          },
-        ),
-        _locationsBelowGroup(group, showSolo: showSolo),
-      ],
+            ),
+            title: Text(
+              group.name,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                color: AppColors.deepBlue,
+              ),
+            ),
+            subtitle: const Text(
+              AppStrings.groupsTapMembers,
+              style: TextStyle(color: AppColors.midBlue),
+            ),
+            trailing: const Icon(
+              Icons.chevron_right,
+              color: AppColors.deepBlue,
+            ),
+            onTap: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => GroupDetailScreen(group: group),
+                ),
+              );
+              await _refresh();
+            },
+          ),
+          ColoredBox(
+            color: AppColors.surface,
+            child: _locationsBelowGroup(group, showSolo: showSolo),
+          ),
+        ],
+      ),
     );
   }
 
@@ -577,10 +590,10 @@ class GroupsScreenState extends State<GroupsScreen>
     }
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 96),
+      padding: const EdgeInsets.fromLTRB(0, 8, 0, 96),
       children: [
         for (var i = 0; i < _groups.length; i++) ...[
-          if (i > 0) const Divider(height: 1),
+          if (i > 0) const SizedBox(height: 8),
           _buildGroupBlock(_groups[i], showSolo: i == 0),
         ],
         const SizedBox(height: 12),
@@ -589,7 +602,7 @@ class GroupsScreenState extends State<GroupsScreen>
           child: Text(
             AppStrings.groupsAlreadyMemberHint,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: AppColors.midBlue,
                 ),
           ),
         ),
@@ -599,35 +612,44 @@ class GroupsScreenState extends State<GroupsScreen>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
-    // Igual que MapShellScreen: Column llena el body del AppShell.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Franja siempre visible → confirma que el body tiene altura.
-        Material(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Text(
-              _loading
-                  ? 'Cargando grupos…'
-                  : _error != null
-                      ? 'Error al cargar grupos'
-                      : 'Mis grupos (${_groups.length})',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+    final first = firstGroupName;
+    final header = _loading
+        ? 'Cargando grupos…'
+        : _error != null
+            ? 'Error al cargar grupos'
+            : (first == null
+                ? 'Mis grupos (${_groups.length})'
+                : 'Mis grupos (${_groups.length}) · $first');
+
+    return ColoredBox(
+      color: AppColors.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: Colors.white,
+            elevation: 1,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Text(
+                header,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.deepBlue,
+                ),
+              ),
             ),
           ),
-        ),
-        Expanded(
-          child: RefreshIndicator(
-            onRefresh: _refresh,
-            child: _buildScrollBody(),
+          Expanded(
+            child: RefreshIndicator(
+              color: AppColors.deepBlue,
+              onRefresh: _refresh,
+              child: _buildScrollBody(),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
