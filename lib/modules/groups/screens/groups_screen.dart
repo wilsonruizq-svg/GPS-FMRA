@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
@@ -38,8 +37,6 @@ class GroupsScreenState extends State<GroupsScreen> {
   bool get isEmpty => !_loading && _error == null && _groups.isEmpty;
   String? get firstGroupName =>
       _groups.isEmpty ? null : _groups.first.name;
-
-  String? get _uid => Supabase.instance.client.auth.currentUser?.id;
 
   FamilyGroup? get _primaryGroup =>
       _groups.isEmpty ? null : _groups.first;
