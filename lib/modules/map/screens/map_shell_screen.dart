@@ -25,6 +25,7 @@ import '../../places/whatsapp_share.dart';
 import '../../profiles/avatar_compress.dart';
 import '../../sos/sos_service.dart';
 import 'package:image_picker/image_picker.dart';
+import '../map_place_focus.dart';
 import '../person_marker_bitmaps.dart';
 
 /// Shell del mapa: MapLibre + pines de integrantes con consentimiento activo.
@@ -44,6 +45,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   );
 
   static const _myLocationZoom = 15.0;
+  static const _placeFocusZoom = 16.5;
 
   /// Heartbeat de publicación (documentado): cada 8 s como máximo de espera
   /// aunque el dispositivo esté quieto. El stream también publica al moverse
@@ -87,6 +89,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   final Map<String, Circle> _placeCirclesById = {};
   final Map<String, Symbol> _placeLabelsById = {};
   List<NamedPlace> _namedPlaces = const [];
+  String? _highlightedPlaceId;
+  Timer? _highlightClearTimer;
   bool _savingPlace = false;
   Timer? _placeSyncTimer;
 
@@ -129,6 +133,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _highlightClearTimer?.cancel();
     _stopSharingLoop();
     _unsubscribeRealtime();
     _mapController = null;
@@ -226,8 +231,12 @@ class _MapShellScreenState extends State<MapShellScreen>
         _loading = false;
         _didFitMembers = false;
       });
-      _maybeAutoCenter();
+      if (!MapPlaceFocus.hasPending) {
+        _maybeAutoCenter();
+      }
       await _syncMarkers();
+      await _loadNamedPlaces();
+      await _consumePendingPlaceFocus();
       _restartSharingLoop();
       _restartRealtimeAndPoll();
     } catch (e) {
@@ -457,8 +466,12 @@ class _MapShellScreenState extends State<MapShellScreen>
     _markerImageReady = false;
     _registeredPersonImages.clear();
     await _ensureMarkerImages();
-    _maybeAutoCenter();
+    if (!MapPlaceFocus.hasPending) {
+      _maybeAutoCenter();
+    }
     await _syncMarkers();
+    await _loadNamedPlaces();
+    await _consumePendingPlaceFocus();
   }
 
   Future<void> _ensureMarkerImages() async {
@@ -479,9 +492,67 @@ class _MapShellScreenState extends State<MapShellScreen>
   /// Si el mapa ya montó con fallback (o GPS llegó tarde), anima a la posición.
   void _maybeAutoCenter() {
     if (_didAutoCenter) return;
+    if (MapPlaceFocus.hasPending) return;
     if (!_styleReady || _mapController == null) return;
     _didAutoCenter = true;
     _centerOnMyLocation(fromUser: false);
+  }
+
+  Future<void> _consumePendingPlaceFocus() async {
+    final req = MapPlaceFocus.take();
+    if (req == null || !mounted) return;
+    await _focusSavedPlace(req);
+  }
+
+  Future<void> _focusSavedPlace(MapPlaceFocusRequest req) async {
+    if (!_styleReady || _mapController == null) {
+      // Mapa aún no listo: reencola para el próximo _onStyleLoaded/_load.
+      MapPlaceFocus.request(req);
+      return;
+    }
+    if (req.placeId != null &&
+        !_namedPlaces.any((p) => p.id == req.placeId)) {
+      await _loadNamedPlaces();
+    }
+    if (req.placeId != null &&
+        !_namedPlaces.any((p) => p.id == req.placeId)) {
+      _namedPlaces = [
+        NamedPlace(
+          id: req.placeId!,
+          ownerId: '',
+          name: (req.name ?? 'Lugar').trim().isEmpty
+              ? 'Lugar'
+              : req.name!.trim(),
+          lat: req.lat,
+          lon: req.lon,
+          createdAt: DateTime.now().toUtc(),
+        ),
+        ..._namedPlaces,
+      ];
+    }
+
+    _highlightedPlaceId = req.placeId;
+    _didAutoCenter = true;
+    await _syncPlaceMarkers();
+    final controller = _mapController;
+    if (controller == null || !mounted) return;
+    try {
+      await controller.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(req.lat, req.lon),
+          _placeFocusZoom,
+        ),
+      );
+    } catch (e) {
+      debugPrint('focusSavedPlace camera: $e');
+    }
+
+    _highlightClearTimer?.cancel();
+    _highlightClearTimer = Timer(const Duration(seconds: 8), () {
+      if (!mounted) return;
+      _highlightedPlaceId = null;
+      unawaited(_syncPlaceMarkersSafe());
+    });
   }
 
   Future<bool> _ensureOsPermission({
@@ -1419,17 +1490,20 @@ class _MapShellScreenState extends State<MapShellScreen>
 
     for (final place in desired.values) {
       final geometry = LatLng(place.lat, place.lon);
-      const color = '#6A1B9A';
+      final highlight = place.id == _highlightedPlaceId;
+      final color = highlight ? '#C62828' : '#6A1B9A';
+      final radius = highlight ? 14.0 : 8.0;
+      final stroke = highlight ? 3.0 : 2.0;
       final existing = _placeCirclesById[place.id];
       if (existing == null) {
         try {
           final circle = await controller.addCircle(
             CircleOptions(
               geometry: geometry,
-              circleRadius: 8,
+              circleRadius: radius,
               circleColor: color,
-              circleOpacity: 0.9,
-              circleStrokeWidth: 2,
+              circleOpacity: 0.95,
+              circleStrokeWidth: stroke,
               circleStrokeColor: '#FFFFFF',
             ),
           );
@@ -1439,7 +1513,12 @@ class _MapShellScreenState extends State<MapShellScreen>
         try {
           await controller.updateCircle(
             existing,
-            CircleOptions(geometry: geometry, circleColor: color),
+            CircleOptions(
+              geometry: geometry,
+              circleColor: color,
+              circleRadius: radius,
+              circleStrokeWidth: stroke,
+            ),
           );
         } catch (_) {}
       }
@@ -1447,14 +1526,16 @@ class _MapShellScreenState extends State<MapShellScreen>
       final existingLabel = _placeLabelsById[place.id];
       // Etiqueta = nombre del lugar (categoría se muestra en lista Grupos).
       final label = place.name;
+      final textColor = highlight ? '#C62828' : '#4A148C';
+      final textSize = highlight ? 13.0 : 11.0;
       if (existingLabel == null) {
         try {
           final symbol = await controller.addSymbol(
             SymbolOptions(
               geometry: geometry,
               textField: label,
-              textSize: 11,
-              textColor: '#4A148C',
+              textSize: textSize,
+              textColor: textColor,
               textHaloColor: '#FFFFFF',
               textHaloWidth: 1.3,
               textOffset: const Offset(0, 1.3),
@@ -1467,7 +1548,12 @@ class _MapShellScreenState extends State<MapShellScreen>
         try {
           await controller.updateSymbol(
             existingLabel,
-            SymbolOptions(geometry: geometry, textField: label),
+            SymbolOptions(
+              geometry: geometry,
+              textField: label,
+              textSize: textSize,
+              textColor: textColor,
+            ),
           );
         } catch (_) {}
       }

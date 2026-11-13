@@ -8,7 +8,9 @@ import 'modules/chat/chat_alert_service.dart';
 import 'modules/groups/exit_pin_service.dart';
 import 'modules/groups/screens/groups_screen.dart';
 import 'modules/groups/widgets/exit_pin_dialog.dart';
+import 'modules/map/map_place_focus.dart';
 import 'modules/map/screens/map_shell_screen.dart';
+import 'modules/places/named_places_service.dart';
 import 'modules/settings/screens/settings_screen.dart';
 
 /// Navegación principal post-login: mapa, grupos, ajustes.
@@ -52,6 +54,19 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  void _openPlaceOnMap(NamedPlace place) {
+    MapPlaceFocus.request(
+      MapPlaceFocusRequest(
+        lat: place.lat,
+        lon: place.lon,
+        placeId: place.id,
+        name: place.name,
+      ),
+    );
+    setState(() => _index = 0);
+    unawaited(ChatAlertService.instance.ensureRunning());
+  }
+
   Future<void> _onRootBack() async {
     if (_exitGateBusy) return;
     _exitGateBusy = true;
@@ -86,7 +101,7 @@ class _AppShellState extends State<AppShell> {
       case 0:
         return const MapShellScreen();
       case 1:
-        return const GroupsScreen();
+        return GroupsScreen(onOpenPlaceOnMap: _openPlaceOnMap);
       case 2:
       default:
         return const SettingsScreen();

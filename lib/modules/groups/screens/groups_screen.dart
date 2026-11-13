@@ -12,7 +12,10 @@ import 'group_detail_screen.dart';
 /// Lista de grupos = exactamente 94d85b4 (ListTile → GroupDetail).
 /// Fuera, debajo: «Ubicaciones guardadas» + buscador abajo.
 class GroupsScreen extends StatefulWidget {
-  const GroupsScreen({super.key});
+  const GroupsScreen({super.key, this.onOpenPlaceOnMap});
+
+  /// Tap en el título de un lugar → AppShell cambia a Mapa y centra.
+  final void Function(NamedPlace place)? onOpenPlaceOnMap;
 
   @override
   State<GroupsScreen> createState() => _GroupsScreenState();
@@ -499,9 +502,23 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: _placePhotoLeading(p),
-                  title: Text(
-                    p.name,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  title: InkWell(
+                    onTap: widget.onOpenPlaceOnMap == null
+                        ? null
+                        : () => widget.onOpenPlaceOnMap!(p),
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        p.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.deepBlue,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppColors.signalCyan,
+                        ),
+                      ),
+                    ),
                   ),
                   subtitle: Text(
                     [
