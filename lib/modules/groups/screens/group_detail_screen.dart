@@ -64,10 +64,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         pinSet = false;
       }
       if (!mounted) return;
+      final amAdmin = me?.isAdmin ?? false;
+      debugPrint(
+        'GroupDetail: uid=$uid me=${me?.userId} role=${me?.role} '
+        'admin=$amAdmin exitPinSet=$pinSet members=${members.length}',
+      );
       setState(() {
         _members = members;
         _myConsent = mine;
-        _iAmAdmin = me?.isAdmin ?? false;
+        _iAmAdmin = amAdmin;
         _exitPinSet = pinSet;
         _loading = false;
       });
@@ -274,24 +279,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
   }
 
+  /// PIN para salir del programa / cerrar sesión (Atrás). Siempre visible.
   Widget _exitPinSection(BuildContext context) {
-    if (!_iAmAdmin) {
-      if (!_exitPinSet) return const SizedBox.shrink();
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: Text(
-          AppStrings.exitPinStatusOn,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-        ),
-      );
-    }
-
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: DecoratedBox(
         decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceContainerHighest
+              .withValues(alpha: 0.45),
           border: Border.all(
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
@@ -302,21 +297,46 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                AppStrings.exitPinTitle,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+              Row(
+                children: [
+                  Icon(
+                    _exitPinSet ? Icons.lock : Icons.lock_open_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      AppStrings.exitPinTitle,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
+              Text(
+                AppStrings.exitPinSetBody,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
               Text(
                 _exitPinSet
                     ? AppStrings.exitPinStatusOn
                     : AppStrings.exitPinStatusOff,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
               const SizedBox(height: 12),
-              if (_exitPinBusy)
+              if (!_iAmAdmin)
+                Text(
+                  AppStrings.exitPinAdminOnly,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                )
+              else if (_exitPinBusy)
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(8),
@@ -328,7 +348,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    FilledButton.tonalIcon(
+                    FilledButton.icon(
                       onPressed: () => _setOrChangeExitPin(
                         changing: _exitPinSet,
                       ),
@@ -489,8 +509,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                   ),
                         ),
                       ),
-                      _inviteBanner(context),
+                      // PIN salir del programa — arriba, siempre visible.
                       _exitPinSection(context),
+                      _inviteBanner(context),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                         child: Text(

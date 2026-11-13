@@ -14,6 +14,7 @@ Future<bool> showExitPinChallenge({
 }) async {
   final result = await showDialog<bool>(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (ctx) => _ExitPinChallengeDialog(
       purpose: purpose,
@@ -34,6 +35,7 @@ Future<String?> showExitPinComposeDialog({
   );
   return showDialog<String>(
     context: context,
+    useRootNavigator: true,
     barrierDismissible: false,
     builder: (ctx) => _ExitPinComposeDialog(purpose: purpose),
   );
