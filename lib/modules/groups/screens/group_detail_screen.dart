@@ -123,6 +123,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       setState(() => _lastInvite = invite);
       await showDialog<void>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) {
           return AlertDialog(
             title: const Text(AppStrings.inviteTitle),
@@ -279,14 +280,26 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
   }
 
-  /// PIN para salir del programa / cerrar sesión (Atrás). Siempre visible.
+  /// PIN salir del programa: config solo admin (como 2529e2f / 881e862).
+  /// No-admin: sin card; solo aviso si el PIN ya está activo.
   Widget _exitPinSection(BuildContext context) {
+    if (!_iAmAdmin) {
+      if (!_exitPinSet) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: Text(
+          AppStrings.exitPinStatusOn,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest
-              .withValues(alpha: 0.45),
           border: Border.all(
             color: Theme.of(context).colorScheme.outlineVariant,
           ),
@@ -297,46 +310,21 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(
-                children: [
-                  Icon(
-                    _exitPinSet ? Icons.lock : Icons.lock_open_outlined,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      AppStrings.exitPinTitle,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
+              Text(
+                AppStrings.exitPinTitle,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                ],
               ),
               const SizedBox(height: 6),
-              Text(
-                AppStrings.exitPinSetBody,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 8),
               Text(
                 _exitPinSet
                     ? AppStrings.exitPinStatusOn
                     : AppStrings.exitPinStatusOff,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              if (!_iAmAdmin)
-                Text(
-                  AppStrings.exitPinAdminOnly,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                )
-              else if (_exitPinBusy)
+              if (_exitPinBusy)
                 const Center(
                   child: Padding(
                     padding: EdgeInsets.all(8),
@@ -348,7 +336,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    FilledButton.icon(
+                    FilledButton.tonalIcon(
                       onPressed: () => _setOrChangeExitPin(
                         changing: _exitPinSet,
                       ),
@@ -377,14 +365,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
+  /// Invitar / generar código+enlace: SOLO admin (mismo gate que PIN / 881e862).
+  /// No-admin: sin controles (mensaje lectura).
   Widget _inviteBanner(BuildContext context) {
-    final invite = _lastInvite;
-    if (invite == null) {
-      if (!_iAmAdmin) return const SizedBox.shrink();
+    if (!_iAmAdmin) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Text(
-          AppStrings.groupsInviteHowTo,
+          AppStrings.inviteAdminOnly,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
@@ -392,6 +380,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       );
     }
 
+    final invite = _lastInvite;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
       child: DecoratedBox(
@@ -407,41 +396,71 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                AppStrings.inviteLastHeading,
+                AppStrings.inviteAction,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
                     ),
               ),
               const SizedBox(height: 6),
-              SelectableText(
-                invite.plainToken,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 8),
               Text(
-                AppStrings.inviteFamilySteps,
+                AppStrings.groupsInviteHowTo,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilledButton.tonalIcon(
-                    onPressed: () => _copyInvite(invite, asLink: false),
-                    icon: const Icon(Icons.copy, size: 18),
-                    label: const Text(AppStrings.inviteCopyToken),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => _copyInvite(invite, asLink: true),
-                    icon: const Icon(Icons.link, size: 18),
-                    label: const Text(AppStrings.inviteCopyLink),
-                  ),
-                ],
+              FilledButton.icon(
+                onPressed: _createInvite,
+                icon: Icon(
+                  invite == null ? Icons.person_add_alt_1 : Icons.refresh,
+                  size: 18,
+                ),
+                label: Text(
+                  invite == null ? AppStrings.inviteAction : 'Nuevo código',
+                ),
               ),
+              if (invite != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  AppStrings.inviteLastHeading,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                SelectableText(
+                  invite.plainToken,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  invite.linkStub,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${AppStrings.inviteExpires} ${invite.expiresAt.toLocal()}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: () => _copyInvite(invite, asLink: false),
+                      icon: const Icon(Icons.copy, size: 18),
+                      label: const Text(AppStrings.inviteCopyToken),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _copyInvite(invite, asLink: true),
+                      icon: const Icon(Icons.link, size: 18),
+                      label: const Text(AppStrings.inviteCopyLink),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
