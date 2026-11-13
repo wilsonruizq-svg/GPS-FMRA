@@ -58,6 +58,8 @@ abstract final class AppStrings {
       '(así el registro no manda email y entra al instante).';
 
   static const mapTitle = 'Mapa';
+  static const mapExpandTooltip = 'Ampliar mapa';
+  static const mapCollapseTooltip = 'Mostrar integrantes';
   static const mapPlaceholderTitle = 'Mapa (marcador de posición)';
   static const mapPlaceholderBody =
       'El mapa usa MapLibre sin clave de pago. Guía: docs/MAPLIBRE_ES.md';

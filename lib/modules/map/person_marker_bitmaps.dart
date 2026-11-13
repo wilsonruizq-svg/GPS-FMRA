@@ -4,10 +4,15 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 /// Figuritas mujer/hombre coloreadas para pines MapLibre (`addImage`).
+/// Sin círculo/halo blanco; tamaño de mapa ~6 mm (ver [mapIconSize]).
 class PersonMarkerBitmaps {
   PersonMarkerBitmaps._();
 
   static final Map<String, Uint8List> _cache = {};
+
+  /// Lienzo 192 px. iconSize ~0.34 ≈ −4 mm vs 0.57–0.63 anteriores.
+  static const imagePx = 192;
+  static const mapIconSize = 0.34;
 
   static String imageName({
     required bool female,
@@ -15,30 +20,25 @@ class PersonMarkerBitmaps {
   }) {
     final g = female ? 'f' : 'm';
     final hex = colorHex.replaceAll('#', '').toUpperCase();
-    return 'person_${g}_$hex';
+    return 'person_v7_${g}_$hex';
   }
 
   static Future<Uint8List> png({
     required bool female,
     required Color color,
-    double logicalSize = 96,
   }) async {
-    final key =
-        '${female ? 'f' : 'm'}_${color.toARGB32().toRadixString(16)}_'
-        '${logicalSize.round()}';
+    final key = 'v7_${female ? 'f' : 'm'}_${color.toARGB32().toRadixString(16)}';
     final cached = _cache[key];
     if (cached != null) return cached;
 
-    final dpr = 2.0;
-    final size = logicalSize * dpr;
+    const double size = imagePx * 1.0;
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder);
-
-    // Halo blanco para contraste sobre el mapa.
-    final halo = Paint()
-      ..color = const Color(0xF2FFFFFF)
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(size / 2, size / 2), size * 0.46, halo);
+    // Lienzo transparente — sin círculo blanco.
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, size, size),
+      Paint()..color = const Color(0x00000000),
+    );
 
     final icon = female ? Icons.woman : Icons.man;
     final painter = TextPainter(textDirection: TextDirection.ltr);
