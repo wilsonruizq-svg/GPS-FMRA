@@ -84,10 +84,52 @@ class LocationShareService {
 
   SupabaseClient get _sb => _client ?? supabase;
 
+  /// GF-18: historial máx. 1 punto / 5 min (sesión).
+  static const historyMinInterval = Duration(minutes: 5);
+  /// ~5–6 m en ecuador; evita spam si el GPS no se mueve.
+  static const historyCoordEpsilonDeg = 0.00005;
+
+  static DateTime? _lastHistoryAtUtc;
+  static double? _lastHistoryLat;
+  static double? _lastHistoryLon;
+
   String get _uid {
     final id = _sb.auth.currentUser?.id;
     if (id == null) throw StateError('No hay sesión activa.');
     return id;
+  }
+
+  /// true si conviene append a `location_history` (intervalo + dedupe coords).
+  static bool shouldAppendHistorySample({
+    required double lat,
+    required double lon,
+    DateTime? nowUtc,
+  }) {
+    final now = nowUtc ?? DateTime.now().toUtc();
+    final lastAt = _lastHistoryAtUtc;
+    if (lastAt != null && now.difference(lastAt) < historyMinInterval) {
+      return false;
+    }
+    final lastLat = _lastHistoryLat;
+    final lastLon = _lastHistoryLon;
+    if (lastLat != null && lastLon != null) {
+      final dLat = (lat - lastLat).abs();
+      final dLon = (lon - lastLon).abs();
+      if (dLat < historyCoordEpsilonDeg && dLon < historyCoordEpsilonDeg) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static void _rememberHistorySample({
+    required double lat,
+    required double lon,
+    required DateTime atUtc,
+  }) {
+    _lastHistoryAtUtc = atUtc;
+    _lastHistoryLat = lat;
+    _lastHistoryLon = lon;
   }
 
   /// True si el usuario puede publicar: consentimiento activo del grupo y
@@ -101,6 +143,7 @@ class LocationShareService {
 
   /// Upsert de la ubicación actual. Solo debe llamarse con consentimiento activo.
   /// También intenta append a `location_history` (best-effort; no tumba el live).
+  /// GF-18: máx. 1 punto / 5 min y skip si coords ≈ último historial.
   Future<void> publishPosition(Position pos) async {
     final now = DateTime.now().toUtc();
     final payload = {
@@ -115,6 +158,15 @@ class LocationShareService {
       payload,
       onConflict: 'user_id',
     );
+
+    if (!shouldAppendHistorySample(
+      lat: pos.latitude,
+      lon: pos.longitude,
+      nowUtc: now,
+    )) {
+      return;
+    }
+
     try {
       await _sb.from('location_history').insert({
         'user_id': _uid,
@@ -123,6 +175,11 @@ class LocationShareService {
         'accuracy_m': pos.accuracy.isFinite ? pos.accuracy : null,
         'recorded_at': now.toIso8601String(),
       });
+      _rememberHistorySample(
+        lat: pos.latitude,
+        lon: pos.longitude,
+        atUtc: now,
+      );
     } catch (_) {
       // Historial aún no APPLY / red: el mapa en vivo sigue OK.
     }

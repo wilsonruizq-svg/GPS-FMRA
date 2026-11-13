@@ -39,12 +39,22 @@ class _AppShellState extends State<AppShell> {
   void initState() {
     super.initState();
     unawaited(ChatAlertService.instance.start());
+    MapPlaceFocus.revision.addListener(_onMapFocusRequested);
   }
 
   @override
   void dispose() {
+    MapPlaceFocus.revision.removeListener(_onMapFocusRequested);
     unawaited(ChatAlertService.instance.stop());
     super.dispose();
+  }
+
+  void _onMapFocusRequested() {
+    if (!mounted || !MapPlaceFocus.hasPending) return;
+    if (_index != 0) {
+      setState(() => _index = 0);
+    }
+    unawaited(ChatAlertService.instance.ensureRunning());
   }
 
   void _onTabSelected(int i) {

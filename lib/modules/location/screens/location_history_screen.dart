@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../groups/groups_service.dart';
+import '../../map/map_place_focus.dart';
 import '../location_share_service.dart';
 
 /// Lista mínima de historial GPS del grupo (consent-first vía RLS/RPC).
@@ -91,6 +92,19 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
     final t =
         '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
     return '$d $t';
+  }
+
+  void _openPointOnMap(HistoryPoint p) {
+    MapPlaceFocus.request(
+      MapPlaceFocusRequest(
+        lat: p.lat,
+        lon: p.lon,
+        placeId: 'history:${p.id}',
+        name: p.label,
+      ),
+    );
+    // Historial está encima de AppShell: volver y dejar que AppShell → Mapa.
+    Navigator.of(context).pop();
   }
 
   @override
@@ -193,12 +207,19 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
                                     color: AppColors.deepBlue,
                                   ),
                                 ),
-                                title: Text(p.label),
+                                title: Text(
+                                  p.label,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.deepBlue,
+                                  ),
+                                ),
                                 subtitle: Text(
                                   '${_fmt(p.recordedAt)}  ·  '
                                   '${p.lat.toStringAsFixed(5)}, '
                                   '${p.lon.toStringAsFixed(5)}',
                                 ),
+                                onTap: () => _openPointOnMap(p),
                               );
                             },
                           ),

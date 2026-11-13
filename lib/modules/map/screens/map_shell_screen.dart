@@ -510,7 +510,9 @@ class _MapShellScreenState extends State<MapShellScreen>
       MapPlaceFocus.request(req);
       return;
     }
-    if (req.placeId != null &&
+    final isHistoryFocus = req.placeId?.startsWith('history:') == true;
+    if (!isHistoryFocus &&
+        req.placeId != null &&
         !_namedPlaces.any((p) => p.id == req.placeId)) {
       await _loadNamedPlaces();
     }
@@ -520,14 +522,16 @@ class _MapShellScreenState extends State<MapShellScreen>
         NamedPlace(
           id: req.placeId!,
           ownerId: '',
-          name: (req.name ?? 'Lugar').trim().isEmpty
-              ? 'Lugar'
+          name: (req.name ?? (isHistoryFocus ? 'Historial' : 'Lugar'))
+                  .trim()
+                  .isEmpty
+              ? (isHistoryFocus ? 'Historial' : 'Lugar')
               : req.name!.trim(),
           lat: req.lat,
           lon: req.lon,
           createdAt: DateTime.now().toUtc(),
         ),
-        ..._namedPlaces,
+        ..._namedPlaces.where((p) => !p.id.startsWith('history:')),
       ];
     }
 

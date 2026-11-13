@@ -1,7 +1,9 @@
-/// Coordina Grupos → pestaña Mapa: centrar un lugar guardado.
+import 'package:flutter/foundation.dart';
+
+/// Coordina Grupos/Historial → pestaña Mapa: centrar un punto.
 ///
-/// AppShell cambia a índice 0; [MapShellScreen] consume el request al montar
-/// (solo una pestaña activa, sin IndexedStack).
+/// AppShell escucha [revision] y pasa a índice 0; [MapShellScreen] consume
+/// el request al montar (solo una pestaña activa, sin IndexedStack).
 class MapPlaceFocusRequest {
   const MapPlaceFocusRequest({
     required this.lat,
@@ -19,8 +21,12 @@ class MapPlaceFocusRequest {
 abstract final class MapPlaceFocus {
   static MapPlaceFocusRequest? _pending;
 
+  /// Incrementa al encolar un focus (AppShell → tab Mapa).
+  static final ValueNotifier<int> revision = ValueNotifier<int>(0);
+
   static void request(MapPlaceFocusRequest value) {
     _pending = value;
+    revision.value++;
   }
 
   static bool get hasPending => _pending != null;
