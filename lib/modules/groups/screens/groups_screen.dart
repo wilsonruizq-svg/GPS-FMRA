@@ -435,17 +435,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
             onTap: () => unawaited(_openGroupDetail(_groups[i])),
           ),
         ],
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text(
-            AppStrings.groupsAlreadyMemberHint,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-        ),
-        const Divider(height: 24),
+        const Divider(height: 16),
         _placesSection(),
       ],
     );

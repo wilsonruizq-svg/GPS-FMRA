@@ -1896,23 +1896,19 @@ class _MapShellScreenState extends State<MapShellScreen>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FloatingActionButton.extended(
+              FloatingActionButton.small(
                 heroTag: 'map_save_place',
                 tooltip: AppStrings.mapSavePlaceTooltip,
                 backgroundColor: AppColors.signalCyan,
                 foregroundColor: AppColors.deepBlue,
                 onPressed: _savingPlace ? null : _onSavePlacePressed,
-                icon: _savingPlace
+                child: _savingPlace
                     ? const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.push_pin),
-                label: Text(
-                  _savingPlace ? '…' : AppStrings.mapSavePlaceSave,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
               ),
               const SizedBox(height: 12),
               FloatingActionButton.small(
@@ -1932,26 +1928,6 @@ class _MapShellScreenState extends State<MapShellScreen>
                     : const Icon(Icons.my_location),
               ),
             ],
-          ),
-        ),
-        Positioned(
-          left: 12,
-          bottom: 12,
-          child: Material(
-            color: Colors.white.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(8),
-            elevation: 1,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              child: Text(
-                Env.hasMapTilerKey
-                    ? AppStrings.mapEngineMapTiler
-                    : AppStrings.mapEngineLibre,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: AppColors.deepBlue,
-                    ),
-              ),
-            ),
           ),
         ),
       ],
