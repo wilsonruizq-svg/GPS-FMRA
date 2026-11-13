@@ -380,18 +380,97 @@ class _GroupsScreenState extends State<GroupsScreen> {
     return AppStrings.groupsPlacesUncategorized;
   }
 
+  Future<void> _openPlacePhotoFullscreen(NamedPlace place) async {
+    final url = place.hasPhoto ? _places.publicPhotoUrl(place.photoPath) : null;
+    if (url == null || !mounted) return;
+    final screenH = MediaQuery.sizeOf(context).height;
+    // Al menos la altura del mapa ampliado (~viewport completo menos nav).
+    final minH = (screenH * 0.72).clamp(320.0, screenH);
+    await showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierColor: Colors.black.withValues(alpha: 0.92),
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: Colors.black,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+          child: SizedBox(
+            width: double.infinity,
+            height: minH,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                InteractiveViewer(
+                  minScale: 1,
+                  maxScale: 5,
+                  child: Center(
+                    child: Image.network(
+                      url,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, progress) {
+                        if (progress == null) return child;
+                        return const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) => const Center(
+                        child: Icon(
+                          Icons.broken_image_outlined,
+                          color: Colors.white70,
+                          size: 48,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: IconButton(
+                    tooltip: AppStrings.close,
+                    onPressed: () =>
+                        Navigator.of(ctx, rootNavigator: true).pop(),
+                    icon: const Icon(Icons.close, color: Colors.white),
+                  ),
+                ),
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 10,
+                  child: Text(
+                    place.name,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _placePhotoLeading(NamedPlace place) {
     final url =
         place.hasPhoto ? _places.publicPhotoUrl(place.photoPath) : null;
     if (url != null) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.network(
-          url,
-          width: 48,
-          height: 48,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _placeNoPhotoBadge(),
+      return GestureDetector(
+        onTap: () => unawaited(_openPlacePhotoFullscreen(place)),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(
+            url,
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => _placeNoPhotoBadge(),
+          ),
         ),
       );
     }
