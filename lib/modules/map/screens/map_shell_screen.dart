@@ -1944,20 +1944,20 @@ class _MapShellScreenState extends State<MapShellScreen>
                         Expanded(
                           child: actionPill(
                             onPressed: () => unawaited(
-                              pickPhoto(ImageSource.camera, setLocal),
+                              pickPhoto(ImageSource.gallery, setLocal),
                             ),
-                            icon: Icons.photo_camera_outlined,
-                            label: AppStrings.mapSavePlacePhotoCamera,
+                            icon: Icons.photo_outlined,
+                            label: AppStrings.mapSavePlacePhotoGallery,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: actionPill(
                             onPressed: () => unawaited(
-                              pickPhoto(ImageSource.gallery, setLocal),
+                              pickPhoto(ImageSource.camera, setLocal),
                             ),
-                            icon: Icons.photo_outlined,
-                            label: AppStrings.mapSavePlacePhotoGallery,
+                            icon: Icons.photo_camera_outlined,
+                            label: AppStrings.mapSavePlacePhotoCamera,
                           ),
                         ),
                       ],

@@ -340,33 +340,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                   ),
                   const SizedBox(height: 8),
-                  SegmentedButton<String>(
-                    segments: const [
-                      ButtonSegment(
-                        value: 'auto',
-                        label: Text(AppStrings.profileGenderUnset),
-                        icon: Icon(Icons.auto_awesome_outlined, size: 18),
-                      ),
-                      ButtonSegment(
-                        value: 'female',
-                        label: Text(AppStrings.profileGenderFemale),
-                        icon: Icon(Icons.woman, size: 18),
-                      ),
-                      ButtonSegment(
-                        value: 'male',
-                        label: Text(AppStrings.profileGenderMale),
-                        icon: Icon(Icons.man, size: 18),
-                      ),
-                    ],
-                    selected: {_gender ?? 'auto'},
-                    onSelectionChanged: _saving
-                        ? null
-                        : (set) {
-                            final v = set.first;
-                            setState(() {
-                              _gender = v == 'auto' ? null : v;
-                            });
-                          },
+                  _GenderFiguritaPills(
+                    value: _gender,
+                    enabled: !_saving,
+                    onChanged: (v) => setState(() => _gender = v),
                   ),
                   const SizedBox(height: 12),
                   Text(
@@ -469,5 +446,119 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return name[0].toUpperCase();
+  }
+}
+
+/// Pastillas tipo diálogo «guardar ubicación» (Cámara/Galería / acciones).
+/// Selección: Automático | Mujer | Hombre — sin SegmentedButton (texto partido).
+class _GenderFiguritaPills extends StatelessWidget {
+  const _GenderFiguritaPills({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  /// `female` | `male` | null (= automático).
+  final String? value;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  static const _options = <({String? key, String label, IconData icon})>[
+    (
+      key: null,
+      label: AppStrings.profileGenderUnset,
+      icon: Icons.auto_awesome_outlined,
+    ),
+    (
+      key: 'female',
+      label: AppStrings.profileGenderFemale,
+      icon: Icons.woman,
+    ),
+    (
+      key: 'male',
+      label: AppStrings.profileGenderMale,
+      icon: Icons.man,
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final pillShape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(999),
+    );
+    final selectedKey = value;
+
+    return Row(
+      children: [
+        for (var i = 0; i < _options.length; i++) ...[
+          if (i > 0) const SizedBox(width: 8),
+          Expanded(
+            child: Builder(
+              builder: (context) {
+                final opt = _options[i];
+                final selected = selectedKey == opt.key;
+                final child = Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(opt.icon, size: 16),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        opt.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+                final onPressed = !enabled
+                    ? null
+                    : () => onChanged(opt.key);
+                if (selected) {
+                  return FilledButton(
+                    style: FilledButton.styleFrom(
+                      shape: pillShape,
+                      backgroundColor: AppColors.deepBlue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 10,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: onPressed,
+                    child: child,
+                  );
+                }
+                return OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    shape: pillShape,
+                    foregroundColor: AppColors.deepBlue,
+                    backgroundColor: AppColors.surface,
+                    side: BorderSide(color: scheme.outlineVariant),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 10,
+                    ),
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: onPressed,
+                  child: child,
+                );
+              },
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
