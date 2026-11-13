@@ -7,14 +7,12 @@ import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../places/named_places_service.dart';
 import '../groups_service.dart';
-import '../widgets/member_card.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
 
 /// Pestaña Grupos:
-/// - Filas de grupo → tap abre solo MIEMBROS.
-/// - Debajo: lista compartida de UBICACIONES (todos los grupos + solo yo).
-/// - Buscador fijo abajo para filtrar esas ubicaciones.
+/// - Filas de grupo → tap abre GroupDetail (miembros + invitaciones), como 94d85b4.
+/// - Debajo: lista compartida de UBICACIONES + buscador fijo abajo.
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
@@ -33,9 +31,6 @@ class GroupsScreenState extends State<GroupsScreen> {
   List<FamilyGroup> _groups = const [];
   List<NamedPlace> _sharedPlaces = const [];
   List<PlaceCategory> _sharedCats = const [];
-  final Map<String, List<GroupMember>> _membersByGroup = {};
-  final Map<String, bool> _membersLoading = {};
-  final Set<String> _expandedIds = {};
   String _query = '';
 
   bool get isLoading => _loading;
@@ -75,13 +70,9 @@ class GroupsScreenState extends State<GroupsScreen> {
       if (!mounted) return;
       setState(() {
         _groups = groups;
-        _expandedIds.removeWhere((id) => !groups.any((g) => g.id == id));
         _loading = false;
       });
       await _loadSharedPlaces(groups);
-      for (final id in _expandedIds) {
-        unawaited(_loadMembers(id));
-      }
     } catch (e, st) {
       debugPrint('GroupsScreen._refresh ERROR: $e\n$st');
       if (!mounted) return;
@@ -135,26 +126,6 @@ class GroupsScreenState extends State<GroupsScreen> {
       _sharedCats = cats;
       _placesLoading = false;
     });
-  }
-
-  Future<void> _loadMembers(String groupId) async {
-    if (!mounted) return;
-    setState(() => _membersLoading[groupId] = true);
-    try {
-      final members = await _service.listMembers(groupId);
-      if (!mounted) return;
-      setState(() {
-        _membersByGroup[groupId] = members;
-        _membersLoading[groupId] = false;
-      });
-    } catch (e) {
-      debugPrint('listMembers($groupId): $e');
-      if (!mounted) return;
-      setState(() {
-        _membersByGroup[groupId] = const [];
-        _membersLoading[groupId] = false;
-      });
-    }
   }
 
   Future<void> _openGroupDetail(FamilyGroup group) async {
@@ -567,149 +538,56 @@ class GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  Widget _membersSection(FamilyGroup group) {
-    final loading = _membersLoading[group.id] == true;
-    final members = _membersByGroup[group.id];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  AppStrings.groupsMembersSection,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.deepBlue,
-                  ),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: () => unawaited(_openGroupDetail(group)),
-                icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
-                label: const Text(AppStrings.groupsOpenDetail),
-              ),
-            ],
-          ),
-          if (loading && (members == null || members.isEmpty))
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                  SizedBox(width: 12),
-                  Text(AppStrings.groupsMembersLoading),
-                ],
-              ),
-            )
-          else if (members == null || members.isEmpty)
-            const Text(
-              AppStrings.groupsMembersEmpty,
-              style: TextStyle(color: AppColors.midBlue),
-            )
-          else
-            for (final m in members)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: MemberCard(
-                  name: m.label,
-                  photoUrl: m.photoUrl,
-                  isSelf: m.userId == _uid,
-                  shareStatusLabel: m.isAdmin
-                      ? AppStrings.groupsYouAreAdmin
-                      : AppStrings.groupsYouAreMember,
-                ),
-              ),
-        ],
-      ),
-    );
-  }
-
-  void _toggleGroup(FamilyGroup group) {
-    final open = !_expandedIds.contains(group.id);
-    setState(() {
-      if (open) {
-        _expandedIds.add(group.id);
-      } else {
-        _expandedIds.remove(group.id);
-      }
-    });
-    if (open) {
-      unawaited(_loadMembers(group.id));
-    }
-  }
-
-  /// Solo nombre + miembros al expandir (sin ubicaciones dentro del grupo).
+  /// Como 94d85b4: tap abre GroupDetail (miembros + invitaciones de vinculación).
   Widget _buildGroupBlock(FamilyGroup group) {
-    final expanded = _expandedIds.contains(group.id);
     return Material(
       color: Colors.white,
       elevation: 1,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: () => _toggleGroup(group),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
-                    child: const Icon(
-                      Icons.family_restroom,
-                      color: AppColors.deepBlue,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          group.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 18,
-                            color: AppColors.deepBlue,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          expanded
-                              ? 'Ocultar integrantes'
-                              : AppStrings.groupsTapMembers,
-                          style: const TextStyle(
-                            color: AppColors.midBlue,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    expanded ? Icons.expand_less : Icons.expand_more,
-                    color: AppColors.deepBlue,
-                    size: 28,
-                  ),
-                ],
+      child: InkWell(
+        onTap: () => unawaited(_openGroupDetail(group)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+                child: const Icon(
+                  Icons.family_restroom,
+                  color: AppColors.deepBlue,
+                ),
               ),
-            ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.name,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                        color: AppColors.deepBlue,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      AppStrings.groupsTapMembers,
+                      style: const TextStyle(
+                        color: AppColors.midBlue,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right,
+                color: AppColors.deepBlue,
+                size: 28,
+              ),
+            ],
           ),
-          if (expanded) ...[
-            const Divider(height: 1),
-            ColoredBox(
-              color: AppColors.surface,
-              child: _membersSection(group),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
