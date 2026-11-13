@@ -1789,41 +1789,33 @@ class _MapShellScreenState extends State<MapShellScreen>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    SegmentedButton<bool>(
-                      showSelectedIcon: false,
-                      emptySelectionAllowed: false,
-                      style: ButtonStyle(
-                        visualDensity: VisualDensity.compact,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: WidgetStatePropertyAll(pillShape),
-                      ),
-                      segments: const [
-                        ButtonSegment<bool>(
-                          value: false,
-                          icon: Icon(Icons.person_outline, size: 16),
-                          label: Text(AppStrings.mapSavePlaceOnlyMe),
-                        ),
-                        ButtonSegment<bool>(
-                          value: true,
-                          icon: Icon(Icons.groups_outlined, size: 16),
-                          label: Text(AppStrings.mapSavePlaceShareGroup),
-                        ),
-                      ],
-                      selected: {shareWithGroup},
-                      onSelectionChanged: (next) {
-                        final wantGroup = next.contains(true);
-                        setLocal(() {
-                          shareWithGroup = wantGroup;
-                          if (!wantGroup) selectedCategoryId = null;
-                        });
-                        if (wantGroup) {
-                          unawaited(ensureCategories(setLocal));
-                        }
+                    const SizedBox(height: 4),
+                    RadioListTile<bool>(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      contentPadding: EdgeInsets.zero,
+                      value: false,
+                      groupValue: shareWithGroup,
+                      title: const Text(AppStrings.mapSavePlaceOnlyMe),
+                      onChanged: (_) => setLocal(() {
+                        shareWithGroup = false;
+                        selectedCategoryId = null;
+                      }),
+                    ),
+                    RadioListTile<bool>(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      contentPadding: EdgeInsets.zero,
+                      value: true,
+                      groupValue: shareWithGroup,
+                      title: const Text(AppStrings.mapSavePlaceShareGroup),
+                      onChanged: (_) {
+                        setLocal(() => shareWithGroup = true);
+                        unawaited(ensureCategories(setLocal));
                       },
                     ),
                     if (shareWithGroup) ...[
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 2),
                       DropdownButtonFormField<String?>(
                         key: ValueKey(selectedCategoryId ?? 'none'),
                         initialValue: selectedCategoryId,
