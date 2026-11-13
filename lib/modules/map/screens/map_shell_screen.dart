@@ -1662,21 +1662,24 @@ class _MapShellScreenState extends State<MapShellScreen>
 
             Widget actionPill({
               required VoidCallback? onPressed,
-              required IconData icon,
               required String label,
+              IconData? icon,
               bool primary = false,
             }) {
               final child = Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 16),
-                  const SizedBox(width: 4),
+                  if (icon != null) ...[
+                    Icon(icon, size: 16),
+                    const SizedBox(width: 4),
+                  ],
                   Flexible(
                     child: Text(
                       label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -1959,7 +1962,6 @@ class _MapShellScreenState extends State<MapShellScreen>
                         child: actionPill(
                           onPressed: () =>
                               Navigator.of(ctx, rootNavigator: true).pop(),
-                          icon: Icons.close,
                           label: AppStrings.cancel,
                         ),
                       ),
@@ -1968,7 +1970,6 @@ class _MapShellScreenState extends State<MapShellScreen>
                         child: actionPill(
                           onPressed: () => Navigator.of(ctx, rootNavigator: true)
                               .pop('wa'),
-                          icon: Icons.chat_outlined,
                           label: AppStrings.mapSavePlaceWhatsApp,
                         ),
                       ),
@@ -1977,7 +1978,6 @@ class _MapShellScreenState extends State<MapShellScreen>
                         child: actionPill(
                           onPressed: () => Navigator.of(ctx, rootNavigator: true)
                               .pop('save'),
-                          icon: Icons.push_pin,
                           label: AppStrings.mapSavePlaceSave,
                           primary: true,
                         ),
