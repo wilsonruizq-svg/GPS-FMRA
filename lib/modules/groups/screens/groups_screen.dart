@@ -126,11 +126,23 @@ class GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _openGroupDetail(FamilyGroup group) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => GroupDetailScreen(group: group),
-      ),
-    );
+    debugPrint('GroupsScreen: open detail «${group.name}» id=${group.id}');
+    try {
+      // rootNavigator: salir del IndexedStack del AppShell (como push fiable).
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute<void>(
+          builder: (_) => GroupDetailScreen(group: group),
+        ),
+      );
+    } catch (e, st) {
+      debugPrint('GroupsScreen: open detail FAILED: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir el grupo: $e')),
+      );
+      return;
+    }
+    if (!mounted) return;
     await _refresh();
   }
 
@@ -535,56 +547,35 @@ class GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  /// Como 94d85b4: tap abre GroupDetail (miembros + invitaciones de vinculación).
+  /// ListTile exacto como 94d85b4 → GroupDetail (miembros + invitar).
   Widget _buildGroupBlock(FamilyGroup group) {
     return Material(
       color: Colors.white,
-      elevation: 1,
-      child: InkWell(
-        onTap: () => unawaited(_openGroupDetail(group)),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
-                child: const Icon(
-                  Icons.family_restroom,
-                  color: AppColors.deepBlue,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 18,
-                        color: AppColors.deepBlue,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      AppStrings.groupsTapMembers,
-                      style: const TextStyle(
-                        color: AppColors.midBlue,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(
-                Icons.chevron_right,
-                color: AppColors.deepBlue,
-                size: 28,
-              ),
-            ],
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: 10,
+        ),
+        leading: CircleAvatar(
+          backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+          child: const Icon(
+            Icons.family_restroom,
+            color: AppColors.deepBlue,
           ),
         ),
+        title: Text(
+          group.name,
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            fontSize: 17,
+          ),
+        ),
+        subtitle: const Text(AppStrings.groupsTapMembers),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () {
+          debugPrint('GroupsScreen: ListTile onTap «${group.name}»');
+          unawaited(_openGroupDetail(group));
+        },
       ),
     );
   }
@@ -727,35 +718,35 @@ class GroupsScreenState extends State<GroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final first = firstGroupName;
-    final header = _loading
-        ? 'Cargando grupos…'
-        : _error != null
-            ? 'Error al cargar grupos'
-            : (first == null
-                ? 'Mis grupos (${_groups.length})'
-                : 'Mis grupos (${_groups.length}) · $first');
+    // Scaffold como 94d85b4 (FAB crear/unir solo si no hay grupos).
+    final showCreateJoinFab = !_loading && _error == null && _groups.isEmpty;
 
-    return ColoredBox(
-      color: AppColors.surface,
-      child: Column(
+    return Scaffold(
+      backgroundColor: AppColors.surface,
+      floatingActionButton: showCreateJoinFab
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'join_invite',
+                  onPressed: _joinWithCode,
+                  icon: const Icon(Icons.vpn_key_outlined),
+                  label: const Text(AppStrings.groupsJoinAction),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'create_group',
+                  onPressed: _createGroup,
+                  icon: const Icon(Icons.add),
+                  label: const Text(AppStrings.groupsCreateAction),
+                ),
+              ],
+            )
+          : null,
+      body: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Material(
-            color: Colors.white,
-            elevation: 1,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Text(
-                header,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: AppColors.deepBlue,
-                ),
-              ),
-            ),
-          ),
           Expanded(
             child: RefreshIndicator(
               color: AppColors.deepBlue,
@@ -763,7 +754,7 @@ class GroupsScreenState extends State<GroupsScreen> {
               child: _buildScrollBody(),
             ),
           ),
-          // Buscador fijo abajo: filtra la lista compartida de ubicaciones.
+          // Fuera del detalle: buscador abajo para «Ubicaciones guardadas».
           if (!_loading && _error == null) _searchBar(),
         ],
       ),
