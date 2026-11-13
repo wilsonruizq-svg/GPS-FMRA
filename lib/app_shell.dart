@@ -12,7 +12,9 @@ import 'modules/map/screens/map_shell_screen.dart';
 import 'modules/settings/screens/settings_screen.dart';
 
 /// Navegación principal post-login: mapa, grupos, ajustes.
-/// El botón Atrás del sistema en la raíz pide el PIN de salida si aplica.
+///
+/// **No IndexedStack con MapLibre:** el platform view del mapa tapa Grupos
+/// (AppBar sí se ve; la lista queda en blanco). Solo montamos la pestaña activa.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -45,7 +47,6 @@ class _AppShellState extends State<AppShell> {
 
   void _onTabSelected(int i) {
     setState(() => _index = i);
-    // Al volver al Mapa, asegurar listener de alertas de chat.
     if (i == 0) {
       unawaited(ChatAlertService.instance.ensureRunning());
     }
@@ -80,6 +81,18 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
+  Widget _bodyForIndex() {
+    switch (_index) {
+      case 0:
+        return const MapShellScreen();
+      case 1:
+        return const GroupsScreen();
+      case 2:
+      default:
+        return const SettingsScreen();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
@@ -93,14 +106,8 @@ class _AppShellState extends State<AppShell> {
         appBar: _index == 0
             ? null
             : AppBar(title: Text(_titles[_index])),
-        body: IndexedStack(
-          index: _index,
-          children: const [
-            MapShellScreen(),
-            GroupsScreen(),
-            SettingsScreen(),
-          ],
-        ),
+        // Una sola pestaña montada: evita que MapLibre tape Grupos/Ajustes.
+        body: _bodyForIndex(),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: _onTabSelected,
