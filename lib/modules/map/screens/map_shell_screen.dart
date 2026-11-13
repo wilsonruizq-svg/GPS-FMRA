@@ -2221,11 +2221,6 @@ class _MapShellScreenState extends State<MapShellScreen>
                           ),
                   ),
                   IconButton(
-                    tooltip: AppStrings.mapSavePlaceTooltip,
-                    onPressed: _savingPlace ? null : _onSavePlacePressed,
-                    icon: const Icon(Icons.push_pin_outlined),
-                  ),
-                  IconButton(
                     tooltip: _mapExpanded
                         ? AppStrings.mapCollapseTooltip
                         : AppStrings.mapExpandTooltip,
