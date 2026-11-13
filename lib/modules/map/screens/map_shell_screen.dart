@@ -1731,12 +1731,14 @@ class _MapShellScreenState extends State<MapShellScreen>
                             isDense: true,
                             hintText: hint,
                             hintStyle: TextStyle(
-                              color: scheme.onSurfaceVariant
-                                  .withValues(alpha: 0.55),
-                              fontWeight: FontWeight.w400,
+                              color: AppColors.midBlue.withValues(alpha: 0.85),
+                              fontWeight: FontWeight.w500,
+                              fontSize: 14,
                             ),
                             filled: true,
                             fillColor: Colors.white,
+                            // Hint siempre visible (no se apaga con tema claro/oscuro).
+                            floatingLabelBehavior: FloatingLabelBehavior.never,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 18,
                               vertical: 12,

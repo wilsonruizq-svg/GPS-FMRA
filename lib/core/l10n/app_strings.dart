@@ -63,11 +63,10 @@ abstract final class AppStrings {
 
   static const mapSavePlaceTooltip = 'Guardar ubicación con nombre';
   static const mapSavePlaceTitle = 'Guardar este lugar';
-  static const mapSavePlaceNameLabel = 'Nombre del lugar';
-  static const mapSavePlaceNameHint = 'Ej. Casa, Trabajo, Parque';
-  static const mapSavePlaceDescLabel = 'Detalle / descripción';
-  static const mapSavePlaceDescHint =
-      'Ej. Restaurante El Patio, menú familiar…';
+  static const mapSavePlaceNameLabel = 'Título';
+  static const mapSavePlaceNameHint = 'Nombre del lugar';
+  static const mapSavePlaceDescLabel = 'Detalle';
+  static const mapSavePlaceDescHint = 'Notas u observaciones';
   static const mapSavePlacePhoto = 'Foto de referencia';
   static const mapSavePlacePhotoAdd = 'Agregar foto';
   static const mapSavePlacePhotoCamera = 'Cámara';
