@@ -1830,31 +1830,36 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   Widget _buildMapPane(BuildContext context) {
-    if (!_cameraResolved || _initialCamera == null) {
-      return const ColoredBox(
-        color: Color(0xFFE8EEF4),
-        child: Center(child: CircularProgressIndicator()),
-      );
-    }
-
     final styleUrl = Env.mapStyleUrl;
     final showMyLocation =
         _myConsent?.isActive == true || _osLocationGranted;
+    final mapReady = _cameraResolved && _initialCamera != null;
+
     return Stack(
       fit: StackFit.expand,
       children: [
-        MapLibreMap(
-          styleString: styleUrl,
-          initialCameraPosition: _initialCamera!,
-          compassEnabled: true,
-          myLocationEnabled: showMyLocation,
-          myLocationTrackingMode: MyLocationTrackingMode.none,
-          trackCameraPosition: true,
-          onMapCreated: _onMapCreated,
-          onStyleLoadedCallback: () {
-            unawaited(_onStyleLoaded());
-          },
-        ),
+        if (!mapReady)
+          const ColoredBox(
+            color: Color(0xFFE8EEF4),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          MapLibreMap(
+            styleString: styleUrl,
+            initialCameraPosition: _initialCamera!,
+            compassEnabled: true,
+            myLocationEnabled: showMyLocation,
+            myLocationTrackingMode: MyLocationTrackingMode.none,
+            trackCameraPosition: true,
+            onMapCreated: _onMapCreated,
+            onStyleLoadedCallback: () {
+              unawaited(_onStyleLoaded());
+            },
+            // Mantener pulsado = pin / guardar ubicación actual.
+            onMapLongClick: (point, latLng) {
+              unawaited(_onSavePlacePressed());
+            },
+          ),
         // SOS dentro del mapa, arriba; mismo tamaño que «mi ubicación».
         Positioned(
           right: 12,
@@ -1884,25 +1889,30 @@ class _MapShellScreenState extends State<MapShellScreen>
                   ),
           ),
         ),
+        // Pin / guardar ubicación — siempre visible (también mientras carga el mapa).
         Positioned(
           right: 12,
           bottom: 56,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FloatingActionButton.small(
+              FloatingActionButton.extended(
                 heroTag: 'map_save_place',
                 tooltip: AppStrings.mapSavePlaceTooltip,
                 backgroundColor: AppColors.signalCyan,
                 foregroundColor: AppColors.deepBlue,
                 onPressed: _savingPlace ? null : _onSavePlacePressed,
-                child: _savingPlace
+                icon: _savingPlace
                     ? const SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.add_location_alt_outlined),
+                    : const Icon(Icons.push_pin),
+                label: Text(
+                  _savingPlace ? '…' : AppStrings.mapSavePlaceSave,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
               const SizedBox(height: 12),
               FloatingActionButton.small(
@@ -2132,6 +2142,11 @@ class _MapShellScreenState extends State<MapShellScreen>
                               onChanged: _onSelectGroup,
                             ),
                           ),
+                  ),
+                  IconButton(
+                    tooltip: AppStrings.mapSavePlaceTooltip,
+                    onPressed: _savingPlace ? null : _onSavePlacePressed,
+                    icon: const Icon(Icons.push_pin_outlined),
                   ),
                   IconButton(
                     tooltip: _mapExpanded
