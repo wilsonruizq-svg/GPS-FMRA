@@ -1628,8 +1628,87 @@ class _MapShellScreenState extends State<MapShellScreen>
                 unawaited(ensureCategories(setLocal));
               });
             }
+            final scheme = Theme.of(ctx).colorScheme;
+            final pillShape = RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(999),
+            );
+            ButtonStyle pillStyle({required bool primary}) {
+              if (primary) {
+                return FilledButton.styleFrom(
+                  shape: pillShape,
+                  backgroundColor: AppColors.deepBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 10,
+                  ),
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                );
+              }
+              return OutlinedButton.styleFrom(
+                shape: pillShape,
+                foregroundColor: AppColors.deepBlue,
+                backgroundColor: AppColors.surface,
+                side: BorderSide(color: scheme.outlineVariant),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              );
+            }
+
+            Widget actionPill({
+              required VoidCallback? onPressed,
+              required IconData icon,
+              required String label,
+              bool primary = false,
+            }) {
+              final child = Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 16),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+              if (primary) {
+                return FilledButton(
+                  style: pillStyle(primary: true),
+                  onPressed: onPressed,
+                  child: child,
+                );
+              }
+              return OutlinedButton(
+                style: pillStyle(primary: false),
+                onPressed: onPressed,
+                child: child,
+              );
+            }
+
             return AlertDialog(
-              title: const Text(AppStrings.mapSavePlaceTitle),
+              titlePadding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+              contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              actionsPadding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+              title: Text(
+                AppStrings.mapSavePlaceTitle,
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1640,6 +1719,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                       autofocus: true,
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
+                        isDense: true,
                         labelText: AppStrings.mapSavePlaceNameLabel,
                         hintText: AppStrings.mapSavePlaceNameHint,
                       ),
@@ -1651,86 +1731,105 @@ class _MapShellScreenState extends State<MapShellScreen>
                       maxLines: 2,
                       maxLength: 280,
                       decoration: const InputDecoration(
+                        isDense: true,
                         labelText: AppStrings.mapSavePlaceDescLabel,
                         hintText: AppStrings.mapSavePlaceDescHint,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 4),
                     Text(
                       AppStrings.mapSavePlacePhoto,
-                      style: Theme.of(ctx).textTheme.titleSmall,
+                      style: Theme.of(ctx).textTheme.labelLarge,
                     ),
-                    const SizedBox(height: 8),
-                    if (photoBytes != null)
+                    if (photoBytes != null) ...[
+                      const SizedBox(height: 6),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.memory(
                           photoBytes!,
-                          height: 120,
+                          height: 88,
                           fit: BoxFit.cover,
                         ),
                       ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        OutlinedButton.icon(
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                           onPressed: () =>
-                              unawaited(pickPhoto(ImageSource.camera, setLocal)),
-                          icon: const Icon(Icons.photo_camera_outlined),
-                          label: const Text(AppStrings.mapSavePlacePhotoCamera),
+                              setLocal(() => photoBytes = null),
+                          child: const Text(AppStrings.mapSavePlacePhotoClear),
                         ),
-                        OutlinedButton.icon(
-                          onPressed: () => unawaited(
-                            pickPhoto(ImageSource.gallery, setLocal),
+                      ),
+                    ] else
+                      const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: actionPill(
+                            onPressed: () => unawaited(
+                              pickPhoto(ImageSource.camera, setLocal),
+                            ),
+                            icon: Icons.photo_camera_outlined,
+                            label: AppStrings.mapSavePlacePhotoCamera,
                           ),
-                          icon: const Icon(Icons.photo_outlined),
-                          label: const Text(AppStrings.mapSavePlacePhotoGallery),
                         ),
-                        if (photoBytes != null)
-                          TextButton(
-                            onPressed: () =>
-                                setLocal(() => photoBytes = null),
-                            child: const Text(AppStrings.mapSavePlacePhotoClear),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: actionPill(
+                            onPressed: () => unawaited(
+                              pickPhoto(ImageSource.gallery, setLocal),
+                            ),
+                            icon: Icons.photo_outlined,
+                            label: AppStrings.mapSavePlacePhotoGallery,
                           ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        shareWithGroup
-                            ? Icons.radio_button_off
-                            : Icons.radio_button_checked,
+                    SegmentedButton<bool>(
+                      showSelectedIcon: false,
+                      emptySelectionAllowed: false,
+                      style: ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: WidgetStatePropertyAll(pillShape),
                       ),
-                      title: const Text(AppStrings.mapSavePlaceOnlyMe),
-                      onTap: () => setLocal(() {
-                        shareWithGroup = false;
-                        selectedCategoryId = null;
-                      }),
-                    ),
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        shareWithGroup
-                            ? Icons.radio_button_checked
-                            : Icons.radio_button_off,
-                      ),
-                      title: const Text(AppStrings.mapSavePlaceShareGroup),
-                      onTap: () {
-                        setLocal(() => shareWithGroup = true);
-                        unawaited(ensureCategories(setLocal));
+                      segments: const [
+                        ButtonSegment<bool>(
+                          value: false,
+                          icon: Icon(Icons.person_outline, size: 16),
+                          label: Text(AppStrings.mapSavePlaceOnlyMe),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          icon: Icon(Icons.groups_outlined, size: 16),
+                          label: Text(AppStrings.mapSavePlaceShareGroup),
+                        ),
+                      ],
+                      selected: {shareWithGroup},
+                      onSelectionChanged: (next) {
+                        final wantGroup = next.contains(true);
+                        setLocal(() {
+                          shareWithGroup = wantGroup;
+                          if (!wantGroup) selectedCategoryId = null;
+                        });
+                        if (wantGroup) {
+                          unawaited(ensureCategories(setLocal));
+                        }
                       },
                     ),
                     if (shareWithGroup) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       DropdownButtonFormField<String?>(
                         key: ValueKey(selectedCategoryId ?? 'none'),
                         initialValue: selectedCategoryId,
+                        isDense: true,
                         decoration: const InputDecoration(
+                          isDense: true,
                           labelText: AppStrings.mapSavePlaceCategoryLabel,
                           helperText: AppStrings.mapSavePlaceCategoryHint,
                         ),
@@ -1748,8 +1847,8 @@ class _MapShellScreenState extends State<MapShellScreen>
                         onChanged: (v) =>
                             setLocal(() => selectedCategoryId = v),
                       ),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
+                      const SizedBox(height: 6),
+                      actionPill(
                         onPressed: groupIdForCats == null
                             ? null
                             : () async {
@@ -1757,10 +1856,10 @@ class _MapShellScreenState extends State<MapShellScreen>
                                     await _promptCreatePlaceCategory(
                                   groupId: groupIdForCats,
                                 );
-                                // _prompt ya esperó frames; otro beat antes de
-                                // setLocal sobre el diálogo padre (evita 6281).
                                 await _waitFrames(2);
-                                if (created == null || !ctx.mounted) return;
+                                if (created == null || !ctx.mounted) {
+                                  return;
+                                }
                                 setLocal(() {
                                   categories = [
                                     ...categories,
@@ -1774,27 +1873,47 @@ class _MapShellScreenState extends State<MapShellScreen>
                                   categoriesLoaded = true;
                                 });
                               },
-                        icon: const Icon(Icons.create_new_folder_outlined),
-                        label: const Text(AppStrings.mapSavePlaceCategoryNew),
+                        icon: Icons.create_new_folder_outlined,
+                        label: AppStrings.mapSavePlaceCategoryNew,
                       ),
                     ],
                   ],
                 ),
               ),
               actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
-                  child: const Text(AppStrings.cancel),
-                ),
-                TextButton(
-                  onPressed: () =>
-                      Navigator.of(ctx, rootNavigator: true).pop('wa'),
-                  child: const Text(AppStrings.mapSavePlaceWhatsApp),
-                ),
-                FilledButton(
-                  onPressed: () =>
-                      Navigator.of(ctx, rootNavigator: true).pop('save'),
-                  child: const Text(AppStrings.mapSavePlaceSave),
+                SizedBox(
+                  width: double.maxFinite,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: actionPill(
+                          onPressed: () =>
+                              Navigator.of(ctx, rootNavigator: true).pop(),
+                          icon: Icons.close,
+                          label: AppStrings.cancel,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: actionPill(
+                          onPressed: () => Navigator.of(ctx, rootNavigator: true)
+                              .pop('wa'),
+                          icon: Icons.chat_outlined,
+                          label: AppStrings.mapSavePlaceWhatsApp,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: actionPill(
+                          onPressed: () => Navigator.of(ctx, rootNavigator: true)
+                              .pop('save'),
+                          icon: Icons.push_pin,
+                          label: AppStrings.mapSavePlaceSave,
+                          primary: true,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             );
