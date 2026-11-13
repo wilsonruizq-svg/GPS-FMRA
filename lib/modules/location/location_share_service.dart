@@ -185,30 +185,96 @@ class LocationShareService {
     }
   }
 
-  /// Historial reciente visible del grupo (RPC). Vacío si no APPLY / sin permiso.
-  Future<List<HistoryPoint>> fetchGroupHistory({
+  /// Historial reciente **propio** (auth.uid) del grupo.
+  /// Prefiere RPC `list_own_location_history`; fallback a
+  /// `list_group_location_history` (post-migración también own-only) y,
+  /// si fallan, SELECT directo filtrado por `_uid`.
+  Future<List<HistoryPoint>> fetchOwnHistory({
     required String groupId,
     int hours = 24,
     int limit = 200,
   }) async {
+    final uid = _uid;
     try {
       final rows = await _sb.rpc(
-        'list_group_location_history',
+        'list_own_location_history',
         params: {
           'p_group_id': groupId,
           'p_hours': hours,
           'p_limit': limit,
         },
       );
-      if (rows is! List) return const [];
-      return rows
-          .map(
-            (e) => HistoryPoint.fromMap(Map<String, dynamic>.from(e as Map)),
-          )
-          .toList();
+      return _mapHistoryRows(rows, onlyUserId: uid);
+    } catch (_) {
+      try {
+        final rows = await _sb.rpc(
+          'list_group_location_history',
+          params: {
+            'p_group_id': groupId,
+            'p_hours': hours,
+            'p_limit': limit,
+          },
+        );
+        // Defensa en cliente: nunca mostrar filas ajenas aunque el RPC viejo
+        // aún devuelva peers (pre-migración own-only).
+        return _mapHistoryRows(rows, onlyUserId: uid);
+      } catch (_) {
+        return _fetchOwnHistoryDirect(
+          groupId: groupId,
+          hours: hours,
+          limit: limit,
+        );
+      }
+    }
+  }
+
+  /// @deprecated Usar [fetchOwnHistory]. Mantiene nombre por compat; same own-only.
+  Future<List<HistoryPoint>> fetchGroupHistory({
+    required String groupId,
+    int hours = 24,
+    int limit = 200,
+  }) =>
+      fetchOwnHistory(groupId: groupId, hours: hours, limit: limit);
+
+  Future<List<HistoryPoint>> _fetchOwnHistoryDirect({
+    required String groupId,
+    required int hours,
+    required int limit,
+  }) async {
+    try {
+      final uid = _uid;
+      final since = DateTime.now()
+          .toUtc()
+          .subtract(Duration(hours: hours.clamp(1, 72)));
+      final rows = await _sb
+          .from('location_history')
+          .select('id, user_id, lat, lon, accuracy_m, recorded_at')
+          .eq('user_id', uid)
+          .gte('recorded_at', since.toIso8601String())
+          .order('recorded_at', ascending: false)
+          .limit(limit.clamp(1, 500));
+      // groupId se valida en el caller (selector); RLS own-only basta.
+      // Si hace falta pertenencia, el RPC es el camino preferido.
+      final points = _mapHistoryRows(rows, onlyUserId: uid);
+      if (groupId.isEmpty) return points;
+      return points;
     } catch (_) {
       return const [];
     }
+  }
+
+  List<HistoryPoint> _mapHistoryRows(
+    dynamic rows, {
+    required String onlyUserId,
+  }) {
+    if (rows is! List) return const [];
+    final mine = onlyUserId.trim().toLowerCase();
+    return rows
+        .map(
+          (e) => HistoryPoint.fromMap(Map<String, dynamic>.from(e as Map)),
+        )
+        .where((p) => p.userId.trim().toLowerCase() == mine)
+        .toList();
   }
 
   /// Ubicaciones visibles del grupo (RPC `list_group_locations`).

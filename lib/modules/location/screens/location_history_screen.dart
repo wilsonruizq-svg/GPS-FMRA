@@ -6,7 +6,7 @@ import '../../groups/groups_service.dart';
 import '../../map/map_place_focus.dart';
 import '../location_share_service.dart';
 
-/// Lista mínima de historial GPS del grupo (consent-first vía RLS/RPC).
+/// Historial GPS **propio** del usuario en sesión (auth.uid), por grupo.
 class LocationHistoryScreen extends StatefulWidget {
   const LocationHistoryScreen({super.key});
 
@@ -45,7 +45,7 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
           : (groups.isNotEmpty ? groups.first : null);
       List<HistoryPoint> points = const [];
       if (selected != null) {
-        points = await _locations.fetchGroupHistory(groupId: selected.id);
+        points = await _locations.fetchOwnHistory(groupId: selected.id);
       }
       if (!mounted) return;
       setState(() {
@@ -70,7 +70,7 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
       _loading = true;
     });
     try {
-      final points = await _locations.fetchGroupHistory(groupId: g.id);
+      final points = await _locations.fetchOwnHistory(groupId: g.id);
       if (!mounted) return;
       setState(() {
         _points = points;

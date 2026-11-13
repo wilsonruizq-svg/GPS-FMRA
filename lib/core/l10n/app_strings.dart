@@ -265,19 +265,19 @@ abstract final class AppStrings {
   static const settingsSectionAbout = 'Información';
   static const settingsHistory = 'Historial de ubicaciones';
   static const settingsHistorySubtitle =
-      'Puntos recientes del grupo (con consentimiento)';
+      'Tus puntos GPS recientes (solo tu cuenta)';
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
 
   static const historyTitle = 'Historial';
   static const historyConsentNote =
-      'Solo ves historial de quienes comparten contigo (consentimiento activo). '
-      'Tus puntos se guardan al compartir en el mapa. '
-      'SQL: 20261102272000_location_history.sql';
+      'Solo ves tu propio historial (usuario en sesión). '
+      'Los puntos se guardan al compartir ubicación en el mapa. '
+      'SQL: 20261113043000_location_history_own_only.sql';
   static const historyEmpty =
-      'Aún no hay puntos de historial visibles. '
-      'Comparte ubicación en el mapa unos minutos y aplica el SQL de historial '
-      'si aún no lo corriste.';
+      'Aún no hay puntos de tu historial. '
+      'Comparte ubicación en el mapa unos minutos y aplica el SQL own-only '
+      'si aún ves puntos de otra persona.';
 
   static const exitPinTitle = 'PIN de salida';
   static const exitPinSetAction = 'Configurar PIN de salida';

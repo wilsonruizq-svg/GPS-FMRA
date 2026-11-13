@@ -46,6 +46,10 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY para historial GPS:** tabla `location_history` + RPC
       `list_group_location_history`. Éxito: `location_history_ok = true`.
       Guía: `docs/HISTORIAL_ES.md`.)
+   11b. `supabase/migrations/20261113043000_location_history_own_only.sql`
+      (**APPLY OBLIGATORIO si el historial muestra puntos del admin en
+      todos los teléfonos:** RLS SELECT = `user_id = auth.uid()` + RPC
+      filtra solo el caller. Éxito: `history_own_only_ok = true`.)
    12. `supabase/migrations/20261102273000_sos_acks.sql`
       (**APPLY para Aceptar grupal:** tabla `sos_acks` + RPC `ack_sos` /
       `list_sos_ack_progress`. El emisor ve pendientes; el SOS se resuelve
