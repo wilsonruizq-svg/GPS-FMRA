@@ -408,8 +408,20 @@ abstract final class AppStrings {
       'Aceptado. Todos confirmaron: SOS cerrado.';
   static const sosAckError =
       'No se pudo guardar Aceptar en el servidor. '
-      'El banner se ocultó en este teléfono. '
-      'Confirma que aplicaste 20261102273000_sos_acks.sql.';
+      'El aviso SOS sigue visible; inténtalo de nuevo.';
+  static const sosAckErrorNetwork =
+      'Sin conexión con el servidor (Wi‑Fi/datos o certificado). '
+      'Revisa internet e inténtalo otra vez. El SOS sigue visible.';
+  static const sosAckNeedMigrationTitle = 'SOS Aceptar: falta activar en el API';
+  static const sosAckNeedMigrationBody =
+      'El botón Aceptar está en la app, pero el servidor no encuentra '
+      'ack_sos / sos_acks (404). Arreglo:\n\n'
+      '1. Supabase → SQL Editor → New query.\n'
+      '2. Pega TODO:\n'
+      '   supabase/migrations/20261102273000_sos_acks.sql\n'
+      '3. Run. Al final: sos_acks_ok = true.\n'
+      '4. Reinicia la app y pulsa Aceptar otra vez.\n\n'
+      'Sin ese SQL el banner no puede confirmar al emisor.';
   static const sosAckLoading = 'Cargando confirmaciones del grupo…';
   static const sosAckNoPeers =
       'No hay otros integrantes en el grupo para confirmar.';

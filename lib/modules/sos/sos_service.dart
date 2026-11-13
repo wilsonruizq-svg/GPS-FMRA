@@ -146,10 +146,31 @@ class SosService {
         raw.contains('schema cache') ||
         raw.contains('pgrst205') ||
         raw.contains('pgrst202') ||
-        (raw.contains('404') && raw.contains('sos')) ||
+        (raw.contains('404') &&
+            (raw.contains('sos') ||
+                raw.contains('ack_sos') ||
+                raw.contains('sos_acks'))) ||
         (raw.contains('relation') &&
-            raw.contains('sos_events') &&
+            (raw.contains('sos_events') || raw.contains('sos_acks')) &&
             raw.contains('does not exist'));
+  }
+
+  /// Red / TLS / DNS (no confundir con “falta SQL”).
+  static bool isConnectivityError(Object error) {
+    final raw = error.toString().toLowerCase();
+    return raw.contains('socketexception') ||
+        raw.contains('failed host lookup') ||
+        raw.contains('network is unreachable') ||
+        raw.contains('connection reset') ||
+        raw.contains('connection refused') ||
+        raw.contains('timed out') ||
+        raw.contains('timeout') ||
+        raw.contains('handshake') ||
+        raw.contains('certificate') ||
+        raw.contains('ssl') ||
+        raw.contains('tls') ||
+        raw.contains('clientexception') ||
+        raw.contains('xmlhttprequest');
   }
 
   /// Alertas activas del grupo (más recientes primero).
@@ -338,12 +359,43 @@ class SosService {
   }
 
   /// Compañero pulsa Aceptar → registra ack; si todos aceptaron, resuelve el SOS.
+  /// Prefiere RPC `ack_sos`; si el schema cache no lo ve, fallback INSERT en
+  /// `sos_acks` + `try_resolve_sos_if_all_acked` (misma semántica RLS).
   Future<bool> acknowledge(String sosId) async {
-    final raw = await _sb.rpc('ack_sos', params: {'p_sos_id': sosId});
-    if (raw is Map) {
-      return raw['all_acked'] == true;
+    final id = sosId.trim();
+    if (id.isEmpty) {
+      throw ArgumentError('sosId vacío');
     }
-    return false;
+    try {
+      final raw = await _sb.rpc('ack_sos', params: {'p_sos_id': id});
+      if (raw is Map) {
+        return raw['all_acked'] == true;
+      }
+      return false;
+    } catch (e) {
+      if (!isMissingApiObject(e)) rethrow;
+      return _acknowledgeViaInsert(id);
+    }
+  }
+
+  Future<bool> _acknowledgeViaInsert(String sosId) async {
+    await _sb.from('sos_acks').upsert(
+      {
+        'sos_id': sosId,
+        'user_id': _uid,
+      },
+      onConflict: 'sos_id,user_id',
+    );
+    try {
+      final raw = await _sb.rpc(
+        'try_resolve_sos_if_all_acked',
+        params: {'p_sos_id': sosId},
+      );
+      return raw == true;
+    } catch (_) {
+      // Ack quedó guardado; el resolve puede llegar en el siguiente poll.
+      return false;
+    }
   }
 
   /// Si no hay otros miembros, resuelve de inmediato (todos = vacío).

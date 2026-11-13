@@ -2317,12 +2317,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   Future<void> _acceptSosPeer(SosEvent event) async {
-    // Receptor: registra ack en servidor y oculta banner localmente.
-    _sosRefreshEpoch++;
-    _markSosDismissedLocally(event);
-    setState(() {
-      _activeSos = _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
-    });
+    // Primero servidor; solo ocultar banner si Aceptar quedó guardado.
+    // (Antes se ocultaba al tocar y el snack decía “no se pudo guardar…”.)
     final lat = event.lat;
     final lon = event.lon;
     final c = _mapController;
@@ -2336,6 +2332,12 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       final allAcked = await _sos.acknowledge(event.id);
       if (!mounted) return;
+      _sosRefreshEpoch++;
+      _markSosDismissedLocally(event);
+      setState(() {
+        _activeSos =
+            _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -2345,22 +2347,44 @@ class _MapShellScreenState extends State<MapShellScreen>
           ),
         ),
       );
-    } catch (_) {
+      unawaited(_refreshActiveSos());
+    } catch (e) {
       if (!mounted) return;
+      if (SosService.isMissingApiObject(e)) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text(AppStrings.sosAckNeedMigrationTitle),
+            content: const SingleChildScrollView(
+              child: Text(AppStrings.sosAckNeedMigrationBody),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text(AppStrings.close),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+      final msg = SosService.isConnectivityError(e)
+          ? AppStrings.sosAckErrorNetwork
+          : AppStrings.sosAckError;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.sosAckError)),
+        SnackBar(content: Text(msg)),
       );
     }
   }
 
   Widget? _buildSosBanner() {
     final visible = _activeSos.where((e) {
-      if (e.userId == _myUid) return true;
+      if (_isOwnSos(e)) return true;
       return !_isSosHiddenLocally(e);
     }).toList();
     if (visible.isEmpty) return null;
     final event = visible.first;
-    final isSelf = event.userId == _myUid;
+    final isSelf = _isOwnSos(event);
     final senderName = _sosSenderLabel(event);
     final progress =
         isSelf && _sosAckProgress?.sosId == event.id ? _sosAckProgress : null;
