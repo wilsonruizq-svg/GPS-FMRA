@@ -314,11 +314,16 @@ class GroupsScreenState extends State<GroupsScreen> {
   }
 
   Future<void> _joinWithCode() async {
-    final result = await Navigator.of(context).push<AcceptInviteResult>(
+    final result =
+        await Navigator.of(context, rootNavigator: true).push<AcceptInviteResult>(
       MaterialPageRoute(builder: (_) => const AcceptInviteScreen()),
     );
     if (result == null) return;
     await _refresh();
+    if (!mounted) return;
+    final match = _groups.where((g) => g.id == result.groupId);
+    if (match.isEmpty) return;
+    await _openGroupDetail(match.first);
   }
 
   List<NamedPlace> get _filteredPlaces {
@@ -718,33 +723,11 @@ class GroupsScreenState extends State<GroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Scaffold como 94d85b4 (FAB crear/unir solo si no hay grupos).
-    final showCreateJoinFab = !_loading && _error == null && _groups.isEmpty;
-
-    return Scaffold(
-      backgroundColor: AppColors.surface,
-      floatingActionButton: showCreateJoinFab
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                FloatingActionButton.extended(
-                  heroTag: 'join_invite',
-                  onPressed: _joinWithCode,
-                  icon: const Icon(Icons.vpn_key_outlined),
-                  label: const Text(AppStrings.groupsJoinAction),
-                ),
-                const SizedBox(height: 12),
-                FloatingActionButton.extended(
-                  heroTag: 'create_group',
-                  onPressed: _createGroup,
-                  icon: const Icon(Icons.add),
-                  label: const Text(AppStrings.groupsCreateAction),
-                ),
-              ],
-            )
-          : null,
-      body: Column(
+    // SIN Scaffold anidado (AppShell ya tiene uno → blank Groups).
+    // Column+Expanded da altura real; ListTile abre GroupDetail.
+    return ColoredBox(
+      color: AppColors.surface,
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
