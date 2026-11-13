@@ -1714,29 +1714,107 @@ class _MapShellScreenState extends State<MapShellScreen>
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        labelText: AppStrings.mapSavePlaceNameLabel,
-                        hintText: AppStrings.mapSavePlaceNameHint,
-                      ),
-                      maxLength: 80,
+                    Builder(
+                      builder: (_) {
+                        InputDecoration pillDecoration(String hint) {
+                          final border = OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(999),
+                            borderSide: BorderSide(
+                              color: scheme.outlineVariant,
+                              width: 1,
+                            ),
+                          );
+                          return InputDecoration(
+                            isDense: true,
+                            hintText: hint,
+                            hintStyle: TextStyle(
+                              color: scheme.onSurfaceVariant
+                                  .withValues(alpha: 0.55),
+                              fontWeight: FontWeight.w400,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 12,
+                            ),
+                            border: border,
+                            enabledBorder: border,
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(999),
+                              borderSide: const BorderSide(
+                                color: AppColors.signalCyan,
+                                width: 1.2,
+                              ),
+                            ),
+                            counterText: '',
+                          );
+                        }
+
+                        Widget labeledPill({
+                          required TextEditingController controller,
+                          required String label,
+                          required String hint,
+                          int maxLines = 1,
+                          int? maxLength,
+                          bool autofocus = false,
+                        }) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                label,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(ctx)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.deepBlue,
+                                    ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextField(
+                                controller: controller,
+                                autofocus: autofocus,
+                                textAlign: TextAlign.center,
+                                textCapitalization:
+                                    TextCapitalization.sentences,
+                                maxLines: maxLines,
+                                maxLength: maxLength,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.deepBlue,
+                                ),
+                                decoration: pillDecoration(hint),
+                              ),
+                            ],
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            labeledPill(
+                              controller: nameController,
+                              label: AppStrings.mapSavePlaceNameLabel,
+                              hint: AppStrings.mapSavePlaceNameHint,
+                              maxLength: 80,
+                              autofocus: true,
+                            ),
+                            const SizedBox(height: 10),
+                            labeledPill(
+                              controller: descController,
+                              label: AppStrings.mapSavePlaceDescLabel,
+                              hint: AppStrings.mapSavePlaceDescHint,
+                              maxLines: 2,
+                              maxLength: 280,
+                            ),
+                          ],
+                        );
+                      },
                     ),
-                    TextField(
-                      controller: descController,
-                      textCapitalization: TextCapitalization.sentences,
-                      maxLines: 2,
-                      maxLength: 280,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        labelText: AppStrings.mapSavePlaceDescLabel,
-                        hintText: AppStrings.mapSavePlaceDescHint,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     Text(
                       AppStrings.mapSavePlacePhoto,
                       style: Theme.of(ctx).textTheme.labelLarge,
