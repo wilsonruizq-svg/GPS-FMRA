@@ -60,6 +60,75 @@ abstract final class AppStrings {
   static const mapTitle = 'Mapa';
   static const mapExpandTooltip = 'Ampliar mapa';
   static const mapCollapseTooltip = 'Mostrar integrantes';
+
+  static const mapSavePlaceTooltip = 'Guardar ubicación con nombre';
+  static const mapSavePlaceTitle = 'Guardar este lugar';
+  static const mapSavePlaceNameLabel = 'Nombre del lugar';
+  static const mapSavePlaceNameHint = 'Ej. Casa, Trabajo, Parque';
+  static const mapSavePlaceDescLabel = 'Detalle / descripción';
+  static const mapSavePlaceDescHint =
+      'Ej. Restaurante El Patio, menú familiar…';
+  static const mapSavePlacePhoto = 'Foto de referencia';
+  static const mapSavePlacePhotoAdd = 'Agregar foto';
+  static const mapSavePlacePhotoCamera = 'Cámara';
+  static const mapSavePlacePhotoGallery = 'Galería';
+  static const mapSavePlacePhotoClear = 'Quitar foto';
+  static const mapSavePlaceOnlyMe = 'Solo yo';
+  static const mapSavePlaceShareGroup = 'Compartir con el grupo';
+  static const mapSavePlaceSave = 'Guardar';
+  static const mapSavePlaceWhatsApp = 'WhatsApp';
+  static const mapSavePlaceNeedGps = 'No hay GPS aún. Activa ubicación e inténtalo.';
+  static const mapSavePlaceNeedGroup =
+      'Elige un grupo para compartir el lugar.';
+  static const mapSavePlaceSaved = 'Lugar guardado.';
+  static const mapSavePlaceShared = 'Lugar compartido con el grupo.';
+  static const mapSavePlaceWhatsAppOk = 'Abriendo WhatsApp…';
+  static const mapSavePlaceWhatsAppError =
+      'No se pudo abrir WhatsApp. ¿Está instalado?';
+  static const mapSavePlaceError =
+      'No se pudo guardar el lugar. Revisa la conexión.';
+  static const mapSavePlaceApply =
+      'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
+      '(named_places_photos_ok = true). Guía: docs/PLACES_ES.md';
+  static const groupsPlacesTitle = 'Ubicaciones guardadas';
+  static const groupsPlacesEmpty =
+      'Sin ubicaciones aún. Crea una categoría (ej. Restaurantes) '
+      'y guarda lugares desde el Mapa con “Compartir con el grupo”.';
+  static const groupsPlacesDelete = 'Eliminar ubicación';
+  static const groupsPlacesDeleted = 'Ubicación eliminada.';
+  static const groupsPlacesDeleteConfirm =
+      '¿Eliminar esta ubicación del grupo?';
+  static const groupsPlacesOpenMap = 'Ver en mapa';
+  static const groupsPlacesUncategorized = 'Sin categoría';
+  static const groupsPlacesSoloTitle = 'Solo yo';
+  static const groupsPlacesSoloHint =
+      'Guardados sin compartir con el grupo. En el Mapa elige '
+      '“Compartir con el grupo” para que los vea toda la familia.';
+  static const groupsPlacesSharedTitle = 'Ubicaciones guardadas';
+  static const groupsPlacesSectionHint = 'Toca para ver ubicaciones';
+  static const groupsPlacesSearchHint =
+      'Buscar ubicaciones (nombre, detalle…)';
+  static const groupsPlacesSearchEmpty =
+      'Ninguna ubicación coincide con la búsqueda.';
+  static const groupsCategoryCreateTitle = 'Nueva categoría';
+  static const groupsCategoryCreateAction = 'Nueva carpeta';
+  static const groupsCategoryNameLabel = 'Nombre';
+  static const groupsCategoryNameHint = 'Ej. Restaurantes, Negocios';
+  static const groupsCategoryDelete = 'Eliminar categoría';
+  static String groupsCategoryCreated(String name) =>
+      'Categoría creada: $name';
+  static String groupsCategoryDeleteConfirm(String name) =>
+      '¿Eliminar la categoría «$name»? Las ubicaciones quedan sin carpeta.';
+  static const groupsCategoryEmpty = 'Sin ubicaciones en esta carpeta.';
+  static String groupsCategoryPlaceCount(int n) =>
+      n == 1 ? '1 ubicación' : '$n ubicaciones';
+  static const mapSavePlaceCategoryLabel = 'Categoría / carpeta';
+  static const mapSavePlaceCategoryHint = 'Elige o crea desde Grupos';
+  static const mapSavePlaceCategoryNone = 'Sin categoría';
+  static const groupsMembersSection = 'Integrantes';
+  static const groupsMembersEmpty = 'Sin integrantes visibles.';
+  static const groupsMembersLoading = 'Cargando integrantes…';
+  static const groupsOpenDetail = 'Invitar / administrar';
   static const mapPlaceholderTitle = 'Mapa (marcador de posición)';
   static const mapPlaceholderBody =
       'El mapa usa MapLibre sin clave de pago. Guía: docs/MAPLIBRE_ES.md';
