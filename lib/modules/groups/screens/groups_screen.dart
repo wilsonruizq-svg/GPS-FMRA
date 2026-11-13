@@ -110,6 +110,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
     });
   }
 
+  Future<void> _waitFrames(int count) async {
+    for (var i = 0; i < count; i++) {
+      final done = Completer<void>();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!done.isCompleted) done.complete();
+      });
+      WidgetsBinding.instance.scheduleFrame();
+      await done.future;
+    }
+  }
+
+  Future<void> _waitAfterDialogClosed() async {
+    await _waitFrames(3);
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+    if (!mounted) return;
+    await _waitFrames(1);
+  }
+
   Future<void> _createCategoryQuickAdd() async {
     if (_groups.isEmpty) {
       if (!mounted) return;
@@ -122,25 +140,29 @@ class _GroupsScreenState extends State<GroupsScreen> {
     if (_groups.length > 1) {
       final picked = await showDialog<String>(
         context: context,
+        useRootNavigator: true,
         builder: (ctx) => SimpleDialog(
           title: const Text(AppStrings.groupsCategoryCreateTitle),
           children: [
             for (final g in _groups)
               SimpleDialogOption(
-                onPressed: () => Navigator.pop(ctx, g.id),
+                onPressed: () =>
+                    Navigator.of(ctx, rootNavigator: true).pop(g.id),
                 child: Text(g.name),
               ),
           ],
         ),
       );
-      if (picked == null) return;
+      await _waitAfterDialogClosed();
+      if (picked == null || !mounted) return;
       groupId = picked;
     }
-    if (!mounted) return;
 
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
+      useRootNavigator: true,
+      barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         title: const Text(AppStrings.groupsCategoryCreateTitle),
         content: TextField(
@@ -155,23 +177,24 @@ class _GroupsScreenState extends State<GroupsScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
             child: const Text(AppStrings.cancel),
           ),
           FilledButton(
             onPressed: () {
               final t = controller.text.trim();
               if (t.isEmpty) return;
-              Navigator.pop(ctx, t);
+              Navigator.of(ctx, rootNavigator: true).pop(t);
             },
             child: const Text(AppStrings.mapSavePlaceCategoryNew),
           ),
         ],
       ),
     );
-    controller.dispose();
     final trimmed = name?.trim() ?? '';
-    if (trimmed.isEmpty) return;
+    await _waitAfterDialogClosed();
+    controller.dispose();
+    if (trimmed.isEmpty || !mounted) return;
     try {
       final created = await _places.createCategory(
         groupId: groupId,
@@ -346,24 +369,18 @@ class _GroupsScreenState extends State<GroupsScreen> {
     final url =
         place.hasPhoto ? _places.publicPhotoUrl(place.photoPath) : null;
     if (url != null) {
-      return Tooltip(
-        message: AppStrings.groupsPlacesPhotoYes,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(
-            url,
-            width: 48,
-            height: 48,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) => _placeNoPhotoBadge(),
-          ),
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          url,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _placeNoPhotoBadge(),
         ),
       );
     }
-    return Tooltip(
-      message: AppStrings.groupsPlacesPhotoNo,
-      child: _placeNoPhotoBadge(),
-    );
+    return _placeNoPhotoBadge();
   }
 
   Widget _placeNoPhotoBadge() {
@@ -483,9 +500,6 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         'Grupo'
                       else
                         AppStrings.groupsPlacesSoloTitle,
-                      p.hasPhoto
-                          ? AppStrings.groupsPlacesPhotoYes
-                          : AppStrings.groupsPlacesPhotoNo,
                     ].join('\n'),
                   ),
                   isThreeLine: true,

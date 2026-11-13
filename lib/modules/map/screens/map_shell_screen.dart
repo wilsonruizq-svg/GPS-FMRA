@@ -1473,14 +1473,17 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
+  /// Nueva categoría — mismo patrón bc1cc73: rootNavigator + wait + no setState
+  /// mientras el route del diálogo anidado se desactiva (assert 6281).
   Future<PlaceCategory?> _promptCreatePlaceCategory({
-    required BuildContext parentContext,
     required String groupId,
   }) async {
+    if (!mounted) return null;
     final controller = TextEditingController();
     final name = await showDialog<String>(
-      context: parentContext,
+      context: context, // State context, no el ctx del diálogo padre
       useRootNavigator: true,
+      barrierDismissible: true,
       builder: (ctx) => AlertDialog(
         title: const Text(AppStrings.groupsCategoryCreateTitle),
         content: TextField(
@@ -1494,7 +1497,9 @@ class _MapShellScreenState extends State<MapShellScreen>
           maxLength: 40,
           onSubmitted: (v) {
             final t = v.trim();
-            if (t.isNotEmpty) Navigator.of(ctx, rootNavigator: true).pop(t);
+            if (t.isNotEmpty) {
+              Navigator.of(ctx, rootNavigator: true).pop(t);
+            }
           },
         ),
         actions: [
@@ -1513,11 +1518,13 @@ class _MapShellScreenState extends State<MapShellScreen>
         ],
       ),
     );
-    // Diálogo anidado: dispose tras frame.
-    await Future<void>.delayed(Duration.zero);
-    controller.dispose();
+
     final trimmed = name?.trim() ?? '';
-    if (trimmed.isEmpty) return null;
+    // Crítico: esperar a que muera el route antes de dispose / RPC / snackbar.
+    await _waitAfterDialogClosed();
+    controller.dispose();
+    if (trimmed.isEmpty || !mounted) return null;
+
     try {
       final created = await _places.createCategory(
         groupId: groupId,
@@ -1747,10 +1754,12 @@ class _MapShellScreenState extends State<MapShellScreen>
                             : () async {
                                 final created =
                                     await _promptCreatePlaceCategory(
-                                  parentContext: ctx,
                                   groupId: groupIdForCats,
                                 );
-                                if (created == null) return;
+                                // _prompt ya esperó frames; otro beat antes de
+                                // setLocal sobre el diálogo padre (evita 6281).
+                                await _waitFrames(2);
+                                if (created == null || !ctx.mounted) return;
                                 setLocal(() {
                                   categories = [
                                     ...categories,
