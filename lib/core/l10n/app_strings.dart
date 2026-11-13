@@ -123,8 +123,13 @@ abstract final class AppStrings {
   static String groupsCategoryPlaceCount(int n) =>
       n == 1 ? '1 ubicación' : '$n ubicaciones';
   static const mapSavePlaceCategoryLabel = 'Categoría / carpeta';
-  static const mapSavePlaceCategoryHint = 'Elige o crea desde Grupos';
+  static const mapSavePlaceCategoryHint =
+      'Elige una carpeta o pulsa «Nueva categoría» abajo';
   static const mapSavePlaceCategoryNone = 'Sin categoría';
+  static const mapSavePlaceCategoryNew = 'Nueva categoría';
+  static const groupsPlacesPhotoYes = 'Con foto';
+  static const groupsPlacesPhotoNo = 'Sin foto';
+  static const groupsPlacesFilterAll = 'Todas';
   static const groupsMembersSection = 'Integrantes';
   static const groupsMembersEmpty = 'Sin integrantes visibles.';
   static const groupsMembersLoading = 'Cargando integrantes…';

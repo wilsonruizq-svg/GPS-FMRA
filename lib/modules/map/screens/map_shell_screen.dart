@@ -1473,6 +1473,68 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
+  Future<PlaceCategory?> _promptCreatePlaceCategory({
+    required BuildContext parentContext,
+    required String groupId,
+  }) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: parentContext,
+      useRootNavigator: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.groupsCategoryCreateTitle),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: AppStrings.groupsCategoryNameLabel,
+            hintText: AppStrings.groupsCategoryNameHint,
+          ),
+          maxLength: 40,
+          onSubmitted: (v) {
+            final t = v.trim();
+            if (t.isNotEmpty) Navigator.of(ctx, rootNavigator: true).pop(t);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx, rootNavigator: true).pop(),
+            child: const Text(AppStrings.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              final t = controller.text.trim();
+              if (t.isEmpty) return;
+              Navigator.of(ctx, rootNavigator: true).pop(t);
+            },
+            child: const Text(AppStrings.mapSavePlaceCategoryNew),
+          ),
+        ],
+      ),
+    );
+    // Diálogo anidado: dispose tras frame.
+    await Future<void>.delayed(Duration.zero);
+    controller.dispose();
+    final trimmed = name?.trim() ?? '';
+    if (trimmed.isEmpty) return null;
+    try {
+      final created = await _places.createCategory(
+        groupId: groupId,
+        name: trimmed,
+      );
+      GpsFmraApp.messengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text(AppStrings.groupsCategoryCreated(created.name))),
+      );
+      return created;
+    } catch (e) {
+      GpsFmraApp.messengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+      return null;
+    }
+  }
+
   Future<void> _onSavePlacePressed() async {
     if (_savingPlace) return;
     Position? fix = _lastAcceptedFix;
@@ -1658,6 +1720,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                     if (shareWithGroup) ...[
                       const SizedBox(height: 4),
                       DropdownButtonFormField<String?>(
+                        key: ValueKey(selectedCategoryId ?? 'none'),
                         initialValue: selectedCategoryId,
                         decoration: const InputDecoration(
                           labelText: AppStrings.mapSavePlaceCategoryLabel,
@@ -1676,6 +1739,33 @@ class _MapShellScreenState extends State<MapShellScreen>
                         ],
                         onChanged: (v) =>
                             setLocal(() => selectedCategoryId = v),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: groupIdForCats == null
+                            ? null
+                            : () async {
+                                final created =
+                                    await _promptCreatePlaceCategory(
+                                  parentContext: ctx,
+                                  groupId: groupIdForCats,
+                                );
+                                if (created == null) return;
+                                setLocal(() {
+                                  categories = [
+                                    ...categories,
+                                    created,
+                                  ]..sort(
+                                      (a, b) => a.name
+                                          .toLowerCase()
+                                          .compareTo(b.name.toLowerCase()),
+                                    );
+                                  selectedCategoryId = created.id;
+                                  categoriesLoaded = true;
+                                });
+                              },
+                        icon: const Icon(Icons.create_new_folder_outlined),
+                        label: const Text(AppStrings.mapSavePlaceCategoryNew),
                       ),
                     ],
                   ],
