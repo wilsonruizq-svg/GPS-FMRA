@@ -1445,7 +1445,8 @@ class _MapShellScreenState extends State<MapShellScreen>
       }
 
       final existingLabel = _placeLabelsById[place.id];
-      final label = place.isShared ? 'Grupo · ${place.name}' : place.name;
+      // Etiqueta = nombre del lugar (categoría se muestra en lista Grupos).
+      final label = place.name;
       if (existingLabel == null) {
         try {
           final symbol = await controller.addSymbol(
@@ -1865,7 +1866,8 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       debugPrint(
         'named_places save: name=$placeName share=$wantGroup '
-        'group=$groupIdForSave lat=$lat lon=$lon photo=${photoJpeg != null}',
+        'group=$groupIdForSave category=$categoryIdForSave '
+        'lat=$lat lon=$lon photo=${photoJpeg != null}',
       );
       final created = await _places.createWithOptionalPhoto(
         name: placeName,

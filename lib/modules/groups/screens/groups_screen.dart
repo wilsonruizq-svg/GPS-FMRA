@@ -365,6 +365,18 @@ class _GroupsScreenState extends State<GroupsScreen> {
     }
   }
 
+  String _placeCategoryLabel(NamedPlace place) {
+    if (!place.isShared) return AppStrings.groupsPlacesSoloTitle;
+    final cid = place.categoryId?.trim();
+    if (cid == null || cid.isEmpty) {
+      return AppStrings.groupsPlacesUncategorized;
+    }
+    for (final c in _categories) {
+      if (c.id == cid) return c.name;
+    }
+    return AppStrings.groupsPlacesUncategorized;
+  }
+
   Widget _placePhotoLeading(NamedPlace place) {
     final url =
         place.hasPhoto ? _places.publicPhotoUrl(place.photoPath) : null;
@@ -495,11 +507,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     [
                       if ((p.description ?? '').trim().isNotEmpty)
                         p.description!.trim(),
+                      _placeCategoryLabel(p),
                       '${p.lat.toStringAsFixed(5)}, ${p.lon.toStringAsFixed(5)}',
-                      if (p.isShared)
-                        'Grupo'
-                      else
-                        AppStrings.groupsPlacesSoloTitle,
                     ].join('\n'),
                   ),
                   isThreeLine: true,
