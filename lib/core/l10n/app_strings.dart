@@ -284,6 +284,8 @@ abstract final class AppStrings {
   static const settingsSignOut = 'Cerrar sesión';
   static const settingsAbout = 'Acerca de GPS-FMRA';
   static const settingsVersion = 'Versión 1.0.0 — Fase 1';
+  static const settingsAboutCredit =
+      'Wilson Ruiz Quezada — propietario y creador del producto';
   static const settingsSectionAccount = 'Tu cuenta';
   static const settingsSectionPrivacy = 'Privacidad';
   /// Sección neutra (sin delatar GPS).

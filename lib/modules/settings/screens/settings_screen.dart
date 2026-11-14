@@ -188,15 +188,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 8),
         _settingsCard(
           children: [
-            const ListTile(
+            ListTile(
               contentPadding:
-                  EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: CircleAvatar(
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: const CircleAvatar(
                 backgroundColor: Color(0x1A0B2A4A),
                 child: Icon(Icons.info_outline, color: AppColors.deepBlue),
               ),
-              title: Text(AppStrings.settingsAbout),
-              subtitle: Text(AppStrings.settingsVersion),
+              title: const Text(AppStrings.settingsAbout),
+              subtitle: Text(
+                '${AppStrings.settingsVersion}\n${AppStrings.settingsAboutCredit}',
+              ),
+              isThreeLine: true,
             ),
           ],
         ),
