@@ -190,49 +190,84 @@ class LocationShareService {
   }
 
   /// Historial reciente **propio** (auth.uid) del grupo.
-  /// Prefiere RPC `list_own_location_history`; fallback a
-  /// `list_group_location_history` (post-migración también own-only) y,
-  /// si fallan, SELECT directo filtrado por `_uid`.
   Future<List<HistoryPoint>> fetchOwnHistory({
     required String groupId,
     int hours = 24,
     int limit = 200,
   }) async {
     final uid = _uid;
+    return fetchMemberHistory(
+      groupId: groupId,
+      userId: uid,
+      hours: hours,
+      limit: limit,
+      forceOwnOnlyFallback: true,
+    );
+  }
+
+  /// Historial de un integrante. Admin: cualquiera del grupo.
+  /// Miembro: solo [userId] == auth.uid() (RPC rechaza el resto).
+  Future<List<HistoryPoint>> fetchMemberHistory({
+    required String groupId,
+    required String userId,
+    int hours = 24,
+    int limit = 200,
+    bool forceOwnOnlyFallback = false,
+  }) async {
+    final uid = _uid;
+    final target = userId.trim();
+    if (target.isEmpty) return const [];
+
     try {
       final rows = await _sb.rpc(
-        'list_own_location_history',
+        'list_member_location_history',
         params: {
           'p_group_id': groupId,
+          'p_user_id': target,
           'p_hours': hours,
           'p_limit': limit,
         },
       );
-      return _mapHistoryRows(rows, onlyUserId: uid);
+      return _mapHistoryRows(rows, onlyUserId: target);
     } catch (_) {
-      try {
-        final rows = await _sb.rpc(
-          'list_group_location_history',
-          params: {
-            'p_group_id': groupId,
-            'p_hours': hours,
-            'p_limit': limit,
-          },
-        );
-        // Defensa en cliente: nunca mostrar filas ajenas aunque el RPC viejo
-        // aún devuelva peers (pre-migración own-only).
-        return _mapHistoryRows(rows, onlyUserId: uid);
-      } catch (_) {
-        return _fetchOwnHistoryDirect(
-          groupId: groupId,
-          hours: hours,
-          limit: limit,
-        );
+      // Sin APPLY admin: solo propio (own-only).
+      if (forceOwnOnlyFallback ||
+          target.trim().toLowerCase() == uid.trim().toLowerCase()) {
+        try {
+          final rows = await _sb.rpc(
+            'list_own_location_history',
+            params: {
+              'p_group_id': groupId,
+              'p_hours': hours,
+              'p_limit': limit,
+            },
+          );
+          return _mapHistoryRows(rows, onlyUserId: uid);
+        } catch (_) {
+          try {
+            final rows = await _sb.rpc(
+              'list_group_location_history',
+              params: {
+                'p_group_id': groupId,
+                'p_hours': hours,
+                'p_limit': limit,
+              },
+            );
+            return _mapHistoryRows(rows, onlyUserId: uid);
+          } catch (_) {
+            return _fetchOwnHistoryDirect(
+              groupId: groupId,
+              hours: hours,
+              limit: limit,
+            );
+          }
+        }
       }
+      rethrow;
     }
   }
 
-  /// @deprecated Usar [fetchOwnHistory]. Mantiene nombre por compat; same own-only.
+  /// @deprecated Usar [fetchOwnHistory] / [fetchMemberHistory].
   Future<List<HistoryPoint>> fetchGroupHistory({
     required String groupId,
     int hours = 24,

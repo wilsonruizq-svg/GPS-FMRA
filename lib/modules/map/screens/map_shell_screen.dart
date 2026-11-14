@@ -687,12 +687,25 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   void _openOwnHistory() {
+    _openMemberHistory(userId: _myUid);
+  }
+
+  void _openMemberHistory({required String userId}) {
     final g = _selected;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => LocationHistoryScreen(initialGroup: g),
+        builder: (_) => LocationHistoryScreen(
+          initialGroup: g,
+          initialUserId: userId,
+        ),
       ),
     );
+  }
+
+  bool _iAmGroupAdmin() {
+    if (_myUid.isEmpty) return false;
+    final me = _members.where((m) => m.userId == _myUid).firstOrNull;
+    return me?.isAdmin == true;
   }
 
   Future<void> _centerOnMyLocation({required bool fromUser}) async {
@@ -2817,9 +2830,15 @@ class _MapShellScreenState extends State<MapShellScreen>
                                     displayName: m.label,
                                   ),
                                   onTap: () {
-                                    // Yo → recientes propios; otros → centrar pin.
+                                    // Yo → recientes propios.
+                                    // Admin → recientes de ese integrante.
+                                    // Otros → centrar pin en vivo.
                                     if (isSelf) {
                                       _openOwnHistory();
+                                      return;
+                                    }
+                                    if (_iAmGroupAdmin()) {
+                                      _openMemberHistory(userId: m.userId);
                                       return;
                                     }
                                     final loc = _locationsByUser[m.userId];

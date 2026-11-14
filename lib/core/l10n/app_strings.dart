@@ -204,6 +204,17 @@ abstract final class AppStrings {
   static const memberYouSuffix = '(tú)';
   static const memberRoleAdmin = 'Admin del grupo';
   static const memberRoleMember = 'Integrante';
+  static const memberPromoteAdmin = 'Hacer administrador';
+  static const memberDemoteAdmin = 'Quitar administrador';
+  static const memberPromoteAdminDone = 'Ahora es administrador del grupo.';
+  static const memberDemoteAdminDone = 'Ya no es administrador.';
+  static const memberAdminMaxReached =
+      'Ya hay 2 administradores (máximo padre/madre).';
+  static const memberAdminLastBlocked =
+      'No se puede quitar el último administrador del grupo.';
+  static const memberAdminNeedSql =
+      'Falta APPLY del SQL de admins duales. '
+      'Pega docs/group-dual-admins.sql → Run (group_dual_admins_ok = true).';
   static const memberShareActive = 'Estado: En línea';
   static const memberSharePaused = 'Estado: Ausente';
   static const memberShareRevoked = 'Estado: Ausente';
@@ -294,6 +305,11 @@ abstract final class AppStrings {
   /// Acceso discreto (mapa / yo en lista) — no “historial GPS”.
   static const historyMapTooltip = 'Recientes';
   static const historyOpenAction = 'Recientes';
+  static const historyMemberLabel = 'Integrante';
+  static const historyNeedAdminSql =
+      'Falta APPLY del SQL de historial admin. '
+      'Pega docs/location-history-admin-group.sql → Run '
+      '(location_history_admin_ok = true).';
 
   static const exitPinTitle = 'PIN de salida';
   static const exitPinSetAction = 'Configurar PIN de salida';
