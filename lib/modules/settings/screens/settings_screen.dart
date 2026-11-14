@@ -190,14 +190,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             ListTile(
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               leading: const CircleAvatar(
                 backgroundColor: Color(0x1A0B2A4A),
                 child: Icon(Icons.info_outline, color: AppColors.deepBlue),
               ),
               title: const Text(AppStrings.settingsAbout),
-              subtitle: Text(
-                '${AppStrings.settingsVersion}\n${AppStrings.settingsAboutCredit}',
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    AppStrings.settingsVersion,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    AppStrings.settingsAboutCreditLabel,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Text(
+                    AppStrings.settingsAboutCreditName,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
               ),
               isThreeLine: true,
             ),
