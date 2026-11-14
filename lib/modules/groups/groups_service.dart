@@ -27,6 +27,15 @@ class FamilyGroup {
     );
   }
 
+  FamilyGroup copyWith({String? name, String? status}) {
+    return FamilyGroup(
+      id: id,
+      name: name ?? this.name,
+      createdBy: createdBy,
+      status: status ?? this.status,
+    );
+  }
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) || other is FamilyGroup && other.id == id;
@@ -144,23 +153,119 @@ class GroupsService {
         .toList();
   }
 
+  /// Máx. grupos activos que el usuario puede crear (GF-32).
+  static const maxCreatedGroups = 3;
+
+  /// Cuántos grupos activos creó el usuario (created_by), no los unidos.
+  Future<int> countCreatedActiveGroups() async {
+    try {
+      final raw = await _sb.rpc('count_created_active_groups');
+      if (raw is int) return raw;
+      if (raw is num) return raw.toInt();
+    } catch (_) {
+      // Fallback si el RPC aún no APPLY.
+    }
+    final rows = await _sb
+        .from('family_groups')
+        .select('id')
+        .eq('created_by', _uid)
+        .eq('status', 'active');
+    return (rows as List).length;
+  }
+
   /// Inserta el grupo; el trigger añade al creador como `group_admin`.
+  /// GF-32: máx. [maxCreatedGroups] grupos creados (cliente + trigger SQL).
   Future<FamilyGroup> createGroup(String name) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError('El nombre del grupo no puede estar vacío.');
     }
+    if (trimmed.length > 80) {
+      throw ArgumentError('El nombre del grupo es demasiado largo (máx. 80).');
+    }
 
+    final created = await countCreatedActiveGroups();
+    if (created >= maxCreatedGroups) {
+      throw StateError(
+        'Ya creaste $maxCreatedGroups grupos. '
+        'Elimina uno para poder crear otro.',
+      );
+    }
+
+    try {
+      final row = await _sb
+          .from('family_groups')
+          .insert({
+            'name': trimmed,
+            'created_by': _uid,
+          })
+          .select('id, name, created_by, status')
+          .single();
+      return FamilyGroup.fromMap(row);
+    } catch (e) {
+      final raw = e.toString();
+      if (raw.contains('MAX_CREATED_GROUPS') ||
+          raw.contains('Ya creaste 3 grupos')) {
+        throw StateError(
+          'Ya creaste $maxCreatedGroups grupos. '
+          'Elimina uno para poder crear otro.',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Admin: renombra el grupo (RPC o UPDATE RLS).
+  Future<FamilyGroup> renameGroup({
+    required String groupId,
+    required String name,
+  }) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('El nombre del grupo no puede estar vacío.');
+    }
+    if (trimmed.length > 80) {
+      throw ArgumentError('El nombre del grupo es demasiado largo (máx. 80).');
+    }
+    try {
+      final row = await _sb.rpc(
+        'rename_family_group',
+        params: {'p_group_id': groupId, 'p_name': trimmed},
+      );
+      if (row is Map) {
+        return FamilyGroup.fromMap(Map<String, dynamic>.from(row));
+      }
+    } catch (_) {
+      // Fallback: UPDATE directo (policy family_groups_update_admin).
+    }
     final row = await _sb
         .from('family_groups')
-        .insert({
-          'name': trimmed,
-          'created_by': _uid,
-        })
+        .update({'name': trimmed})
+        .eq('id', groupId)
         .select('id, name, created_by, status')
         .single();
-
     return FamilyGroup.fromMap(row);
+  }
+
+  /// Admin: elimina el grupo (cascade membresías / datos ligados).
+  Future<void> deleteGroup(String groupId) async {
+    try {
+      await _sb.rpc('delete_family_group', params: {'p_group_id': groupId});
+      return;
+    } catch (e) {
+      final raw = e.toString().toLowerCase();
+      if (raw.contains('could not find the function') ||
+          raw.contains('pgrst202') ||
+          raw.contains('schema cache')) {
+        // Sin RPC: soft-archive (status) para no dejar al usuario sin opción.
+        await _sb
+            .from('family_groups')
+            .update({'status': 'archived'})
+            .eq('id', groupId);
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<List<GroupMember>> listMembers(String groupId) async {

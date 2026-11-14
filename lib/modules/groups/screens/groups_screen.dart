@@ -280,6 +280,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
     if (name == null || name.isEmpty) return;
 
     try {
+      final created = await _service.countCreatedActiveGroups();
+      if (created >= GroupsService.maxCreatedGroups) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStrings.groupsCreateLimitReached)),
+        );
+        return;
+      }
       final group = await _service.createGroup(name);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -297,8 +305,15 @@ class _GroupsScreenState extends State<GroupsScreen> {
       await _refresh();
     } catch (e) {
       if (!mounted) return;
+      final raw = e.toString();
+      final msg = raw.contains('Ya creaste') || raw.contains('MAX_CREATED')
+          ? AppStrings.groupsCreateLimitReached
+          : raw.replaceFirst(RegExp(r'^Exception:\s*'), '').replaceFirst(
+                RegExp(r'^Bad state:\s*'),
+                '',
+              );
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
+        SnackBar(content: Text(msg)),
       );
     }
   }

@@ -178,6 +178,21 @@ abstract final class AppStrings {
   static const groupsNameLabel = 'Nombre del grupo';
   static const groupsNameHint = 'Ej. Familia Ruiz';
   static const groupsCreatedPrefix = 'Grupo creado:';
+  static const groupsRenameAction = 'Editar nombre';
+  static const groupsRenameTitle = 'Nombre del grupo';
+  static const groupsRenameSave = 'Guardar nombre';
+  static const groupsRenamed = 'Nombre del grupo actualizado.';
+  static const groupsDeleteAction = 'Eliminar grupo';
+  static const groupsDeleteTitle = '¿Eliminar este grupo?';
+  static const groupsDeleteBody =
+      'Se borrarán integrantes, invitaciones y datos del grupo. '
+      'Esta acción no se puede deshacer.';
+  static const groupsDeleteConfirm = 'Sí, eliminar';
+  static const groupsDeleted = 'Grupo eliminado.';
+  static const groupsCreateLimitReached =
+      'Ya creaste 3 grupos. Elimina uno para poder crear otro.';
+  static const groupsAdminOnly =
+      'Solo el administrador del grupo puede hacer esto.';
   static const groupsTapMembers = 'Ver integrantes e invitar';
   static const groupsYouAreAdmin = 'Eres admin de este grupo';
   static const groupsYouAreMember = 'Eres integrante';

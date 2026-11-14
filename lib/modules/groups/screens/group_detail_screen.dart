@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -25,6 +27,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   final _consent = ConsentService();
   final _exitPin = ExitPinService();
 
+  late FamilyGroup _group;
   bool _loading = true;
   String? _error;
   List<GroupMember> _members = const [];
@@ -33,10 +36,12 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   bool _iAmAdmin = false;
   bool _exitPinSet = false;
   bool _exitPinBusy = false;
+  bool _mutating = false;
 
   @override
   void initState() {
     super.initState();
+    _group = widget.group;
     _load();
   }
 
@@ -46,10 +51,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       _error = null;
     });
     try {
-      final members = await _groups.listMembers(widget.group.id);
+      final members = await _groups.listMembers(_group.id);
       final consents = await _consent.listOwnGroupConsents();
       final mine = consents.cast<LocationConsent?>().firstWhere(
-            (c) => c?.groupId == widget.group.id,
+            (c) => c?.groupId == _group.id,
             orElse: () => null,
           );
       final uid = Supabase.instance.client.auth.currentUser?.id;
@@ -59,7 +64,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           );
       var pinSet = false;
       try {
-        pinSet = await _exitPin.groupHasPin(widget.group.id);
+        pinSet = await _exitPin.groupHasPin(_group.id);
       } catch (_) {
         pinSet = false;
       }
@@ -113,7 +118,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       return;
     }
     try {
-      final invite = await _groups.createInvite(widget.group.id);
+      final invite = await _groups.createInvite(_group.id);
       if (!mounted) return;
       setState(() => _lastInvite = invite);
       await showDialog<void>(
@@ -216,7 +221,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     if (pin == null || !mounted) return;
     setState(() => _exitPinBusy = true);
     try {
-      await _exitPin.setPin(groupId: widget.group.id, pin: pin);
+      await _exitPin.setPin(groupId: _group.id, pin: pin);
       if (!mounted) return;
       setState(() {
         _exitPinSet = true;
@@ -256,7 +261,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     if (confirmed != true || !mounted) return;
     setState(() => _exitPinBusy = true);
     try {
-      await _exitPin.clearPin(widget.group.id);
+      await _exitPin.clearPin(_group.id);
       if (!mounted) return;
       setState(() {
         _exitPinSet = false;
@@ -357,6 +362,108 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
+  Future<void> _renameGroup() async {
+    if (!_iAmAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.groupsAdminOnly)),
+      );
+      return;
+    }
+    final controller = TextEditingController(text: _group.name);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text(AppStrings.groupsRenameTitle),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 80,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: AppStrings.groupsNameLabel,
+              hintText: AppStrings.groupsNameHint,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(AppStrings.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text(AppStrings.groupsRenameSave),
+            ),
+          ],
+        );
+      },
+    );
+    if (name == null || name.isEmpty || name == _group.name) return;
+    setState(() => _mutating = true);
+    try {
+      final updated = await _groups.renameGroup(groupId: _group.id, name: name);
+      if (!mounted) return;
+      setState(() {
+        _group = updated;
+        _mutating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.groupsRenamed)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _mutating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
+  Future<void> _deleteGroup() async {
+    if (!_iAmAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.groupsAdminOnly)),
+      );
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.groupsDeleteTitle),
+        content: Text('${AppStrings.groupsDeleteBody}\n\n«${_group.name}»'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(AppStrings.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(AppStrings.groupsDeleteConfirm),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() => _mutating = true);
+    try {
+      await _groups.deleteGroup(_group.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.groupsDeleted)),
+      );
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _mutating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
+  }
+
   Widget _inviteBanner(BuildContext context) {
     final invite = _lastInvite;
     if (invite == null) {
@@ -435,24 +542,44 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.group.name),
+        title: Text(_group.name),
         actions: [
           IconButton(
             tooltip: AppStrings.chatAction,
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => GroupChatScreen(group: widget.group),
-                ),
-              );
-            },
+            onPressed: _mutating
+                ? null
+                : () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => GroupChatScreen(group: _group),
+                      ),
+                    );
+                  },
             icon: const Icon(Icons.chat_bubble_outline),
           ),
           if (_iAmAdmin)
             IconButton(
               tooltip: AppStrings.inviteAction,
-              onPressed: _createInvite,
+              onPressed: _mutating ? null : _createInvite,
               icon: const Icon(Icons.person_add_alt_1),
+            ),
+          if (_iAmAdmin)
+            PopupMenuButton<String>(
+              enabled: !_mutating,
+              onSelected: (v) {
+                if (v == 'rename') unawaited(_renameGroup());
+                if (v == 'delete') unawaited(_deleteGroup());
+              },
+              itemBuilder: (ctx) => const [
+                PopupMenuItem(
+                  value: 'rename',
+                  child: Text(AppStrings.groupsRenameAction),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(AppStrings.groupsDeleteAction),
+                ),
+              ],
             ),
         ],
       ),
