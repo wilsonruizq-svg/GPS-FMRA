@@ -20,6 +20,7 @@ import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
 import '../../location/location_fix_filter.dart';
+import '../../location/location_keep_alive.dart';
 import '../../location/location_share_service.dart';
 import '../../places/named_places_service.dart';
 import '../../places/whatsapp_share.dart';
@@ -669,6 +670,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (mounted && granted != _osLocationGranted) {
       setState(() => _osLocationGranted = granted);
     }
+    // Anti-secuestro: sin enlaces a Ajustes Android / sin enseñar GPS.
     if (!granted && mounted && showFeedback) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -676,10 +678,6 @@ class _MapShellScreenState extends State<MapShellScreen>
             permission == LocationPermission.deniedForever
                 ? AppStrings.mapLocationDeniedForever
                 : AppStrings.mapLocationDenied,
-          ),
-          action: SnackBarAction(
-            label: AppStrings.mapOpenSettings,
-            onPressed: Geolocator.openAppSettings,
           ),
         ),
       );
@@ -698,13 +696,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       if (!serviceEnabled) {
         if (mounted && fromUser) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(AppStrings.mapLocationDisabled),
-              action: SnackBarAction(
-                label: AppStrings.mapOpenSettings,
-                onPressed: Geolocator.openLocationSettings,
-              ),
-            ),
+            const SnackBar(content: Text(AppStrings.mapLocationDisabled)),
           );
         }
         return;
@@ -745,11 +737,22 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   LocationSettings _trackingSettings() {
     if (defaultTargetPlatform == TargetPlatform.android) {
+      // GF-38: FGS discreto (notificación obligatoria del OS; texto neutro).
+      // No bypass: si el usuario apaga GPS en Android, no hay fix.
       return AndroidSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 8,
         intervalDuration: const Duration(seconds: 5),
         maxUpdateAge: const Duration(seconds: 20),
+        foregroundNotificationConfig: const ForegroundNotificationConfig(
+          notificationTitle: LocationKeepAlive.fgsTitle,
+          notificationText: LocationKeepAlive.fgsBody,
+          notificationChannelName: LocationKeepAlive.fgsChannel,
+          notificationIcon:
+              AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+          enableWakeLock: true,
+          setOngoing: true,
+        ),
       );
     }
     if (defaultTargetPlatform == TargetPlatform.iOS) {
@@ -819,6 +822,8 @@ class _MapShellScreenState extends State<MapShellScreen>
     unawaited(_ensureOsPermission(requestIfNeeded: false, showFeedback: false)
         .then((granted) {
       if (!granted || !mounted) return;
+      unawaited(LocationKeepAlive.startNativeKeepAlive());
+      unawaited(LocationKeepAlive.maybeRequestBatteryExemptionOnce());
       _positionSub = Geolocator.getPositionStream(
         locationSettings: _trackingSettings(),
       ).listen(

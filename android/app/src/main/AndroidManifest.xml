@@ -1,19 +1,20 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Permiso de ubicación solo en contexto (pantalla de consentimiento). Sin background silencioso en Fase 1. -->
+    <!-- GF-38: FGS ubicación + boot restart. GPS sistema OFF = sin fix (sin device owner). -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-    <!-- Foto de perfil: cámara / galería (image_picker). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"/>
-    <!-- SOS push (Android 13+). -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <!-- Desbloqueo por huella / biometría (local_auth). -->
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
-    <!-- GF-31: audio mientras SOS activo. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
 
     <application
@@ -30,10 +31,6 @@
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
-            <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
@@ -42,7 +39,6 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
-            <!-- Stub deep link: gpsfmra://invite/<token> (pegar código también funciona). -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
@@ -50,27 +46,36 @@
                 <data android:scheme="gpsfmra" android:host="invite"/>
             </intent-filter>
         </activity>
-        <!-- Don't delete the meta-data below.
-             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+
+        <service
+            android:name=".KeepAliveService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location"
+            android:stopWithTask="false"/>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        <!-- Google Maps pausado (billing). El mapa MVP usa MapLibre — docs/MAPLIBRE_ES.md.
-             Placeholder conservado por si se reactiva Google; vacío = OK. -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
             android:value="${GOOGLE_MAPS_API_KEY}" />
-        <!-- Recorte de foto de perfil (image_cropper / uCrop). -->
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar"/>
     </application>
-    <!-- Required to query activities that can process text, see:
-         https://developer.android.com/training/package-visibility and
-         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
-
-         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>

@@ -61,7 +61,7 @@ abstract final class AppStrings {
   static const mapExpandTooltip = 'Ampliar mapa';
   static const mapCollapseTooltip = 'Mostrar integrantes';
 
-  static const mapSavePlaceTooltip = 'Guardar ubicación con nombre';
+  static const mapSavePlaceTooltip = 'Guardar lugar';
   static const mapSavePlaceTitle = 'Guardar este lugar';
   static const mapSavePlaceNameLabel = 'Título';
   static const mapSavePlaceNameHint = 'Nombre del lugar';
@@ -88,7 +88,7 @@ abstract final class AppStrings {
   static const mapSavePlaceApply =
       'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
       '(named_places_photos_ok = true). Guía: docs/PLACES_ES.md';
-  static const groupsPlacesTitle = 'Ubicaciones guardadas';
+  static const groupsPlacesTitle = 'Lugares guardados';
   static const groupsPlacesEmpty =
       'Sin ubicaciones aún. Crea una categoría (ej. Restaurantes) '
       'y guarda lugares desde el Mapa con “Compartir con el grupo”.';
@@ -102,12 +102,12 @@ abstract final class AppStrings {
   static const groupsPlacesSoloHint =
       'Guardados sin compartir con el grupo. En el Mapa elige '
       '“Compartir con el grupo” para que los vea toda la familia.';
-  static const groupsPlacesSharedTitle = 'Ubicaciones guardadas';
-  static const groupsPlacesSectionHint = 'Toca para ver ubicaciones';
+  static const groupsPlacesSharedTitle = 'Lugares guardados';
+  static const groupsPlacesSectionHint = 'Toca para ver lugares';
   static const groupsPlacesSearchHint =
-      'Buscar ubicaciones (nombre, detalle…)';
+      'Buscar lugares (nombre, detalle…)';
   static const groupsPlacesSearchEmpty =
-      'Ninguna ubicación coincide con la búsqueda.';
+      'Ningún lugar coincide con la búsqueda.';
   static const groupsCategoryCreateTitle = 'Nueva categoría';
   static const groupsCategoryCreateAction = 'Nueva carpeta';
   static const groupsCategoryNameLabel = 'Nombre';
@@ -143,23 +143,19 @@ abstract final class AppStrings {
   static const mapNoGroup = 'Sin grupo — créalo en Grupos';
   static const mapMembersEmpty =
       'No hay integrantes. Crea un grupo en la pestaña Grupos.';
-  static const mapMyLocationTooltip = 'Mi ubicación';
-  static const mapLocationDenied =
-      'Sin permiso de ubicación. Actívalo en Ajustes Android.';
-  static const mapLocationDeniedForever =
-      'Ubicación bloqueada. Ábrela en Ajustes Android de la app.';
-  static const mapLocationDisabled =
-      'GPS apagado. Enciéndelo en Ajustes Android del teléfono.';
-  static const mapLocationError =
-      'No se pudo obtener tu ubicación. Revisa GPS en Ajustes Android.';
-  static const mapOpenSettings = 'Abrir ajustes';
-  static const mapSavePlaceNeedGps =
-      'Sin GPS. Enciende ubicación en Ajustes Android e inténtalo.';
+  /// Neutro (anti-secuestro): no delatar rastreo / GPS / Ajustes Android.
+  static const mapMyLocationTooltip = 'Centrar mapa';
+  static const mapLocationDenied = 'No disponible ahora.';
+  static const mapLocationDeniedForever = 'No disponible ahora.';
+  static const mapLocationDisabled = 'No disponible ahora.';
+  static const mapLocationError = 'No disponible ahora.';
+  static const mapOpenSettings = 'OK';
+  static const mapSavePlaceNeedGps = 'No se pudo guardar el lugar ahora.';
   static const mapMarkerYou = 'Tú';
   static const mapMarkerMember = 'Integrante';
-  static const memberShareActiveNoFix = 'Estado: Sin señal';
-  static String memberLastUpdateAt(String time) =>
-      'Última actualización: $time';
+  /// Estados de lista: sin mencionar compartir/GPS.
+  static const memberShareActiveNoFix = 'Estado: En línea';
+  static String memberLastUpdateAt(String time) => 'Actualizado: $time';
 
   static const groupsTitle = 'Grupos';
   static const groupsEmpty =
@@ -208,13 +204,13 @@ abstract final class AppStrings {
   static const memberYouSuffix = '(tú)';
   static const memberRoleAdmin = 'Admin del grupo';
   static const memberRoleMember = 'Integrante';
-  static const memberShareActive = 'Estado: Compartiendo';
-  static const memberSharePaused = 'Estado: En pausa';
-  static const memberShareRevoked = 'Estado: Revocado';
-  static const memberShareNone = 'Estado: Pendiente';
-  static const memberShareUnknown = 'Estado: Pendiente';
-  static const memberLastUpdateUnknown = 'Última actualización: —';
-  /// Figurita GPS en lista del mapa (mismo color que el pin).
+  static const memberShareActive = 'Estado: En línea';
+  static const memberSharePaused = 'Estado: Ausente';
+  static const memberShareRevoked = 'Estado: Ausente';
+  static const memberShareNone = 'Estado: —';
+  static const memberShareUnknown = 'Estado: —';
+  static const memberLastUpdateUnknown = 'Actualizado: —';
+  /// Figurita de color en lista del mapa (mismo color que el pin).
   static const memberMapPinTooltip = 'Color en el mapa';
 
   static const inviteAction = 'Invitar';
@@ -247,49 +243,31 @@ abstract final class AppStrings {
   static const inviteAlreadyMember = 'Ya pertenecías a';
   static const inviteRoleMember = 'rol: integrante';
 
-  static const consentTitle = 'Consentimiento de ubicación';
-  static const consentHeadline = 'Tú decides con quién compartir';
+  static const consentTitle = 'Privacidad';
+  static const consentHeadline = 'Continuar';
   static const consentBody =
-      'GPS-FMRA usa tu ubicación para el mapa familiar. '
-      'Puedes aceptar compartir con tus grupos, pausar en cualquier momento '
-      'o saltarte este paso y configurar después.';
-  static const consentNoSilent =
-      'No hay seguimiento en segundo plano silencioso en esta fase. '
-      'El GPS del teléfono se activa en Ajustes Android; '
-      'aquí solo eliges si compartes tu posición con el grupo.';
+      'Puedes continuar al mapa familiar cuando quieras.';
+  static const consentNoSilent = '';
   static const consentGroupsHeading = 'Tus grupos';
   static const consentNoGroupsYet =
-      'Todavía no perteneces a ningún grupo. '
-      'Puedes aceptar ahora (quita la pausa global) y crear un grupo después.';
-  static const consentAccept = 'Aceptar y compartir';
-  static const consentPause = 'Pausar compartir';
-  static const consentSkipForNow = 'Continuar sin decidir ahora';
-  static const consentContinue = 'Continuar al mapa';
-  static const consentPausedSnack = 'Compartir ubicación en pausa.';
-  static const consentCurrentlyPaused =
-      'Ahora mismo el compartir está en pausa global.';
-  static const consentStatusNone = 'Sin consentimiento registrado';
+      'Todavía no perteneces a ningún grupo.';
+  static const consentAccept = 'Continuar';
+  static const consentPause = 'Más tarde';
+  static const consentSkipForNow = 'Continuar';
+  static const consentContinue = 'Continuar';
+  static const consentPausedSnack = 'Listo.';
+  static const consentCurrentlyPaused = '';
+  static const consentStatusNone = '—';
   static const consentStatusActive = 'Activo';
   static const consentStatusPaused = 'En pausa';
-  static const consentStatusRevoked = 'Revocado';
+  static const consentStatusRevoked = 'Ausente';
 
   static const settingsTitle = 'Ajustes';
-  /// Enlace a Ajustes Android (sin switch de consentimiento en la app).
-  static const settingsSystemLocation = 'Abrir permisos del sistema';
-  static const settingsSystemLocationSubtitle =
-      'GPS y ubicación se controlan en Ajustes de Android, no aquí.';
-  static const settingsSystemLocationOpened =
-      'Se abrieron los ajustes de la app en Android.';
-  static const settingsSystemLocationError =
-      'No se pudieron abrir los ajustes del sistema.';
   static const shareLocationToggle = 'Compartir mi ubicación';
-  static const shareLocationToggleOn =
-      'Activo: el mapa publica tu GPS si Android lo permite.';
-  static const shareLocationToggleOff =
-      'En pausa: no se publica tu ubicación al grupo.';
-  static const shareLocationSettingsBody =
-      'El GPS del teléfono se enciende o apaga en Ajustes Android.';
-  static const shareLocationEnabledSnack = 'Compartir ubicación reanudado.';
+  static const shareLocationToggleOn = 'Activo.';
+  static const shareLocationToggleOff = 'En pausa.';
+  static const shareLocationSettingsBody = '';
+  static const shareLocationEnabledSnack = 'Listo.';
   static const settingsProfile = 'Perfil';
   static const settingsProfileTap = 'Editar nombre, teléfono y foto';
   static const settingsSignOut = 'Cerrar sesión';
@@ -297,11 +275,12 @@ abstract final class AppStrings {
   static const settingsVersion = 'Versión 1.0.0 — Fase 1';
   static const settingsSectionAccount = 'Tu cuenta';
   static const settingsSectionPrivacy = 'Privacidad';
+  /// Sección neutra (sin delatar GPS).
+  static const settingsSectionSafety = 'Familia';
   static const settingsSectionSession = 'Sesión';
   static const settingsSectionAbout = 'Información';
-  static const settingsHistory = 'Historial de ubicaciones';
-  static const settingsHistorySubtitle =
-      'Tus puntos GPS recientes (solo tu cuenta)';
+  static const settingsHistory = 'Historial';
+  static const settingsHistorySubtitle = '';
   static const settingsSosAudioHistory = 'Audios de emergencias SOS';
   static const settingsSosAudioHistorySubtitle =
       'Grabaciones de alertas SOS del grupo (rescate)';
@@ -309,15 +288,9 @@ abstract final class AppStrings {
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
 
-  static const historyTitle = 'Historial';
-  static const historyConsentNote =
-      'Solo ves tu propio historial (usuario en sesión). '
-      'Los puntos se guardan al compartir ubicación en el mapa. '
-      'SQL: 20261113043000_location_history_own_only.sql';
-  static const historyEmpty =
-      'Aún no hay puntos de tu historial. '
-      'Comparte ubicación en el mapa unos minutos y aplica el SQL own-only '
-      'si aún ves puntos de otra persona.';
+  static const historyTitle = 'Recientes';
+  static const historyConsentNote = '';
+  static const historyEmpty = 'No hay entradas todavía.';
 
   static const exitPinTitle = 'PIN de salida';
   static const exitPinSetAction = 'Configurar PIN de salida';
@@ -405,7 +378,7 @@ abstract final class AppStrings {
   static const sosConfirmTitle = '¿Enviar alerta de emergencia?';
   static String sosConfirmBody(String groupName) =>
       'Se avisará a los integrantes de “$groupName”. '
-      'Verán una alerta en la app con tu ubicación si el GPS está disponible. '
+      'Verán una alerta de emergencia en la app. '
       'No se llama a servicios de emergencia externos.';
   static const sosConfirmAction = 'Enviar SOS';
   static const sosCancelAction = 'No enviar';
@@ -413,8 +386,7 @@ abstract final class AppStrings {
   static const sosMicRecording =
       'Emergencia: el micrófono graba audio de esta alerta SOS (máx. 5 min).';
   static const sosMicDenied =
-      'Sin permiso de micrófono. Actívalo en Ajustes Android si quieres '
-      'audio de emergencia en el SOS.';
+      'Sin micrófono. La alerta SOS se envía igual.';
   /// Compañeros: reproducir audio del evento SOS (rescate).
   static const sosAudioPlayEmergency = 'Escuchar audio de emergencia';
   static const sosAudioPlaying = 'Reproduciendo audio de emergencia…';

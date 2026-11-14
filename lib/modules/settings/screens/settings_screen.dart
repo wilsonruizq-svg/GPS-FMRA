@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
@@ -8,7 +7,6 @@ import '../../auth/biometric_unlock_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
 import '../../groups/exit_pin_service.dart';
 import '../../groups/widgets/exit_pin_dialog.dart';
-import '../../location/screens/location_history_screen.dart';
 import '../../profiles/profile_service.dart';
 import '../../profiles/screens/edit_profile_screen.dart';
 import '../../sos/screens/sos_emergency_audio_history_screen.dart';
@@ -67,27 +65,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _openSystemLocationSettings() async {
-    try {
-      final opened = await Geolocator.openAppSettings();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            opened
-                ? AppStrings.settingsSystemLocationOpened
-                : AppStrings.settingsSystemLocationError,
-          ),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.settingsSystemLocationError)),
-      );
-    }
-  }
-
   Future<void> _signOut() async {
     if (_signingOut) return;
     setState(() => _signingOut = true);
@@ -142,48 +119,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       children: [
         _buildProfileCard(theme),
         const SizedBox(height: 28),
-        _sectionLabel(AppStrings.settingsSectionPrivacy),
+        _sectionLabel(AppStrings.settingsSectionSafety),
         const SizedBox(height: 8),
         _settingsCard(
           children: [
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: CircleAvatar(
-                backgroundColor: AppColors.deepBlue.withValues(alpha: 0.1),
-                child: const Icon(
-                  Icons.settings_applications_outlined,
-                  color: AppColors.deepBlue,
-                ),
-              ),
-              title: const Text(AppStrings.settingsSystemLocation),
-              subtitle: const Text(AppStrings.settingsSystemLocationSubtitle),
-              trailing: const Icon(Icons.open_in_new),
-              onTap: _openSystemLocationSettings,
-            ),
-            const Divider(height: 1),
-            ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              leading: CircleAvatar(
-                backgroundColor: AppColors.deepBlue.withValues(alpha: 0.1),
-                child: const Icon(
-                  Icons.timeline_outlined,
-                  color: AppColors.deepBlue,
-                ),
-              ),
-              title: const Text(AppStrings.settingsHistory),
-              subtitle: const Text(AppStrings.settingsHistorySubtitle),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const LocationHistoryScreen(),
-                  ),
-                );
-              },
-            ),
-            const Divider(height: 1),
             ListTile(
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

@@ -121,8 +121,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
   }
 
   void _goApp() {
-    // Sin wizard de consentimiento: GPS se gestiona en Ajustes Android /
-    // interruptor opcional en Ajustes de la app.
+    // Sin wizard de consentimiento ni opciones GPS visibles (GF-38).
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => const AppShell()),
     );
