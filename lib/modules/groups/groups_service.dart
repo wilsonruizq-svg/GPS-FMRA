@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
+import '../location/consent_service.dart';
 import 'invite_token.dart';
 
 class FamilyGroup {
@@ -201,7 +202,12 @@ class GroupsService {
           })
           .select('id, name, created_by, status')
           .single();
-      return FamilyGroup.fromMap(row);
+      final group = FamilyGroup.fromMap(row);
+      // Sin wizard: activa share para RLS de pines (best-effort).
+      try {
+        await ConsentService().acceptShareWithGroup(group.id);
+      } catch (_) {}
+      return group;
     } catch (e) {
       final raw = e.toString();
       if (raw.contains('MAX_CREATED_GROUPS') ||

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../app_shell.dart';
 import '../../../core/l10n/app_strings.dart';
-import '../../location/screens/consent_screen.dart';
 import '../../profiles/profile_service.dart';
 import '../../push/push_service.dart';
 import '../auth_error_message.dart';
@@ -93,7 +93,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
         // Tras la primera clave, las siguientes aperturas usan huella.
         await BiometricUnlockService().enableAfterPasswordLogin();
         if (!mounted) return;
-        _goConsent();
+        _goApp();
       } else {
         await _auth.signIn(email: email, password: password);
         if (!mounted) return;
@@ -101,7 +101,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
         await PushService().syncTokenAfterLogin();
         await BiometricUnlockService().enableAfterPasswordLogin();
         if (!mounted) return;
-        _goConsent();
+        _goApp();
       }
     } on AuthException catch (e) {
       if (!mounted) return;
@@ -120,11 +120,11 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
     }
   }
 
-  void _goConsent() {
+  void _goApp() {
+    // Sin wizard de consentimiento: GPS se gestiona en Ajustes Android /
+    // interruptor opcional en Ajustes de la app.
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => const ConsentScreen(isOnboarding: true),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const AppShell()),
     );
   }
 

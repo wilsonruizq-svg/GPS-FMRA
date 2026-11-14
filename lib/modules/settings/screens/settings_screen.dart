@@ -7,7 +7,7 @@ import '../../auth/biometric_unlock_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
 import '../../groups/exit_pin_service.dart';
 import '../../groups/widgets/exit_pin_dialog.dart';
-import '../../location/screens/consent_screen.dart';
+import '../../location/screens/share_location_settings_screen.dart';
 import '../../location/screens/location_history_screen.dart';
 import '../../profiles/profile_service.dart';
 import '../../profiles/screens/edit_profile_screen.dart';
@@ -140,7 +140,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
-                    builder: (_) => const ConsentScreen(),
+                    builder: (_) => const ShareLocationSettingsScreen(),
                   ),
                 );
               },

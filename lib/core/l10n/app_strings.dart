@@ -211,6 +211,8 @@ abstract final class AppStrings {
   static const memberShareNone = 'Estado: Pendiente';
   static const memberShareUnknown = 'Estado: Pendiente';
   static const memberLastUpdateUnknown = 'Última actualización: —';
+  /// Figurita GPS en lista del mapa (mismo color que el pin).
+  static const memberMapPinTooltip = 'Color en el mapa';
 
   static const inviteAction = 'Invitar';
   static const inviteTitle = 'Código listo para compartir';
@@ -269,9 +271,18 @@ abstract final class AppStrings {
   static const consentStatusRevoked = 'Revocado';
 
   static const settingsTitle = 'Ajustes';
-  static const settingsPrivacy = 'Privacidad y consentimiento';
+  static const settingsPrivacy = 'Compartir ubicación';
   static const settingsPrivacySubtitle =
-      'Quién puede ver tu ubicación en el mapa';
+      'Pausa o reanuda el envío de tu GPS al grupo';
+  static const shareLocationToggle = 'Compartir mi ubicación';
+  static const shareLocationToggleOn =
+      'Activo: el mapa publica tu GPS si Android lo permite.';
+  static const shareLocationToggleOff =
+      'En pausa: no se publica tu ubicación al grupo.';
+  static const shareLocationSettingsBody =
+      'El GPS del teléfono se enciende o apaga en Ajustes Android. '
+      'Aquí solo pausas o reanudas el envío a la familia.';
+  static const shareLocationEnabledSnack = 'Compartir ubicación reanudado.';
   static const settingsProfile = 'Perfil';
   static const settingsProfileTap = 'Editar nombre, teléfono y foto';
   static const settingsSignOut = 'Cerrar sesión';
@@ -389,9 +400,20 @@ abstract final class AppStrings {
   static const sosCancelAction = 'No enviar';
   static const sosSent = 'Alerta SOS enviada al grupo.';
   static const sosMicRecording =
-      'Micrófono activo: grabando audio del SOS (máx. 5 min).';
+      'Emergencia: el micrófono graba audio de esta alerta SOS (máx. 5 min).';
   static const sosMicDenied =
-      'Sin permiso de micrófono. Actívalo en Ajustes Android si quieres audio SOS.';
+      'Sin permiso de micrófono. Actívalo en Ajustes Android si quieres '
+      'audio de emergencia en el SOS.';
+  /// Compañeros: reproducir audio del evento SOS activo (rescate), no feed grupal.
+  static const sosAudioPlayEmergency = 'Escuchar audio de emergencia';
+  static const sosAudioPlaying = 'Reproduciendo audio de emergencia…';
+  static const sosAudioStop = 'Detener audio';
+  static const sosAudioNotReady =
+      'Aún no hay audio de esta emergencia. '
+      'El micrófono del emisor puede estar grabando; reintenta en unos segundos.';
+  static const sosAudioPlayError =
+      'No se pudo reproducir el audio de esta emergencia. '
+      'Revisa conexión o SQL sos-audio (APPLY).';
   static const sosSendError =
       'No se pudo enviar el SOS. Revisa la conexión e inténtalo de nuevo.';
   static const sosNeedGroup =

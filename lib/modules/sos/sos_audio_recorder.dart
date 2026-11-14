@@ -9,11 +9,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
 
-/// GF-31: graba micrófono mientras un SOS propio está activo.
+/// GF-31/34: graba micrófono del **dueño del teléfono** durante su SOS.
 ///
-/// - Pide `RECORD_AUDIO` al iniciar.
-/// - Máx. [_maxDuration]; al parar intenta subir a Storage `sos-audio`
-///   (best-effort; si el bucket no existe, queda solo local).
+/// Sube a Storage `sos-audio/{uid}/{sos_id}.m4a` ligado a ese evento.
+/// Compañeros reproducen solo desde el banner/detalle de ese SOS (rescate).
 class SosAudioRecorder {
   SosAudioRecorder({SupabaseClient? client}) : _client = client;
 
@@ -21,13 +20,17 @@ class SosAudioRecorder {
   SupabaseClient get _sb => _client ?? supabase;
 
   static const maxDuration = Duration(minutes: 5);
+  /// Sube el tramo actual para que compañeros oigan durante el SOS activo.
+  static const flushInterval = Duration(seconds: 35);
   static const storageBucket = 'sos-audio';
 
   final AudioRecorder _recorder = AudioRecorder();
   Timer? _maxTimer;
+  Timer? _flushTimer;
   String? _activeSosId;
   String? _localPath;
   bool _starting = false;
+  bool _flushing = false;
 
   bool get isRecording => _activeSosId != null;
 
@@ -51,30 +54,17 @@ class SosAudioRecorder {
         return false;
       }
 
-      final dir = await getTemporaryDirectory();
-      final path =
-          '${dir.path}${Platform.pathSeparator}sos_$id.m4a';
-      try {
-        final old = File(path);
-        if (await old.exists()) await old.delete();
-      } catch (_) {}
+      final ok = await _beginSegment(id);
+      if (!ok) return false;
 
-      await _recorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
-          bitRate: 96000,
-          sampleRate: 44100,
-          numChannels: 1,
-        ),
-        path: path,
-      );
-      _activeSosId = id;
-      _localPath = path;
       _maxTimer?.cancel();
       _maxTimer = Timer(maxDuration, () {
         unawaited(stop(upload: true));
       });
-      debugPrint('SosAudioRecorder: grabando $path');
+      _flushTimer?.cancel();
+      _flushTimer = Timer.periodic(flushInterval, (_) {
+        unawaited(_flushUploadAndContinue());
+      });
       return true;
     } catch (e) {
       debugPrint('SosAudioRecorder.startForSos: $e');
@@ -86,10 +76,65 @@ class SosAudioRecorder {
     }
   }
 
+  Future<bool> _beginSegment(String sosId) async {
+    final dir = await getTemporaryDirectory();
+    final path =
+        '${dir.path}${Platform.pathSeparator}sos_$sosId.m4a';
+    try {
+      final old = File(path);
+      if (await old.exists()) await old.delete();
+    } catch (_) {}
+
+    await _recorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 96000,
+        sampleRate: 44100,
+        numChannels: 1,
+      ),
+      path: path,
+    );
+    _activeSosId = sosId;
+    _localPath = path;
+    debugPrint('SosAudioRecorder: grabando $path');
+    return true;
+  }
+
+  /// Detiene el tramo, sube y reinicia (mismo sos_id) para rescate en vivo.
+  Future<void> _flushUploadAndContinue() async {
+    if (_flushing) return;
+    final sosId = _activeSosId;
+    if (sosId == null) return;
+    _flushing = true;
+    try {
+      final path = _localPath;
+      try {
+        if (await _recorder.isRecording()) {
+          await _recorder.stop();
+        }
+      } catch (e) {
+        debugPrint('SosAudioRecorder.flush stop: $e');
+      }
+      _localPath = null;
+      if (path != null) {
+        await _uploadBestEffort(sosId: sosId, path: path);
+      }
+      if (_activeSosId == sosId) {
+        await _beginSegment(sosId);
+      }
+    } catch (e) {
+      debugPrint('SosAudioRecorder.flush: $e');
+    } finally {
+      _flushing = false;
+    }
+  }
+
   /// Detiene y, si [upload], intenta Storage `sos-audio/{uid}/{sosId}.m4a`.
   Future<void> stop({bool upload = true}) async {
     _maxTimer?.cancel();
     _maxTimer = null;
+    _flushTimer?.cancel();
+    _flushTimer = null;
     final sosId = _activeSosId;
     final path = _localPath;
     _activeSosId = null;
@@ -104,7 +149,7 @@ class SosAudioRecorder {
     }
 
     if (!upload || sosId == null || path == null) return;
-    unawaited(_uploadBestEffort(sosId: sosId, path: path));
+    await _uploadBestEffort(sosId: sosId, path: path);
   }
 
   Future<void> _uploadBestEffort({

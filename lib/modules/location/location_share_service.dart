@@ -132,16 +132,20 @@ class LocationShareService {
     _lastHistoryLon = lon;
   }
 
-  /// True si el usuario puede publicar: consentimiento activo del grupo y
-  /// sin pausa global.
+  /// True si puede publicar: sin pausa global en Ajustes.
+  /// Asegura fila de consentimiento activa (RLS peers) sin wizard.
   Future<bool> canPublishForGroup(String groupId) async {
     final paused = await _consent.isGloballyPaused();
     if (paused) return false;
-    final consents = await _consent.listOwnGroupConsents();
-    return consents.any((c) => c.groupId == groupId && c.isActive);
+    try {
+      await _consent.acceptShareWithGroup(groupId);
+    } catch (_) {
+      // Si falla RLS/red, el upsert live fallará igual; no bloquear el check.
+    }
+    return true;
   }
 
-  /// Upsert de la ubicación actual. Solo debe llamarse con consentimiento activo.
+  /// Upsert de la ubicación actual (si Ajustes no tiene pausa global).
   /// También intenta append a `location_history` (best-effort; no tumba el live).
   /// GF-18: máx. 1 punto / 5 min y skip si coords ≈ último historial.
   Future<void> publishPosition(Position pos) async {

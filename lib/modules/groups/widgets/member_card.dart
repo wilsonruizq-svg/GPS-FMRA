@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 
-/// Fila compacta de integrante: foto, nombre, estado; opcional DM.
+/// Fila compacta de integrante: foto, nombre, estado; figurita GPS + DM.
+///
+/// Orden: nombre/estado | [figurita color] | [chat].
+/// La figurita usa el mismo color que el pin del mapa cuando [mapPinColor]
+/// no es null (integrante compartiendo ubicación).
 class MemberCard extends StatelessWidget {
   const MemberCard({
     super.key,
@@ -11,6 +15,8 @@ class MemberCard extends StatelessWidget {
     required this.shareStatusLabel,
     this.photoUrl,
     this.isSelf = false,
+    this.mapPinColor,
+    this.female = false,
     this.onTap,
     this.onMessage,
   });
@@ -19,6 +25,9 @@ class MemberCard extends StatelessWidget {
   final String shareStatusLabel;
   final String? photoUrl;
   final bool isSelf;
+  /// Color del pin GPS en el mapa; si null, no se muestra figurita.
+  final Color? mapPinColor;
+  final bool female;
   final VoidCallback? onTap;
   final VoidCallback? onMessage;
 
@@ -94,6 +103,17 @@ class MemberCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (mapPinColor != null) ...[
+                Tooltip(
+                  message: AppStrings.memberMapPinTooltip,
+                  child: Icon(
+                    female ? Icons.woman : Icons.man,
+                    color: mapPinColor,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(width: 2),
+              ],
               if (onMessage != null && !isSelf)
                 IconButton(
                   tooltip: AppStrings.dmAction,

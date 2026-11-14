@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -23,6 +24,7 @@ import '../../location/location_share_service.dart';
 import '../../places/named_places_service.dart';
 import '../../places/whatsapp_share.dart';
 import '../../profiles/avatar_compress.dart';
+import '../../sos/sos_audio_access.dart';
 import '../../sos/sos_audio_recorder.dart';
 import '../../sos/sos_service.dart';
 import 'package:image_picker/image_picker.dart';
@@ -61,8 +63,14 @@ class _MapShellScreenState extends State<MapShellScreen>
   final _locationShare = LocationShareService();
   final _sos = SosService();
   final _sosAudio = SosAudioRecorder();
+  final _sosAudioAccess = SosAudioAccess();
+  final _sosPeerPlayer = AudioPlayer();
+  StreamSubscription<PlayerState>? _sosPeerPlayerSub;
   final _places = NamedPlacesService();
   final _fixFilter = const LocationFixFilter();
+  bool _sosAudioBusy = false;
+  bool _sosAudioPlaying = false;
+  String? _sosAudioPlayingSosId;
 
   MapLibreMapController? _mapController;
   bool _styleReady = false;
@@ -128,6 +136,15 @@ class _MapShellScreenState extends State<MapShellScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _sosPeerPlayerSub = _sosPeerPlayer.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.completed) {
+        if (!mounted) return;
+        setState(() {
+          _sosAudioPlaying = false;
+          _sosAudioPlayingSosId = null;
+        });
+      }
+    });
     _resolveInitialCamera();
     _load();
   }
@@ -138,9 +155,66 @@ class _MapShellScreenState extends State<MapShellScreen>
     _highlightClearTimer?.cancel();
     _stopSharingLoop();
     _unsubscribeRealtime();
+    unawaited(_sosPeerPlayerSub?.cancel());
     unawaited(_sosAudio.dispose());
+    unawaited(_sosPeerPlayer.dispose());
     _mapController = null;
     super.dispose();
+  }
+
+  Future<void> _stopSosPeerAudio() async {
+    try {
+      await _sosPeerPlayer.stop();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _sosAudioPlaying = false;
+      _sosAudioPlayingSosId = null;
+      _sosAudioBusy = false;
+    });
+  }
+
+  /// Compañeros: audio solo del `sos_event` en el banner (rescate), no feed grupal.
+  Future<void> _playSosEmergencyAudio(SosEvent event) async {
+    if (_sosAudioBusy) return;
+    if (_sosAudioPlaying && _sosAudioPlayingSosId == event.id) {
+      await _stopSosPeerAudio();
+      return;
+    }
+    setState(() => _sosAudioBusy = true);
+    try {
+      final uri = await _sosAudioAccess.signedPlayUri(
+        sosId: event.id,
+        senderUserId: event.userId,
+      );
+      if (!mounted) return;
+      if (uri == null) {
+        setState(() => _sosAudioBusy = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStrings.sosAudioNotReady)),
+        );
+        return;
+      }
+      await _sosPeerPlayer.stop();
+      await _sosPeerPlayer.setUrl(uri.toString());
+      setState(() {
+        _sosAudioPlaying = true;
+        _sosAudioPlayingSosId = event.id;
+        _sosAudioBusy = false;
+      });
+      await _sosPeerPlayer.play();
+    } catch (e) {
+      debugPrint('SOS peer audio: $e');
+      if (!mounted) return;
+      setState(() {
+        _sosAudioBusy = false;
+        _sosAudioPlaying = false;
+        _sosAudioPlayingSosId = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.sosAudioPlayError)),
+      );
+    }
   }
 
   void _syncSosAudioWithActive() {
@@ -471,6 +545,14 @@ class _MapShellScreenState extends State<MapShellScreen>
     return AppStrings.memberShareUnknown;
   }
 
+  /// Figurita de color en lista: misma regla que pin (consentimiento activo).
+  bool _isSharingForList(GroupMember m) {
+    final isSelf =
+        m.userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+    if (isSelf) return _myConsent?.isActive == true;
+    return _consentsBySharer[m.userId]?.isActive == true;
+  }
+
   void _onMapCreated(MapLibreMapController controller) {
     _mapController = controller;
   }
@@ -720,7 +802,19 @@ class _MapShellScreenState extends State<MapShellScreen>
     _cachedCanPublishAt = null;
 
     final group = _selected;
-    if (group == null || _myConsent?.isActive != true) return;
+    if (group == null) return;
+
+    // Sin wizard: asegura consent RLS en background y publica si Android OK.
+    unawaited(_consent.acceptShareWithGroup(group.id).then((_) {
+      if (!mounted) return;
+      _myConsent = LocationConsent(
+        id: _myConsent?.id ?? 'local',
+        sharerId: _myUid,
+        scope: 'group',
+        status: 'active',
+        groupId: group.id,
+      );
+    }).catchError((_) {}));
 
     unawaited(_ensureOsPermission(requestIfNeeded: false, showFeedback: false)
         .then((granted) {
@@ -786,7 +880,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   Future<void> _publishFromFix({required bool force}) async {
     if (_publishing) return;
     final group = _selected;
-    if (group == null || _myConsent?.isActive != true) return;
+    if (group == null) return;
 
     final granted = await _ensureOsPermission(
       requestIfNeeded: false,
@@ -2248,8 +2342,8 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   Widget _buildMapPane(BuildContext context) {
     final styleUrl = Env.mapStyleUrl;
-    final showMyLocation =
-        _myConsent?.isActive == true || _osLocationGranted;
+    // GPS del mapa: permiso Android (sin wizard de consentimiento).
+    final showMyLocation = _osLocationGranted;
     final mapReady = _cameraResolved && _initialCamera != null;
 
     return Stack(
@@ -2484,14 +2578,48 @@ class _MapShellScreenState extends State<MapShellScreen>
                 ),
               ),
             ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                AppStrings.sosBannerAckHint,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  height: 1.25,
+                ),
+              ),
               const SizedBox(height: 10),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white70),
+                  minimumSize: const Size.fromHeight(44),
+                ),
+                onPressed: _sosAudioBusy
+                    ? null
+                    : () => unawaited(_playSosEmergencyAudio(event)),
+                icon: Icon(
+                  _sosAudioPlaying && _sosAudioPlayingSosId == event.id
+                      ? Icons.stop_circle_outlined
+                      : Icons.hearing,
+                ),
+                label: Text(
+                  _sosAudioPlaying && _sosAudioPlayingSosId == event.id
+                      ? AppStrings.sosAudioStop
+                      : AppStrings.sosAudioPlayEmergency,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              const SizedBox(height: 8),
               FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: Colors.white,
                   foregroundColor: AppColors.accentRed,
                   minimumSize: const Size.fromHeight(44),
                 ),
-                onPressed: () => unawaited(_acceptSosPeer(event)),
+                onPressed: () {
+                  unawaited(_stopSosPeerAudio());
+                  unawaited(_acceptSosPeer(event));
+                },
                 child: const Text(
                   AppStrings.sosBannerAck,
                   style: TextStyle(fontWeight: FontWeight.w800),
@@ -2647,11 +2775,23 @@ class _MapShellScreenState extends State<MapShellScreen>
                                 final isSelf =
                                     m.userId.trim().toLowerCase() == _myUid &&
                                         _myUid.isNotEmpty;
+                                final sharing = _isSharingForList(m);
+                                final pinHex = _pinColorFor(
+                                  m.userId,
+                                  isSelf: isSelf,
+                                );
                                 return MemberCard(
                                   name: m.label,
                                   photoUrl: m.photoUrl,
                                   isSelf: isSelf,
                                   shareStatusLabel: _shareFor(m),
+                                  mapPinColor: sharing
+                                      ? _colorFromHex(pinHex)
+                                      : null,
+                                  female: PersonMarkerGender.isFemale(
+                                    gender: m.gender,
+                                    displayName: m.label,
+                                  ),
                                   onTap: () {
                                     final loc = _locationsByUser[m.userId];
                                     final c = _mapController;
