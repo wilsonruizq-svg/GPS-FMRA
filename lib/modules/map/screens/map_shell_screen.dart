@@ -23,6 +23,7 @@ import '../../location/location_share_service.dart';
 import '../../places/named_places_service.dart';
 import '../../places/whatsapp_share.dart';
 import '../../profiles/avatar_compress.dart';
+import '../../sos/sos_audio_recorder.dart';
 import '../../sos/sos_service.dart';
 import 'package:image_picker/image_picker.dart';
 import '../map_place_focus.dart';
@@ -59,6 +60,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   final _consent = ConsentService();
   final _locationShare = LocationShareService();
   final _sos = SosService();
+  final _sosAudio = SosAudioRecorder();
   final _places = NamedPlacesService();
   final _fixFilter = const LocationFixFilter();
 
@@ -136,8 +138,20 @@ class _MapShellScreenState extends State<MapShellScreen>
     _highlightClearTimer?.cancel();
     _stopSharingLoop();
     _unsubscribeRealtime();
+    unawaited(_sosAudio.dispose());
     _mapController = null;
     super.dispose();
+  }
+
+  void _syncSosAudioWithActive() {
+    final own = _activeSos.where(_isOwnSos).toList();
+    if (own.isEmpty) {
+      if (_sosAudio.isRecording) {
+        unawaited(_sosAudio.stop(upload: true));
+      }
+      return;
+    }
+    unawaited(_sosAudio.startForSos(own.first.id));
   }
 
   @override
@@ -149,15 +163,15 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
-  /// Pide permiso OS al abrir el mapa y fija [initialCameraPosition] con GPS
-  /// si está disponible (sin esperar al FAB).
+  /// Fija [initialCameraPosition] con GPS si ya hay permiso (GF-30: no pide
+  /// permiso ni muestra wizard al abrir el mapa).
   Future<void> _resolveInitialCamera() async {
     CameraPosition camera = _fallbackCamera;
     try {
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (serviceEnabled) {
         final granted = await _ensureOsPermission(
-          requestIfNeeded: true,
+          requestIfNeeded: false,
           showFeedback: false,
         );
         if (granted) {
@@ -564,6 +578,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     bool showFeedback = false,
   }) async {
     var permission = await Geolocator.checkPermission();
+    // Solo pedir diálogo OS ante acción explícita del usuario (FAB / guardar).
     if (permission == LocationPermission.denied && requestIfNeeded) {
       permission = await Geolocator.requestPermission();
     }
@@ -573,20 +588,17 @@ class _MapShellScreenState extends State<MapShellScreen>
       setState(() => _osLocationGranted = granted);
     }
     if (!granted && mounted && showFeedback) {
-      final forever = permission == LocationPermission.deniedForever;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            forever
+            permission == LocationPermission.deniedForever
                 ? AppStrings.mapLocationDeniedForever
                 : AppStrings.mapLocationDenied,
           ),
-          action: forever
-              ? SnackBarAction(
-                  label: AppStrings.mapOpenSettings,
-                  onPressed: Geolocator.openAppSettings,
-                )
-              : null,
+          action: SnackBarAction(
+            label: AppStrings.mapOpenSettings,
+            onPressed: Geolocator.openAppSettings,
+          ),
         ),
       );
     }
@@ -604,14 +616,20 @@ class _MapShellScreenState extends State<MapShellScreen>
       if (!serviceEnabled) {
         if (mounted && fromUser) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text(AppStrings.mapLocationDisabled)),
+            SnackBar(
+              content: const Text(AppStrings.mapLocationDisabled),
+              action: SnackBarAction(
+                label: AppStrings.mapOpenSettings,
+                onPressed: Geolocator.openLocationSettings,
+              ),
+            ),
           );
         }
         return;
       }
 
       final granted = await _ensureOsPermission(
-        requestIfNeeded: true,
+        requestIfNeeded: fromUser,
         showFeedback: fromUser,
       );
       if (!granted) return;
@@ -965,6 +983,9 @@ class _MapShellScreenState extends State<MapShellScreen>
           _sosAckProgress = null;
         });
       }
+      if (_sosAudio.isRecording) {
+        unawaited(_sosAudio.stop(upload: true));
+      }
       return;
     }
     final epoch = ++_sosRefreshEpoch;
@@ -1008,6 +1029,7 @@ class _MapShellScreenState extends State<MapShellScreen>
         _activeSos = visible;
         _sosAckProgress = progress;
       });
+      _syncSosAudioWithActive();
     } catch (_) {
       // Tabla aún no aplicada o red: no tumbar el mapa.
     }
@@ -1082,8 +1104,9 @@ class _MapShellScreenState extends State<MapShellScreen>
       double? lat;
       double? lon;
       try {
+        // GF-30: SOS no dispara diálogo de ubicación; usa fix si ya hay permiso.
         final granted = await _ensureOsPermission(
-          requestIfNeeded: true,
+          requestIfNeeded: false,
           showFeedback: false,
         );
         if (granted && await Geolocator.isLocationServiceEnabled()) {
@@ -1114,6 +1137,17 @@ class _MapShellScreenState extends State<MapShellScreen>
         ];
         _sosAckProgress = null;
       });
+      // GF-31: micrófono mientras el SOS propio está activo.
+      unawaited(_sosAudio.startForSos(event.id).then((ok) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              ok ? AppStrings.sosMicRecording : AppStrings.sosMicDenied,
+            ),
+          ),
+        );
+      }));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${AppStrings.sosSent} ${AppStrings.sosPeerHint}'),
@@ -1161,6 +1195,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       _activeSos = _activeSos.where((e) => e.id != event.id).toList();
       if (_sosAckProgress?.sosId == event.id) _sosAckProgress = null;
     });
+    unawaited(_sosAudio.stop(upload: true));
     try {
       await _sos.cancel(event.id);
       if (!mounted) return;

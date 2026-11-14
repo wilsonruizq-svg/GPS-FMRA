@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../app_shell.dart';
 import '../../../core/l10n/app_strings.dart';
@@ -62,19 +61,14 @@ class _ConsentScreenState extends State<ConsentScreen> {
     }
   }
 
-  Future<void> _requestLocationInContext() async {
-    final status = await Permission.locationWhenInUse.status;
-    if (status.isGranted || status.isLimited) return;
-    await Permission.locationWhenInUse.request();
-  }
-
   Future<void> _accept() async {
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      await _requestLocationInContext();
+      // GF-30: no pedir permiso OS aquí; el GPS se gestiona en Ajustes Android
+      // y el mapa pide/verifica solo si el usuario toca «Mi ubicación».
       final ids = _myGroups.map((g) => g.id).toList();
       if (ids.isEmpty) {
         // Sin grupos aún: solo quita pausa global; el consentimiento por grupo

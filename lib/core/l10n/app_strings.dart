@@ -76,7 +76,6 @@ abstract final class AppStrings {
   static const mapSavePlaceShareGroup = 'Compartir con el grupo';
   static const mapSavePlaceSave = 'Guardar';
   static const mapSavePlaceWhatsApp = 'WhatsApp';
-  static const mapSavePlaceNeedGps = 'No hay GPS aún. Activa ubicación e inténtalo.';
   static const mapSavePlaceNeedGroup =
       'Elige un grupo para compartir el lugar.';
   static const mapSavePlaceSaved = 'Lugar guardado.';
@@ -146,14 +145,16 @@ abstract final class AppStrings {
       'No hay integrantes. Crea un grupo en la pestaña Grupos.';
   static const mapMyLocationTooltip = 'Mi ubicación';
   static const mapLocationDenied =
-      'Necesitamos el permiso de ubicación para centrar el mapa.';
+      'Sin permiso de ubicación. Actívalo en Ajustes Android.';
   static const mapLocationDeniedForever =
-      'El permiso de ubicación está bloqueado. Actívalo en Ajustes del sistema.';
+      'Ubicación bloqueada. Ábrela en Ajustes Android de la app.';
   static const mapLocationDisabled =
-      'Activa el GPS / ubicación del dispositivo e inténtalo de nuevo.';
+      'GPS apagado. Enciéndelo en Ajustes Android del teléfono.';
   static const mapLocationError =
-      'No se pudo obtener tu ubicación. Inténtalo de nuevo.';
+      'No se pudo obtener tu ubicación. Revisa GPS en Ajustes Android.';
   static const mapOpenSettings = 'Abrir ajustes';
+  static const mapSavePlaceNeedGps =
+      'Sin GPS. Enciende ubicación en Ajustes Android e inténtalo.';
   static const mapMarkerYou = 'Tú';
   static const mapMarkerMember = 'Integrante';
   static const memberShareActiveNoFix = 'Estado: Sin señal';
@@ -234,7 +235,8 @@ abstract final class AppStrings {
       'o saltarte este paso y configurar después.';
   static const consentNoSilent =
       'No hay seguimiento en segundo plano silencioso en esta fase. '
-      'El permiso del sistema se pide solo cuando aceptas, en este contexto.';
+      'El GPS del teléfono se activa en Ajustes Android; '
+      'aquí solo eliges si compartes tu posición con el grupo.';
   static const consentGroupsHeading = 'Tus grupos';
   static const consentNoGroupsYet =
       'Todavía no perteneces a ningún grupo. '
@@ -371,6 +373,10 @@ abstract final class AppStrings {
   static const sosConfirmAction = 'Enviar SOS';
   static const sosCancelAction = 'No enviar';
   static const sosSent = 'Alerta SOS enviada al grupo.';
+  static const sosMicRecording =
+      'Micrófono activo: grabando audio del SOS (máx. 5 min).';
+  static const sosMicDenied =
+      'Sin permiso de micrófono. Actívalo en Ajustes Android si quieres audio SOS.';
   static const sosSendError =
       'No se pudo enviar el SOS. Revisa la conexión e inténtalo de nuevo.';
   static const sosNeedGroup =
