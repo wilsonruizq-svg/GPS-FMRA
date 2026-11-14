@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
 import 'sos_audio_recorder.dart';
+import 'sos_service.dart';
 
 /// Fila de historial: SOS de emergencia con audio subido.
 class SosEmergencyAudioItem {
@@ -94,8 +96,60 @@ class SosAudioAccess {
           )
           .toList();
     } catch (e) {
-      // RPC no APPLY aún.
-      rethrow;
+      if (!SosService.isMissingApiObject(e)) rethrow;
+      debugPrint(
+        'SosAudioAccess: list_group_sos_emergency_audio ausente; fallback Storage.',
+      );
+      return _listGroupEmergencyAudioViaEvents(
+        groupId: gid,
+        limit: limit,
+      );
     }
+  }
+
+  /// Misma semántica que el RPC, sin `list_group_sos_emergency_audio` (solo
+  /// requiere `sos_events` + bucket `sos-audio` como el play en vivo).
+  Future<List<SosEmergencyAudioItem>> _listGroupEmergencyAudioViaEvents({
+    required String groupId,
+    int limit = 50,
+  }) async {
+    final events = await SosService().listForGroup(groupId, limit: limit);
+    if (events.isEmpty) return const [];
+
+    final namesByUser = <String, Set<String>>{};
+    for (final e in events) {
+      namesByUser.putIfAbsent(e.userId, () => {});
+    }
+    for (final userId in namesByUser.keys) {
+      try {
+        final files = await _sb.storage
+            .from(SosAudioRecorder.storageBucket)
+            .list(
+              path: userId,
+              searchOptions: const SearchOptions(limit: 100),
+            );
+        namesByUser[userId] = files.map((f) => f.name).toSet();
+      } catch (err) {
+        debugPrint('SosAudioAccess list($userId): $err');
+        namesByUser[userId] = {};
+      }
+    }
+
+    final out = <SosEmergencyAudioItem>[];
+    for (final e in events) {
+      final fileName = '${e.id}.m4a';
+      if (namesByUser[e.userId]?.contains(fileName) != true) continue;
+      out.add(
+        SosEmergencyAudioItem(
+          sosId: e.id,
+          userId: e.userId,
+          displayName: e.label,
+          status: e.status,
+          createdAt: e.createdAt,
+          storagePath: pathFor(userId: e.userId, sosId: e.id),
+        ),
+      );
+    }
+    return out;
   }
 }

@@ -173,6 +173,35 @@ class SosService {
         raw.contains('xmlhttprequest');
   }
 
+  /// Eventos SOS del grupo (activos y cerrados), más recientes primero.
+  Future<List<SosEvent>> listForGroup(
+    String groupId, {
+    int limit = 50,
+  }) async {
+    final lim = limit.clamp(1, 100);
+    List rows;
+    try {
+      rows = await _sb
+          .from('sos_events')
+          .select(_selectWithProfile)
+          .eq('group_id', groupId)
+          .order('created_at', ascending: false)
+          .limit(lim) as List;
+    } catch (_) {
+      rows = await _sb
+          .from('sos_events')
+          .select(_selectPlain)
+          .eq('group_id', groupId)
+          .order('created_at', ascending: false)
+          .limit(lim) as List;
+    }
+
+    final events = rows
+        .map((e) => SosEvent.fromMap(Map<String, dynamic>.from(e as Map)))
+        .toList();
+    return _enrichDisplayNames(events);
+  }
+
   /// Alertas activas del grupo (más recientes primero).
   /// Siempre intenta resolver `display_name` del emisor (embed o query profiles).
   Future<List<SosEvent>> listActiveForGroup(String groupId) async {
