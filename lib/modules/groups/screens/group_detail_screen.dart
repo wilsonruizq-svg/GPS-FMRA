@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
+import '../../../core/theme/app_theme.dart';
 import '../../chat/screens/direct_chat_screen.dart';
 import '../../chat/screens/group_chat_screen.dart';
 import '../../location/consent_service.dart';
@@ -89,13 +90,117 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   String _shareLabelFor(GroupMember m) {
     final uid = Supabase.instance.client.auth.currentUser?.id;
+    final roleBit = m.isAdmin ? '${AppStrings.memberRoleAdmin} · ' : '';
     if (m.userId == uid) {
-      if (_myConsent == null) return AppStrings.memberShareNone;
-      if (_myConsent!.isActive) return AppStrings.memberShareActive;
-      if (_myConsent!.isPaused) return AppStrings.memberSharePaused;
-      return AppStrings.memberShareRevoked;
+      if (_myConsent == null) return '$roleBit${AppStrings.memberShareNone}';
+      if (_myConsent!.isActive) {
+        return '$roleBit${AppStrings.memberShareActive}';
+      }
+      if (_myConsent!.isPaused) {
+        return '$roleBit${AppStrings.memberSharePaused}';
+      }
+      return '$roleBit${AppStrings.memberShareRevoked}';
     }
-    return AppStrings.memberShareUnknown;
+    return '$roleBit${AppStrings.memberShareUnknown}';
+  }
+
+  int get _adminCount =>
+      _members.where((m) => m.role == 'group_admin').length;
+
+  Future<void> _promoteAdmin(GroupMember m) async {
+    if (!_iAmAdmin) return;
+    try {
+      await _groups.promoteGroupAdmin(groupId: _group.id, userId: m.userId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.memberPromoteAdminDone)),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      final raw = e.toString().toLowerCase();
+      final msg = raw.contains('max 2')
+          ? AppStrings.memberAdminMaxReached
+          : (raw.contains('promote_group_admin') ||
+                  raw.contains('pgrst202') ||
+                  raw.contains('could not find'))
+              ? AppStrings.memberAdminNeedSql
+              : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  Future<void> _demoteAdmin(GroupMember m) async {
+    if (!_iAmAdmin) return;
+    try {
+      await _groups.demoteGroupAdmin(groupId: _group.id, userId: m.userId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.memberDemoteAdminDone)),
+      );
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      final raw = e.toString().toLowerCase();
+      final msg = raw.contains('last group admin')
+          ? AppStrings.memberAdminLastBlocked
+          : (raw.contains('demote_group_admin') ||
+                  raw.contains('pgrst202') ||
+                  raw.contains('could not find'))
+              ? AppStrings.memberAdminNeedSql
+              : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  /// Solo admins actuales eligen al 2.º admin (sin auto-promoción).
+  Widget? _adminRoleMenu(GroupMember m) {
+    if (!_iAmAdmin) return null;
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (m.userId == uid) return null;
+    if (m.role == 'org_admin') return null;
+
+    if (m.role == 'group_admin') {
+      final canDemote = _adminCount > 1;
+      return PopupMenuButton<String>(
+        tooltip: AppStrings.memberDemoteAdmin,
+        enabled: canDemote,
+        onSelected: (v) {
+          if (v == 'demote') unawaited(_demoteAdmin(m));
+        },
+        itemBuilder: (_) => [
+          PopupMenuItem(
+            value: 'demote',
+            enabled: canDemote,
+            child: Text(
+              canDemote
+                  ? AppStrings.memberDemoteAdmin
+                  : AppStrings.memberAdminLastBlocked,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final canPromote = _adminCount < 2;
+    return PopupMenuButton<String>(
+      tooltip: AppStrings.memberPromoteAdmin,
+      enabled: canPromote,
+      onSelected: (v) {
+        if (v == 'promote') unawaited(_promoteAdmin(m));
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'promote',
+          enabled: canPromote,
+          child: Text(
+            canPromote
+                ? AppStrings.memberPromoteAdmin
+                : AppStrings.memberAdminMaxReached,
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _copyInvite(InviteStub invite, {required bool asLink}) async {
@@ -679,6 +784,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               photoUrl: m.photoUrl,
                               isSelf: m.userId == uid,
                               shareStatusLabel: _shareLabelFor(m),
+                              trailingExtra: _adminRoleMenu(m),
                               onMessage: m.userId == uid
                                   ? null
                                   : () {

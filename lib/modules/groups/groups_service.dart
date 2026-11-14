@@ -336,6 +336,37 @@ class GroupsService {
     }
   }
 
+  int countGroupAdmins(List<GroupMember> members) =>
+      members.where((m) => m.role == 'group_admin').length;
+
+  /// Admin: promover miembro a `group_admin` (máx. 2).
+  Future<void> promoteGroupAdmin({
+    required String groupId,
+    required String userId,
+  }) async {
+    await _sb.rpc(
+      'promote_group_admin',
+      params: {
+        'p_group_id': groupId,
+        'p_user_id': userId,
+      },
+    );
+  }
+
+  /// Admin: quitar `group_admin` → member (no el último).
+  Future<void> demoteGroupAdmin({
+    required String groupId,
+    required String userId,
+  }) async {
+    await _sb.rpc(
+      'demote_group_admin',
+      params: {
+        'p_group_id': groupId,
+        'p_user_id': userId,
+      },
+    );
+  }
+
   /// Genera token en claro (solo UI), guarda SHA-256. Un uso, 7 días.
   /// Requiere rol admin del grupo (RLS `invitations_insert_admin`).
   Future<InviteStub> createInvite(String groupId) async {

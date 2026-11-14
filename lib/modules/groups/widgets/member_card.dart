@@ -19,6 +19,7 @@ class MemberCard extends StatelessWidget {
     this.female = false,
     this.onTap,
     this.onMessage,
+    this.trailingExtra,
   });
 
   final String name;
@@ -30,6 +31,8 @@ class MemberCard extends StatelessWidget {
   final bool female;
   final VoidCallback? onTap;
   final VoidCallback? onMessage;
+  /// P. ej. promover/quitar admin (detalle de grupo).
+  final Widget? trailingExtra;
 
   bool get _hasPhoto => photoUrl != null && photoUrl!.trim().isNotEmpty;
 
@@ -114,6 +117,7 @@ class MemberCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 2),
               ],
+              if (trailingExtra != null) trailingExtra!,
               if (onMessage != null && !isSelf)
                 IconButton(
                   tooltip: AppStrings.dmAction,
@@ -121,7 +125,7 @@ class MemberCard extends StatelessWidget {
                   icon: const Icon(Icons.chat_bubble_outline),
                   color: AppColors.deepBlue,
                 )
-              else
+              else if (trailingExtra == null)
                 Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
             ],
           ),
