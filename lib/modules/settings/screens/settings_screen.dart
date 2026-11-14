@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
@@ -7,10 +8,10 @@ import '../../auth/biometric_unlock_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
 import '../../groups/exit_pin_service.dart';
 import '../../groups/widgets/exit_pin_dialog.dart';
-import '../../location/screens/share_location_settings_screen.dart';
 import '../../location/screens/location_history_screen.dart';
 import '../../profiles/profile_service.dart';
 import '../../profiles/screens/edit_profile_screen.dart';
+import '../../sos/screens/sos_emergency_audio_history_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -63,6 +64,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
       setState(() => _profile = updated);
     } else {
       await _load();
+    }
+  }
+
+  Future<void> _openSystemLocationSettings() async {
+    try {
+      final opened = await Geolocator.openAppSettings();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            opened
+                ? AppStrings.settingsSystemLocationOpened
+                : AppStrings.settingsSystemLocationError,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.settingsSystemLocationError)),
+      );
     }
   }
 
@@ -130,20 +152,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: CircleAvatar(
                 backgroundColor: AppColors.deepBlue.withValues(alpha: 0.1),
                 child: const Icon(
-                  Icons.privacy_tip_outlined,
+                  Icons.settings_applications_outlined,
                   color: AppColors.deepBlue,
                 ),
               ),
-              title: const Text(AppStrings.settingsPrivacy),
-              subtitle: const Text(AppStrings.settingsPrivacySubtitle),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ShareLocationSettingsScreen(),
-                  ),
-                );
-              },
+              title: const Text(AppStrings.settingsSystemLocation),
+              subtitle: const Text(AppStrings.settingsSystemLocationSubtitle),
+              trailing: const Icon(Icons.open_in_new),
+              onTap: _openSystemLocationSettings,
             ),
             const Divider(height: 1),
             ListTile(
@@ -163,6 +179,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
                     builder: (_) => const LocationHistoryScreen(),
+                  ),
+                );
+              },
+            ),
+            const Divider(height: 1),
+            ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: CircleAvatar(
+                backgroundColor: AppColors.accentRed.withValues(alpha: 0.12),
+                child: const Icon(
+                  Icons.hearing,
+                  color: AppColors.accentRed,
+                ),
+              ),
+              title: const Text(AppStrings.settingsSosAudioHistory),
+              subtitle: const Text(AppStrings.settingsSosAudioHistorySubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SosEmergencyAudioHistoryScreen(),
                   ),
                 );
               },

@@ -8,6 +8,7 @@ import '../../../core/l10n/app_strings.dart';
 import '../../chat/screens/direct_chat_screen.dart';
 import '../../chat/screens/group_chat_screen.dart';
 import '../../location/consent_service.dart';
+import '../../sos/screens/sos_emergency_audio_history_screen.dart';
 import '../exit_pin_service.dart';
 import '../groups_service.dart';
 import '../widgets/exit_pin_dialog.dart';
@@ -618,6 +619,22 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       ),
                       _inviteBanner(context),
                       _exitPinSection(context),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => SosEmergencyAudioHistoryScreen(
+                                  initialGroup: _group,
+                                ),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.hearing),
+                          label: const Text(AppStrings.sosAudioHistoryAction),
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                         child: Text(

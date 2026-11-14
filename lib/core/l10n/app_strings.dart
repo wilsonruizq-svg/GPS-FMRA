@@ -271,17 +271,21 @@ abstract final class AppStrings {
   static const consentStatusRevoked = 'Revocado';
 
   static const settingsTitle = 'Ajustes';
-  static const settingsPrivacy = 'Compartir ubicación';
-  static const settingsPrivacySubtitle =
-      'Pausa o reanuda el envío de tu GPS al grupo';
+  /// Enlace a Ajustes Android (sin switch de consentimiento en la app).
+  static const settingsSystemLocation = 'Abrir permisos del sistema';
+  static const settingsSystemLocationSubtitle =
+      'GPS y ubicación se controlan en Ajustes de Android, no aquí.';
+  static const settingsSystemLocationOpened =
+      'Se abrieron los ajustes de la app en Android.';
+  static const settingsSystemLocationError =
+      'No se pudieron abrir los ajustes del sistema.';
   static const shareLocationToggle = 'Compartir mi ubicación';
   static const shareLocationToggleOn =
       'Activo: el mapa publica tu GPS si Android lo permite.';
   static const shareLocationToggleOff =
       'En pausa: no se publica tu ubicación al grupo.';
   static const shareLocationSettingsBody =
-      'El GPS del teléfono se enciende o apaga en Ajustes Android. '
-      'Aquí solo pausas o reanudas el envío a la familia.';
+      'El GPS del teléfono se enciende o apaga en Ajustes Android.';
   static const shareLocationEnabledSnack = 'Compartir ubicación reanudado.';
   static const settingsProfile = 'Perfil';
   static const settingsProfileTap = 'Editar nombre, teléfono y foto';
@@ -295,6 +299,10 @@ abstract final class AppStrings {
   static const settingsHistory = 'Historial de ubicaciones';
   static const settingsHistorySubtitle =
       'Tus puntos GPS recientes (solo tu cuenta)';
+  static const settingsSosAudioHistory = 'Audios de emergencias SOS';
+  static const settingsSosAudioHistorySubtitle =
+      'Grabaciones de alertas SOS del grupo (rescate)';
+  static const historyGroupLabel = 'Grupo';
   static const settingsProfileMissing =
       'Perfil no encontrado. Se intentará crear al recargar.';
 
@@ -404,7 +412,7 @@ abstract final class AppStrings {
   static const sosMicDenied =
       'Sin permiso de micrófono. Actívalo en Ajustes Android si quieres '
       'audio de emergencia en el SOS.';
-  /// Compañeros: reproducir audio del evento SOS activo (rescate), no feed grupal.
+  /// Compañeros: reproducir audio del evento SOS (rescate).
   static const sosAudioPlayEmergency = 'Escuchar audio de emergencia';
   static const sosAudioPlaying = 'Reproduciendo audio de emergencia…';
   static const sosAudioStop = 'Detener audio';
@@ -414,6 +422,19 @@ abstract final class AppStrings {
   static const sosAudioPlayError =
       'No se pudo reproducir el audio de esta emergencia. '
       'Revisa conexión o SQL sos-audio (APPLY).';
+  static const sosAudioHistoryTitle = 'Audios de emergencias SOS';
+  static const sosAudioHistorySubtitle =
+      'Solo alertas SOS con micrófono subido. No es chat ni feed social.';
+  static const sosAudioHistoryEmpty =
+      'Aún no hay audios de emergencia en este grupo. '
+      'Aparecen cuando alguien envía SOS con micrófono y se sube el archivo.';
+  static const sosAudioHistoryAction = 'Audios SOS';
+  static const sosAudioHistoryNeedSql =
+      'Falta APPLY del SQL de audios SOS (list_group_sos_emergency_audio). '
+      'Pega docs/sos-audio-emergency.sql en SQL Editor → Run '
+      '(sos_audio_emergency_ok = true).';
+  static const sosAudioStatusActive = 'SOS activo';
+  static const sosAudioStatusResolved = 'SOS cerrado';
   static const sosSendError =
       'No se pudo enviar el SOS. Revisa la conexión e inténtalo de nuevo.';
   static const sosNeedGroup =
