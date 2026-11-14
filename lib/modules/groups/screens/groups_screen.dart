@@ -734,9 +734,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
     }
 
     // Filas de grupo = 94d85b4 ListTile exacto; lugares SOLO debajo.
+    // Padding extra abajo: FAB Crear/Unirme siempre visible (multi-grupo).
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.only(bottom: 160),
       children: [
         for (var i = 0; i < _groups.length; i++) ...[
           if (i > 0) const Divider(height: 1),
@@ -775,7 +776,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final showCreateJoinFab = !_loading && _error == null && _groups.isEmpty;
+    // Multi-grupo: Crear / Unirme siempre, aunque ya haya 1+ grupos.
+    final showCreateJoinFab = !_loading && _error == null;
 
     return Scaffold(
       floatingActionButton: showCreateJoinFab

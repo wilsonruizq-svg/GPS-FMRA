@@ -169,7 +169,8 @@ abstract final class AppStrings {
   static const groupsEmptyJoinHint =
       'Si te invitaron: pega el código en “Unirme con código”.';
   static const groupsAlreadyMemberHint =
-      'Ya perteneces a un grupo. Para invitar, abre el grupo → Invitar.';
+      'Puedes crear otro grupo o unirte con un código. '
+      'Para invitar a tu grupo actual: ábrelo → Invitar.';
   static const groupsCreateTitle = 'Nuevo grupo familiar';
   static const groupsCreateAction = 'Crear grupo';
   static const groupsJoinAction = 'Unirme con código';
