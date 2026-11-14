@@ -175,6 +175,9 @@ abstract final class AppStrings {
   static const groupsCreateTitle = 'Nuevo grupo familiar';
   static const groupsCreateAction = 'Crear grupo';
   static const groupsJoinAction = 'Unirme con código';
+  /// Pastillas AppBar (barra superior pestaña Grupos).
+  static const groupsJoinShort = 'Unirme';
+  static const groupsCreateShort = 'Crear';
   static const groupsNameLabel = 'Nombre del grupo';
   static const groupsNameHint = 'Ej. Familia Ruiz';
   static const groupsCreatedPrefix = 'Grupo creado:';

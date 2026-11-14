@@ -705,7 +705,7 @@ class _GroupsScreenState extends State<GroupsScreen> {
     if (_groups.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(28, 48, 28, 140),
+        padding: const EdgeInsets.fromLTRB(28, 48, 28, 32),
         children: [
           Icon(
             Icons.groups_outlined,
@@ -718,25 +718,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
             style: Theme.of(context).textTheme.bodyLarge,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 28),
-          FilledButton.icon(
-            onPressed: _createGroup,
-            icon: const Icon(Icons.add),
-            label: const Text(AppStrings.groupsCreateAction),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
             AppStrings.groupsEmptyCreateHint,
             style: Theme.of(context).textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 20),
-          OutlinedButton.icon(
-            onPressed: _joinWithCode,
-            icon: const Icon(Icons.vpn_key_outlined),
-            label: const Text(AppStrings.groupsJoinAction),
-          ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
             AppStrings.groupsEmptyJoinHint,
             style: Theme.of(context).textTheme.bodySmall,
@@ -749,10 +737,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
     }
 
     // Filas de grupo = 94d85b4 ListTile exacto; lugares SOLO debajo.
-    // Padding extra abajo: FAB Crear/Unirme siempre visible (multi-grupo).
+    // Acciones Crear/Unirme van en AppBar (sin FAB inferior).
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 160),
+      padding: const EdgeInsets.only(bottom: 24),
       children: [
         for (var i = 0; i < _groups.length; i++) ...[
           if (i > 0) const Divider(height: 1),
@@ -789,33 +777,62 @@ class _GroupsScreenState extends State<GroupsScreen> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Multi-grupo: Crear / Unirme siempre, aunque ya haya 1+ grupos.
-    final showCreateJoinFab = !_loading && _error == null;
-
-    return Scaffold(
-      floatingActionButton: showCreateJoinFab
-          ? Column(
+  Widget _appBarPill({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                FloatingActionButton.extended(
-                  heroTag: 'join_invite',
-                  onPressed: _joinWithCode,
-                  icon: const Icon(Icons.vpn_key_outlined),
-                  label: const Text(AppStrings.groupsJoinAction),
-                ),
-                const SizedBox(height: 12),
-                FloatingActionButton.extended(
-                  heroTag: 'create_group',
-                  onPressed: _createGroup,
-                  icon: const Icon(Icons.add),
-                  label: const Text(AppStrings.groupsCreateAction),
+                Icon(icon, size: 18, color: Colors.white),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
               ],
-            )
-          : null,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        centerTitle: false,
+        title: const Text(AppStrings.groupsTitle),
+        actions: [
+          _appBarPill(
+            icon: Icons.vpn_key_outlined,
+            label: AppStrings.groupsJoinShort,
+            onPressed: _joinWithCode,
+          ),
+          _appBarPill(
+            icon: Icons.add,
+            label: AppStrings.groupsCreateShort,
+            onPressed: _createGroup,
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(

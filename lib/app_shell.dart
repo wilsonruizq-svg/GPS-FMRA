@@ -127,8 +127,9 @@ class _AppShellState extends State<AppShell> {
         _onRootBack();
       },
       child: Scaffold(
-        // Mapa: sin AppBar (franja propia + ampliar). Grupos/Ajustes con título.
-        appBar: _index == 0
+        // Mapa: sin AppBar (franja propia). Grupos: AppBar propia (Unirme/Crear).
+        // Ajustes: título shell.
+        appBar: _index == 0 || _index == 1
             ? null
             : AppBar(title: Text(_titles[_index])),
         // Una sola pestaña montada: evita que MapLibre tape Grupos/Ajustes.
