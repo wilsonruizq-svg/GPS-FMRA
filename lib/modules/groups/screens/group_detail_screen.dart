@@ -8,6 +8,7 @@ import '../../../core/l10n/app_strings.dart';
 import '../../chat/screens/direct_chat_screen.dart';
 import '../../chat/screens/group_chat_screen.dart';
 import '../../location/consent_service.dart';
+import '../../location/screens/location_history_screen.dart';
 import '../../sos/screens/sos_emergency_audio_history_screen.dart';
 import '../exit_pin_service.dart';
 import '../groups_service.dart';
@@ -621,18 +622,42 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       _exitPinSection(context),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => SosEmergencyAudioHistoryScreen(
-                                  initialGroup: _group,
-                                ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => LocationHistoryScreen(
+                                        initialGroup: _group,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.schedule),
+                                label: const Text(AppStrings.historyOpenAction),
                               ),
-                            );
-                          },
-                          icon: const Icon(Icons.hearing),
-                          label: const Text(AppStrings.sosAudioHistoryAction),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) =>
+                                          SosEmergencyAudioHistoryScreen(
+                                        initialGroup: _group,
+                                      ),
+                                    ),
+                                  );
+                                },
+                                icon: const Icon(Icons.hearing),
+                                label:
+                                    const Text(AppStrings.sosAudioHistoryAction),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       Padding(

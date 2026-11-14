@@ -6,9 +6,12 @@ import '../../groups/groups_service.dart';
 import '../../map/map_place_focus.dart';
 import '../location_share_service.dart';
 
-/// Historial GPS **propio** del usuario en sesión (auth.uid), por grupo.
+/// Puntos recientes **propios** (auth.uid), por grupo.
+/// Entrada discreta desde mapa/grupo — no desde Ajustes (GF-38).
 class LocationHistoryScreen extends StatefulWidget {
-  const LocationHistoryScreen({super.key});
+  const LocationHistoryScreen({super.key, this.initialGroup});
+
+  final FamilyGroup? initialGroup;
 
   @override
   State<LocationHistoryScreen> createState() => _LocationHistoryScreenState();
@@ -27,6 +30,7 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
   @override
   void initState() {
     super.initState();
+    _selected = widget.initialGroup;
     _load();
   }
 

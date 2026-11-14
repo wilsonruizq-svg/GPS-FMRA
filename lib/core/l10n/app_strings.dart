@@ -291,6 +291,9 @@ abstract final class AppStrings {
   static const historyTitle = 'Recientes';
   static const historyConsentNote = '';
   static const historyEmpty = 'No hay entradas todavía.';
+  /// Acceso discreto (mapa / yo en lista) — no “historial GPS”.
+  static const historyMapTooltip = 'Recientes';
+  static const historyOpenAction = 'Recientes';
 
   static const exitPinTitle = 'PIN de salida';
   static const exitPinSetAction = 'Configurar PIN de salida';

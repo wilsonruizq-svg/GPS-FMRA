@@ -22,6 +22,7 @@ import '../../location/consent_service.dart';
 import '../../location/location_fix_filter.dart';
 import '../../location/location_keep_alive.dart';
 import '../../location/location_share_service.dart';
+import '../../location/screens/location_history_screen.dart';
 import '../../places/named_places_service.dart';
 import '../../places/whatsapp_share.dart';
 import '../../profiles/avatar_compress.dart';
@@ -683,6 +684,15 @@ class _MapShellScreenState extends State<MapShellScreen>
       );
     }
     return granted;
+  }
+
+  void _openOwnHistory() {
+    final g = _selected;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LocationHistoryScreen(initialGroup: g),
+      ),
+    );
   }
 
   Future<void> _centerOnMyLocation({required bool fromUser}) async {
@@ -2413,6 +2423,15 @@ class _MapShellScreenState extends State<MapShellScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               FloatingActionButton.small(
+                heroTag: 'map_recents',
+                tooltip: AppStrings.historyMapTooltip,
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.deepBlue,
+                onPressed: _openOwnHistory,
+                child: const Icon(Icons.schedule),
+              ),
+              const SizedBox(height: 12),
+              FloatingActionButton.small(
                 heroTag: 'map_save_place',
                 tooltip: AppStrings.mapSavePlaceTooltip,
                 backgroundColor: AppColors.signalCyan,
@@ -2798,6 +2817,11 @@ class _MapShellScreenState extends State<MapShellScreen>
                                     displayName: m.label,
                                   ),
                                   onTap: () {
+                                    // Yo → recientes propios; otros → centrar pin.
+                                    if (isSelf) {
+                                      _openOwnHistory();
+                                      return;
+                                    }
                                     final loc = _locationsByUser[m.userId];
                                     final c = _mapController;
                                     if (loc == null || c == null) return;
