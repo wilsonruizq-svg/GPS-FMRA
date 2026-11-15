@@ -326,8 +326,10 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
               autofillHints: const [AutofillHints.email],
               enabled: !_busy && !_resetPasswordMode,
               readOnly: _resetPasswordMode,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: AppStrings.emailLabel,
+                helperText: _forgotMode ? AppStrings.loginForgotEmailHelper : null,
+                helperMaxLines: 2,
               ),
             ),
             if (!_forgotMode) ...[

@@ -20,16 +20,20 @@ abstract final class AppStrings {
   static const registerButton = 'Crear cuenta';
   static const registerHint = '¿No tienes cuenta? Regístrate';
   static const loginHint = '¿Ya tienes cuenta? Inicia sesión';
-  static const loginForgotHint = '¿Olvidaste tu contraseña?';
+  static const loginForgotHint = 'Olvidé mi contraseña';
   static const loginForgotBack = 'Volver al inicio de sesión';
   static const loginForgotTitle = 'Recuperar contraseña';
   static const loginForgotSubtitle =
-      'Te enviaremos un enlace a tu Gmail. Ábrelo en este teléfono '
+      'Escribe el correo electrónico de tu cuenta (Gmail). '
+      'Te enviaremos un enlace por correo; ábrelo en este teléfono '
       'para elegir una clave nueva.';
-  static const loginForgotSend = 'Enviar enlace';
+  static const loginForgotEmailHelper =
+      'Debe ser Gmail (@gmail.com) para que llegue el correo de recuperación.';
+  static const loginForgotSend = 'Enviar enlace al correo';
   static const loginForgotSent =
-      'Si existe una cuenta con ese Gmail, enviamos un enlace de recuperación. '
-      'Revisa la bandeja de entrada (y spam). Ábrelo en este teléfono.';
+      'Revisa tu correo (bandeja de entrada y spam). '
+      'Si existe una cuenta con ese Gmail, enviamos el enlace de recuperación. '
+      'Ábrelo en este teléfono.';
   static const loginRegisterGmailNote =
       'El registro solo admite Gmail (@gmail.com o @googlemail.com) para que '
       'la recuperación de clave funcione con Google.';
