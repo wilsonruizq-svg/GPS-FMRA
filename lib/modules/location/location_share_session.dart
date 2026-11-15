@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
-import 'consent_service.dart';
 import 'location_fix_filter.dart';
 import 'location_keep_alive.dart';
 import 'location_share_service.dart';
@@ -13,6 +12,11 @@ import 'location_share_service.dart';
 ///
 /// GF-65: el stream ya no vive en [MapShellScreen]; cambiar pestaña no detiene
 /// los fixes hacia `location_updates` si hay grupo activo y consentimiento ON.
+///
+/// GF-67: el dropdown del mapa solo elige qué grupo se **muestra** (pines de
+/// otros). La propia posición se publica una vez (`location_updates` por
+/// user_id) y el consentimiento RLS se activa en **todos** los grupos donde
+/// el usuario es miembro (share activo), no solo en el seleccionado.
 class LocationShareSession {
   LocationShareSession._();
 
@@ -21,13 +25,13 @@ class LocationShareSession {
   static const _publishHeartbeat = Duration(seconds: 8);
   static const _consentCacheTtl = Duration(seconds: 45);
 
-  final _consent = ConsentService();
   final _locationShare = LocationShareService();
   final _fixFilter = const LocationFixFilter();
 
   /// Último fix propio aceptado (mapa u otros listeners).
   final ValueNotifier<MemberLocation?> selfFix = ValueNotifier(null);
 
+  /// Grupo seleccionado en el mapa (UI). No limita a qué grupos se publica.
   String? _activeGroupId;
   Timer? _publishTimer;
   StreamSubscription<Position>? _positionSub;
@@ -52,6 +56,9 @@ class LocationShareSession {
     selfFix.value = null;
   }
 
+  /// Marca el grupo del mapa (UI / pines ajenos). Arranca el loop GPS si hace
+  /// falta; al **cambiar** de grupo no reinicia el stream — solo refresca
+  /// consentimientos en todos los grupos (GF-67).
   void setActiveGroup(String? groupId) {
     final id = groupId?.trim();
     if (id == null || id.isEmpty) {
@@ -59,10 +66,18 @@ class LocationShareSession {
       stopLoop();
       return;
     }
-    if (_activeGroupId == id && _positionSub != null) return;
+    final changed = _activeGroupId != id;
     _activeGroupId = id;
-    if (_sessionActive) {
+    if (!_sessionActive) return;
+
+    if (_positionSub == null) {
       restartLoop();
+      return;
+    }
+    if (changed) {
+      _cachedCanPublish = null;
+      _cachedCanPublishAt = null;
+      unawaited(_refreshAllGroupConsents());
     }
   }
 
@@ -91,7 +106,8 @@ class LocationShareSession {
     final groupId = _activeGroupId;
     if (!_sessionActive || groupId == null) return;
 
-    unawaited(_consent.acceptShareWithGroup(groupId).catchError((_) {}));
+    // GF-67: consent en todos los grupos con membresía, no solo [groupId].
+    unawaited(_refreshAllGroupConsents());
 
     unawaited(
       _ensureOsPermission().then((granted) {
@@ -112,6 +128,12 @@ class LocationShareSession {
     _publishTimer = Timer.periodic(_publishHeartbeat, (_) {
       unawaited(publishFromFix(force: true));
     });
+  }
+
+  Future<void> _refreshAllGroupConsents() async {
+    try {
+      await _locationShare.ensurePublishForAllMemberships();
+    } catch (_) {}
   }
 
   LocationSettings _trackingSettings() {
@@ -176,7 +198,7 @@ class LocationShareSession {
   String _myUid() =>
       (supabase.auth.currentUser?.id ?? '').trim().toLowerCase();
 
-  Future<bool> _canPublishCached(String groupId) async {
+  Future<bool> _canPublishCached() async {
     final now = DateTime.now().toUtc();
     final cachedAt = _cachedCanPublishAt;
     if (_cachedCanPublish != null &&
@@ -186,8 +208,8 @@ class LocationShareSession {
     }
     try {
       final allowed = await _locationShare
-          .canPublishForGroup(groupId)
-          .timeout(const Duration(seconds: 8), onTimeout: () => false);
+          .ensurePublishForAllMemberships()
+          .timeout(const Duration(seconds: 12), onTimeout: () => false);
       _cachedCanPublish = allowed;
       _cachedCanPublishAt = now;
       return allowed;
@@ -198,8 +220,7 @@ class LocationShareSession {
 
   Future<void> publishFromFix({required bool force}) async {
     if (_publishing || !_sessionActive) return;
-    final groupId = _activeGroupId;
-    if (groupId == null) return;
+    if (_activeGroupId == null) return;
 
     final granted = await _ensureOsPermission();
     if (!granted) return;
@@ -243,11 +264,12 @@ class LocationShareSession {
       return;
     }
 
-    final allowed = await _canPublishCached(groupId);
+    final allowed = await _canPublishCached();
     if (!allowed) return;
 
     _publishing = true;
     try {
+      // Un solo upsert por user_id; visibilidad por grupo = location_consents.
       await _locationShare
           .publishPosition(pos)
           .timeout(const Duration(seconds: 10));

@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
+import '../groups/groups_service.dart';
 import 'consent_service.dart';
 
 /// Última ubicación conocida de un miembro (fila en `location_updates`).
@@ -133,15 +134,36 @@ class LocationShareService {
   }
 
   /// True si puede publicar: sin pausa global en Ajustes.
-  /// Asegura fila de consentimiento activa (RLS peers) sin wizard.
+  /// GF-67: activa consentimiento en **todos** los grupos con membresía activa
+  /// (no solo el seleccionado en el mapa). Sin wizard (GF-38).
+  Future<bool> ensurePublishForAllMemberships({
+    GroupsService? groups,
+  }) async {
+    final paused = await _consent.isGloballyPaused();
+    if (paused) return false;
+    try {
+      final list = await (groups ?? GroupsService()).listMyGroups();
+      if (list.isEmpty) return false;
+      await _consent.acceptForAllMyGroups(
+        list.map((g) => g.id).toList(),
+      );
+    } catch (_) {
+      // Si falla RLS/red, el upsert live fallará igual; no tumbar el check.
+    }
+    return true;
+  }
+
+  /// True si puede publicar. Asegura consent del [groupId] y, GF-67, de todos
+  /// los demás grupos con membresía (RLS peers / `can_view_location`).
   Future<bool> canPublishForGroup(String groupId) async {
+    final ok = await ensurePublishForAllMemberships();
+    if (ok) return true;
+    // Fallback: al menos el grupo pedido (p. ej. listMyGroups vacío por red).
     final paused = await _consent.isGloballyPaused();
     if (paused) return false;
     try {
       await _consent.acceptShareWithGroup(groupId);
-    } catch (_) {
-      // Si falla RLS/red, el upsert live fallará igual; no bloquear el check.
-    }
+    } catch (_) {}
     return true;
   }
 

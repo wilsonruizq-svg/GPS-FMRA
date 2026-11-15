@@ -412,7 +412,16 @@ class GroupsService {
         params: {'p_token': token},
       );
       if (raw is Map) {
-        return AcceptInviteResult.fromJson(Map<String, dynamic>.from(raw));
+        final result =
+            AcceptInviteResult.fromJson(Map<String, dynamic>.from(raw));
+        // GF-67: share activo en el grupo unido (RLS pines), sin wizard.
+        try {
+          final gid = result.groupId.trim();
+          if (gid.isNotEmpty) {
+            await ConsentService().acceptShareWithGroup(gid);
+          }
+        } catch (_) {}
+        return result;
       }
       throw StateError('Respuesta inesperada al aceptar la invitación.');
     } on PostgrestException catch (e) {
