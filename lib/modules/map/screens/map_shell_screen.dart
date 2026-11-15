@@ -2039,7 +2039,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       unawaited(ensureCategories(setLocal));
     }
 
-    // null = cancel; 'save' | 'wa'
+    // null = cancel; 'save'
     final action = await showDialog<String>(
       context: context,
       useRootNavigator: true,
@@ -2430,14 +2430,6 @@ class _MapShellScreenState extends State<MapShellScreen>
                       const SizedBox(width: 6),
                       Expanded(
                         child: actionPill(
-                          onPressed: () =>
-                              Navigator.of(ctx, rootNavigator: true).pop('wa'),
-                          label: AppStrings.mapSavePlaceWhatsApp,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: actionPill(
                           onPressed: () => Navigator.of(
                             ctx,
                             rootNavigator: true,
@@ -2486,23 +2478,6 @@ class _MapShellScreenState extends State<MapShellScreen>
           duration: Duration(seconds: seconds),
         ),
       );
-    }
-
-    if (action == 'wa') {
-      final ok = await WhatsAppShare.sharePlace(
-        name: placeName,
-        lat: lat,
-        lon: lon,
-        detail: description.isEmpty ? null : description,
-        photoJpeg: photoJpeg,
-      );
-      if (!mounted) return;
-      toast(
-        ok
-            ? AppStrings.mapSavePlaceWhatsAppOk
-            : AppStrings.mapSavePlaceWhatsAppError,
-      );
-      return;
     }
 
     if (action != 'save') return;
