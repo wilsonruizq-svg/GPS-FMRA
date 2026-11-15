@@ -11,10 +11,11 @@ import '../groups/groups_service.dart';
 import '../push/push_service.dart';
 import 'chat_alert_logic.dart';
 import 'chat_service.dart';
+import 'chat_unread_state.dart';
 import 'dm_service.dart';
 
 /// Alertas app-wide: chat de grupo + DM 1:1 (Realtime + polling).
-class ChatAlertService {
+class ChatAlertService extends ChangeNotifier {
   ChatAlertService._();
   static final ChatAlertService instance = ChatAlertService._();
 
@@ -32,7 +33,31 @@ class ChatAlertService {
   String? mutedGroupId;
   String? mutedPeerId;
   final Set<String> _seenIds = {};
+  final Set<String> _unreadCountedIds = {};
+  final Map<String, int> _unreadByGroup = {};
+  final Map<String, int> _unreadByDmPeer = {};
   DateTime? _startedAt;
+
+  int get totalUnread => ChatUnreadCounters.total([
+        _unreadByGroup,
+        _unreadByDmPeer,
+      ]);
+
+  int unreadCountForGroup(String groupId) =>
+      ChatUnreadCounters.countFor(_unreadByGroup, groupId);
+
+  int unreadCountForDmPeer(String peerUserId) =>
+      ChatUnreadCounters.countFor(_unreadByDmPeer, peerUserId);
+
+  void clearGroupUnread(String groupId) {
+    ChatUnreadCounters.clearThread(_unreadByGroup, groupId);
+    notifyListeners();
+  }
+
+  void clearDmUnread(String peerUserId) {
+    ChatUnreadCounters.clearThread(_unreadByDmPeer, peerUserId);
+    notifyListeners();
+  }
 
   String get _myUid =>
       (supabase.auth.currentUser?.id ?? '').trim().toLowerCase();
@@ -108,6 +133,10 @@ class ChatAlertService {
     _mutePeerDepth = 0;
     mutedGroupId = null;
     mutedPeerId = null;
+    _unreadByGroup.clear();
+    _unreadByDmPeer.clear();
+    _unreadCountedIds.clear();
+    notifyListeners();
     if (g != null) {
       try {
         await _chat.unsubscribe(g);
@@ -233,6 +262,18 @@ class ChatAlertService {
     }
   }
 
+  void _bumpUnreadOnce(String messageId, {required String threadId, required bool dm}) {
+    final mid = messageId.trim();
+    if (mid.isEmpty || _unreadCountedIds.contains(mid)) return;
+    _unreadCountedIds.add(mid);
+    if (dm) {
+      ChatUnreadCounters.bump(_unreadByDmPeer, threadId);
+    } else {
+      ChatUnreadCounters.bump(_unreadByGroup, threadId);
+    }
+    notifyListeners();
+  }
+
   Future<void> _maybeAlertGroup(
     GroupMessage msg, {
     required String source,
@@ -252,6 +293,8 @@ class ChatAlertService {
       if (id.isNotEmpty) _recordSeen(id);
       return;
     }
+
+    _bumpUnreadOnce(id, threadId: msg.groupId, dm: false);
 
     var enriched = msg;
     try {
@@ -287,6 +330,8 @@ class ChatAlertService {
       if (id.isNotEmpty) _recordSeen(id);
       return;
     }
+
+    _bumpUnreadOnce(id, threadId: msg.senderId, dm: true);
 
     var enriched = msg;
     try {

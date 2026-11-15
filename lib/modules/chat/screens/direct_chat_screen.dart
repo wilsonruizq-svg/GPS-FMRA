@@ -45,6 +45,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   void initState() {
     super.initState();
     ChatAlertService.instance.mutePeer(widget.peerUserId);
+    ChatAlertService.instance.clearDmUnread(widget.peerUserId);
     unawaited(_bootstrap());
   }
 

@@ -44,6 +44,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   void initState() {
     super.initState();
     ChatAlertService.instance.muteGroup(widget.group.id);
+    ChatAlertService.instance.clearGroupUnread(widget.group.id);
     unawaited(_bootstrap());
   }
 

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../chat/chat_alert_service.dart';
+import '../../chat/widgets/chat_unread_badge.dart';
 import '../../places/named_places_service.dart';
 import '../../places/whatsapp_share.dart';
 import '../groups_service.dart';
@@ -876,9 +878,22 @@ class _GroupsScreenState extends State<GroupsScreen> {
                   color: AppColors.midBlue,
                 ),
               ),
-              trailing: const Icon(
-                Icons.chevron_right,
-                color: AppColors.midBlue,
+              trailing: ListenableBuilder(
+                listenable: ChatAlertService.instance,
+                builder: (context, _) {
+                  final unread = ChatAlertService.instance
+                      .unreadCountForGroup(_groups[i].id);
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ChatUnreadCountPill(count: unread),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.midBlue,
+                      ),
+                    ],
+                  );
+                },
               ),
               onTap: () => unawaited(_openGroupDetail(_groups[i])),
             ),
