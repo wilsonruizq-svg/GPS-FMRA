@@ -72,8 +72,14 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
         iAmAdmin = me?.isAdmin == true;
 
         final wantId = (widget.initialUserId ?? '').trim();
+        final wantPeer =
+            wantId.isNotEmpty &&
+            wantId.toLowerCase() != _myUid.trim().toLowerCase();
         if (iAmAdmin && wantId.isNotEmpty) {
           focus = members.where((m) => m.userId == wantId).firstOrNull;
+        } else if (wantPeer) {
+          // Miembro no admin: nunca abrir historial ajeno (GF-39/40).
+          focus = me;
         }
         focus ??= me ?? (members.isNotEmpty ? members.first : null);
 

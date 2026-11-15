@@ -123,7 +123,6 @@ class MemberCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 2),
               ],
-              if (trailingExtra != null) trailingExtra!,
               if (onOpenExternalMap != null)
                 IconButton(
                   tooltip: AppStrings.memberExternalMapIconTooltip,
@@ -131,6 +130,7 @@ class MemberCard extends StatelessWidget {
                   icon: const Icon(Icons.satellite_alt_outlined),
                   color: scheme.onSurfaceVariant,
                 ),
+              if (trailingExtra != null) trailingExtra!,
               if (onMessage != null && !isSelf)
                 IconButton(
                   tooltip: AppStrings.dmAction,

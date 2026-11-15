@@ -694,7 +694,25 @@ class _MapShellScreenState extends State<MapShellScreen>
     _openMemberHistory(userId: _myUid);
   }
 
+  /// Fix en vivo = pin visible en MapLibre (GF-47: Earth para cualquier miembro).
+  MemberLocation? _liveFixForMember(String userId) =>
+      _locationsByUser[userId];
+
   void _openMemberHistory({required String userId}) {
+    final target = userId.trim().toLowerCase();
+    final own = _myUid.trim().toLowerCase();
+    if (target.isNotEmpty &&
+        own.isNotEmpty &&
+        target != own &&
+        !_iAmGroupAdmin()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(AppStrings.historyOtherMemberAdminOnly),
+        ),
+      );
+      return;
+    }
     final g = _selected;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -703,6 +721,20 @@ class _MapShellScreenState extends State<MapShellScreen>
           initialUserId: userId,
         ),
       ),
+    );
+  }
+
+  /// GF-39/40: historial de otro integrante — solo administradores.
+  Widget? _adminMemberHistoryButton({
+    required GroupMember member,
+    required bool isSelf,
+  }) {
+    if (!_iAmGroupAdmin() || isSelf) return null;
+    return IconButton(
+      tooltip: AppStrings.historyMapTooltip,
+      icon: const Icon(Icons.schedule_outlined),
+      color: AppColors.deepBlue,
+      onPressed: () => _openMemberHistory(userId: member.userId),
     );
   }
 
@@ -2973,7 +3005,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                                   m.userId,
                                   isSelf: isSelf,
                                 );
-                                final live = _locationsByUser[m.userId];
+                                final live = _liveFixForMember(m.userId);
                                 return MemberCard(
                                   name: m.label,
                                   photoUrl: m.photoUrl,
@@ -2986,16 +3018,10 @@ class _MapShellScreenState extends State<MapShellScreen>
                                     gender: m.gender,
                                     displayName: m.label,
                                   ),
-                                  trailingExtra: _iAmGroupAdmin() && !isSelf
-                                      ? IconButton(
-                                          tooltip: AppStrings.historyMapTooltip,
-                                          icon: const Icon(Icons.schedule_outlined),
-                                          color: AppColors.deepBlue,
-                                          onPressed: () => _openMemberHistory(
-                                            userId: m.userId,
-                                          ),
-                                        )
-                                      : null,
+                                  trailingExtra: _adminMemberHistoryButton(
+                                    member: m,
+                                    isSelf: isSelf,
+                                  ),
                                   onOpenExternalMap: live == null
                                       ? null
                                       : () {

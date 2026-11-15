@@ -325,6 +325,8 @@ abstract final class AppStrings {
   static const historyEmpty = 'No hay entradas todavía.';
   /// Acceso discreto (mapa / yo en lista) — no “historial GPS”.
   static const historyMapTooltip = 'Recientes';
+  static const historyOtherMemberAdminOnly =
+      'Solo administradores pueden ver el historial de otros integrantes.';
   static const historyOpenAction = 'Recientes';
   static const historyMemberLabel = 'Integrante';
   static const historyNeedAdminSql =
