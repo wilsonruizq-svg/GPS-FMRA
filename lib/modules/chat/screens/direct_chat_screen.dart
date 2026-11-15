@@ -158,6 +158,51 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     }
   }
 
+  Future<void> _confirmDelete(DirectMessage m) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.chatDeleteTitle),
+        content: const Text(AppStrings.dmDeleteConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(AppStrings.chatDeleteCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accentRed,
+            ),
+            child: const Text(AppStrings.chatDeleteAction),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _dm.deleteMessage(messageId: m.id);
+      ChatAlertService.instance.onMessageDeleted(
+        messageId: m.id,
+        dmPeerId: widget.peerUserId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _seenIds.remove(m.id);
+        _messages = _messages.where((x) => x.id != m.id).toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.chatDeleteDone)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = DmService.looksLikeMissingDeletePolicy(e)
+          ? AppStrings.dmDeleteMissingSql
+          : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
   String _clock(DateTime utc) {
     final local = utc.toLocal();
     final h = local.hour.toString().padLeft(2, '0');
@@ -241,6 +286,8 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
           message: m,
           isMine: mine,
           timeLabel: _clock(m.createdAt),
+          onLongPress:
+              mine ? () => unawaited(_confirmDelete(m)) : null,
         );
       },
     );
@@ -318,11 +365,13 @@ class _Bubble extends StatelessWidget {
     required this.message,
     required this.isMine,
     required this.timeLabel,
+    this.onLongPress,
   });
 
   final DirectMessage message;
   final bool isMine;
   final String timeLabel;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -345,35 +394,48 @@ class _Bubble extends StatelessWidget {
             constraints: BoxConstraints(
               maxWidth: MediaQuery.sizeOf(context).width * 0.78,
             ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: bg,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onLongPress: onLongPress,
                 borderRadius: radius,
-                border: isMine
-                    ? null
-                    : Border.all(
-                        color: AppColors.midBlue.withValues(alpha: 0.2),
-                      ),
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      message.body,
-                      style: TextStyle(color: fg, fontSize: 15, height: 1.3),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: radius,
+                    border: isMine
+                        ? null
+                        : Border.all(
+                            color: AppColors.midBlue.withValues(alpha: 0.2),
+                          ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      timeLabel,
-                      style: TextStyle(
-                        color: fg.withValues(alpha: 0.75),
-                        fontSize: 11,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          message.body,
+                          style: TextStyle(
+                            color: fg,
+                            fontSize: 15,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          timeLabel,
+                          style: TextStyle(
+                            color: fg.withValues(alpha: 0.75),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),

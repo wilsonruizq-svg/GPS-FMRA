@@ -598,4 +598,23 @@ abstract final class AppStrings {
       '(direct_messages_ok = true). Guía: docs/DM_ES.md';
   static const dmSelfDisabled =
       'No puedes enviarte un mensaje a ti mismo.';
+
+  static const chatDeleteTitle = '¿Eliminar mensaje?';
+  static const chatDeleteConfirm =
+      'Se borrará para todos en el grupo. No se puede deshacer.';
+  static const chatDeleteConfirmAdmin =
+      'Como admin, borrarás este mensaje para todos. No se puede deshacer.';
+  static const dmDeleteConfirm =
+      'Se borrará de esta conversación. No se puede deshacer.';
+  static const chatDeleteAction = 'Eliminar';
+  static const chatDeleteCancel = 'Cancelar';
+  static const chatDeleteDone = 'Mensaje eliminado.';
+  static const chatDeleteMissingSql =
+      'Falta APPLY del SQL de borrar mensajes. '
+      'SQL Editor → supabase/migrations/20261115120000_chat_messages_delete.sql '
+      '→ Run (group_messages_delete_ok = true).';
+  static const dmDeleteMissingSql =
+      'Falta APPLY del SQL de borrar mensajes 1:1. '
+      'Misma migración 20261115120000_chat_messages_delete.sql en Supabase.';
+  static const chatDeleteHint = 'Mantén pulsado un mensaje propio para eliminarlo.';
 }

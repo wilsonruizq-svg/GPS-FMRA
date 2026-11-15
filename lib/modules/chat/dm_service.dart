@@ -154,6 +154,17 @@ class DmService {
     return DirectMessage.fromMap(Map<String, dynamic>.from(row));
   }
 
+  Future<void> deleteMessage({required String messageId}) async {
+    final id = messageId.trim();
+    if (id.isEmpty) throw ArgumentError('Mensaje inválido.');
+    final me = _uid;
+    await _sb
+        .from('direct_messages')
+        .delete()
+        .eq('id', id)
+        .eq('sender_id', me);
+  }
+
   Future<DirectMessage> enrich(DirectMessage message) async {
     if ((message.senderName?.trim().isNotEmpty ?? false)) {
       return message;
@@ -209,6 +220,15 @@ class DmService {
   Future<void> unsubscribe(RealtimeChannel? channel) async {
     if (channel == null) return;
     await _sb.removeChannel(channel);
+  }
+
+  static bool looksLikeMissingDeletePolicy(Object error) {
+    final s = error.toString().toLowerCase();
+    return s.contains('direct_messages') &&
+        (s.contains('42501') ||
+            s.contains('permission denied') ||
+            s.contains('policy') ||
+            s.contains('row-level security'));
   }
 
   static bool looksLikeMissingTable(Object error) {

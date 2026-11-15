@@ -10,6 +10,12 @@ void main() {
     expect(ChatUnreadCounters.total([groups]), 2);
   });
 
+  test('decrement borra clave al llegar a cero', () {
+    final groups = <String, int>{'g1': 1};
+    ChatUnreadCounters.decrement(groups, 'g1');
+    expect(groups.isEmpty, isTrue);
+  });
+
   test('clearThread y DM separado', () {
     final groups = <String, int>{'a': 3};
     final dms = <String, int>{'peer': 1};

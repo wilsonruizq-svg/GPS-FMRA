@@ -59,6 +59,26 @@ class ChatAlertService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Tras borrar un mensaje en servidor: quita id de contadores/seen.
+  void onMessageDeleted({
+    required String messageId,
+    String? groupId,
+    String? dmPeerId,
+  }) {
+    final id = messageId.trim();
+    if (id.isEmpty) return;
+    _seenIds.remove(id);
+    final wasUnread = _unreadCountedIds.remove(id);
+    if (wasUnread) {
+      if (groupId != null && groupId.trim().isNotEmpty) {
+        ChatUnreadCounters.decrement(_unreadByGroup, groupId);
+      } else if (dmPeerId != null && dmPeerId.trim().isNotEmpty) {
+        ChatUnreadCounters.decrement(_unreadByDmPeer, dmPeerId);
+      }
+    }
+    notifyListeners();
+  }
+
   String get _myUid =>
       (supabase.auth.currentUser?.id ?? '').trim().toLowerCase();
 

@@ -20,6 +20,17 @@ class ChatUnreadCounters {
     perThread.remove(ChatAlertLogic.normId(threadId));
   }
 
+  static void decrement(Map<String, int> perThread, String threadId) {
+    final k = ChatAlertLogic.normId(threadId);
+    final cur = perThread[k];
+    if (cur == null || cur <= 0) return;
+    if (cur <= 1) {
+      perThread.remove(k);
+    } else {
+      perThread[k] = cur - 1;
+    }
+  }
+
   static int total(Iterable<Map<String, int>> maps) {
     var sum = 0;
     for (final m in maps) {

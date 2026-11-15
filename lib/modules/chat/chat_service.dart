@@ -137,6 +137,22 @@ class ChatService {
     return GroupMessage.fromMap(Map<String, dynamic>.from(row));
   }
 
+  Future<void> deleteMessage({
+    required String messageId,
+    required String groupId,
+  }) async {
+    final id = messageId.trim();
+    final gid = groupId.trim();
+    if (id.isEmpty || gid.isEmpty) {
+      throw ArgumentError('Mensaje o grupo inválido.');
+    }
+    await _sb
+        .from('group_messages')
+        .delete()
+        .eq('id', id)
+        .eq('group_id', gid);
+  }
+
   /// Completa nombre/foto si el INSERT Realtime no trae embed.
   Future<GroupMessage> enrich(GroupMessage message) async {
     if ((message.senderName?.trim().isNotEmpty ?? false) &&
@@ -207,5 +223,14 @@ class ChatService {
             s.contains('404') ||
             s.contains('schema cache') ||
             s.contains('could not find'));
+  }
+
+  static bool looksLikeMissingDeletePolicy(Object error) {
+    final s = error.toString().toLowerCase();
+    return s.contains('group_messages') &&
+        (s.contains('42501') ||
+            s.contains('permission denied') ||
+            s.contains('policy') ||
+            s.contains('row-level security'));
   }
 }

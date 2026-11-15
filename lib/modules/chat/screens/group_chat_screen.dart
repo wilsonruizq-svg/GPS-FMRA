@@ -32,6 +32,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   bool _loading = true;
   bool _sending = false;
+  bool _iAmAdmin = false;
   String? _error;
   List<GroupMessage> _messages = const [];
   RealtimeChannel? _channel;
@@ -66,12 +67,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     });
     try {
       final list = await _chat.listRecent(groupId: widget.group.id);
+      var admin = false;
+      try {
+        final members = await GroupsService().listMembers(widget.group.id);
+        final uid = Supabase.instance.client.auth.currentUser?.id;
+        admin = members.any((m) => m.userId == uid && m.isAdmin);
+      } catch (_) {
+        admin = false;
+      }
       if (!mounted) return;
       _seenIds
         ..clear()
         ..addAll(list.map((m) => m.id));
       setState(() {
         _messages = list;
+        _iAmAdmin = admin;
         _loading = false;
       });
       _subscribe();
@@ -155,6 +165,53 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
+  Future<void> _confirmDelete(GroupMessage m, {required bool asAdmin}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(AppStrings.chatDeleteTitle),
+        content: Text(
+          asAdmin ? AppStrings.chatDeleteConfirmAdmin : AppStrings.chatDeleteConfirm,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(AppStrings.chatDeleteCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.accentRed,
+            ),
+            child: const Text(AppStrings.chatDeleteAction),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    try {
+      await _chat.deleteMessage(messageId: m.id, groupId: widget.group.id);
+      ChatAlertService.instance.onMessageDeleted(
+        messageId: m.id,
+        groupId: widget.group.id,
+      );
+      if (!mounted) return;
+      setState(() {
+        _seenIds.remove(m.id);
+        _messages = _messages.where((x) => x.id != m.id).toList();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.chatDeleteDone)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final msg = ChatService.looksLikeMissingDeletePolicy(e)
+          ? AppStrings.chatDeleteMissingSql
+          : e.toString();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
   String _clock(DateTime utc) {
     final local = utc.toLocal();
     final h = local.hour.toString().padLeft(2, '0');
@@ -234,10 +291,16 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         final m = _messages[i];
         final mine =
             m.senderId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+        final canDelete = mine || (_iAmAdmin && !mine);
         return _Bubble(
           message: m,
           isMine: mine,
           timeLabel: _clock(m.createdAt),
+          onLongPress: canDelete
+              ? () => unawaited(
+                    _confirmDelete(m, asAdmin: _iAmAdmin && !mine),
+                  )
+              : null,
         );
       },
     );
@@ -315,11 +378,13 @@ class _Bubble extends StatelessWidget {
     required this.message,
     required this.isMine,
     required this.timeLabel,
+    this.onLongPress,
   });
 
   final GroupMessage message;
   final bool isMine;
   final String timeLabel;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -353,33 +418,48 @@ class _Bubble extends StatelessWidget {
             constraints: BoxConstraints(
               maxWidth: MediaQuery.sizeOf(context).width * 0.78,
             ),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: bg,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onLongPress: onLongPress,
                 borderRadius: radius,
-                border: isMine
-                    ? null
-                    : Border.all(color: AppColors.midBlue.withValues(alpha: 0.2)),
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      message.body,
-                      style: TextStyle(color: fg, fontSize: 15, height: 1.3),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: radius,
+                    border: isMine
+                        ? null
+                        : Border.all(
+                            color: AppColors.midBlue.withValues(alpha: 0.2),
+                          ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      timeLabel,
-                      style: TextStyle(
-                        color: fg.withValues(alpha: 0.75),
-                        fontSize: 11,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          message.body,
+                          style: TextStyle(
+                            color: fg,
+                            fontSize: 15,
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          timeLabel,
+                          style: TextStyle(
+                            color: fg.withValues(alpha: 0.75),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
