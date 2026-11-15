@@ -650,25 +650,13 @@ class _MapShellScreenState extends State<MapShellScreen>
       case 'maps':
         await _openMemberInGoogleMaps(lat: lat, lon: lon);
         return;
-      case 'earth':
-        final ok = await ExternalMapLinks.openGoogleEarth(lat: lat, lng: lon);
-        if (!mounted) return;
-        if (!ok) {
-          GpsFmraApp.messengerKey.currentState?.showSnackBar(
-            const SnackBar(
-              content: Text(AppStrings.memberExternalMapOpenError),
-            ),
-          );
-        }
-        return;
-      case 'organic':
-        final okOrganic = await ExternalMapLinks.openPreferredMapApp(
+      case 'osm':
+        final okOsm = await ExternalMapLinks.openOpenStreetMap(
           lat: lat,
           lng: lon,
-          label: shareName,
         );
         if (!mounted) return;
-        if (!okOrganic) {
+        if (!okOsm) {
           GpsFmraApp.messengerKey.currentState?.showSnackBar(
             const SnackBar(
               content: Text(AppStrings.memberExternalMapOpenError),
@@ -886,37 +874,6 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
-  Future<void> _openMemberInGoogleEarth({
-    required double lat,
-    required double lon,
-  }) async {
-    final ok = await ExternalMapLinks.openGoogleEarth(lat: lat, lng: lon);
-    if (!mounted) return;
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.memberExternalMapOpenError)),
-      );
-    }
-  }
-
-  Future<void> _openMemberInPreferredMapApp({
-    required String name,
-    required double lat,
-    required double lon,
-  }) async {
-    final ok = await ExternalMapLinks.openPreferredMapApp(
-      lat: lat,
-      lng: lon,
-      label: name,
-    );
-    if (!mounted) return;
-    if (!ok) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.memberExternalMapOpenError)),
-      );
-    }
-  }
-
   Future<void> _showMemberExternalMapSheet({
     required String name,
     required double lat,
@@ -936,22 +893,10 @@ class _MapShellScreenState extends State<MapShellScreen>
               onTap: () => Navigator.pop(ctx, 'maps'),
             ),
             ListTile(
-              leading: const Icon(Icons.satellite_alt_outlined),
-              title: const Text(AppStrings.memberOpenGoogleEarth),
-              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
-              onTap: () => Navigator.pop(ctx, 'earth'),
-            ),
-            ListTile(
               leading: const Icon(Icons.terrain_outlined),
               title: const Text(AppStrings.memberOpenOsm),
               subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
               onTap: () => Navigator.pop(ctx, 'osm'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.apps_outlined),
-              title: const Text(AppStrings.memberOpenGeoApp),
-              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
-              onTap: () => Navigator.pop(ctx, 'geo'),
             ),
             ListTile(
               leading: const Icon(Icons.share_outlined),
@@ -964,8 +909,6 @@ class _MapShellScreenState extends State<MapShellScreen>
     );
     if (!mounted || action == null) return;
     switch (action) {
-      case 'earth':
-        await _openMemberInGoogleEarth(lat: lat, lon: lon);
       case 'maps':
         await _openMemberInGoogleMaps(lat: lat, lon: lon);
       case 'osm':
@@ -975,20 +918,6 @@ class _MapShellScreenState extends State<MapShellScreen>
         );
         if (!mounted) return;
         if (!okOsm) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(AppStrings.memberExternalMapOpenError),
-            ),
-          );
-        }
-      case 'geo':
-        final okGeo = await ExternalMapLinks.openPreferredMapApp(
-          lat: lat,
-          lng: lon,
-          label: name,
-        );
-        if (!mounted) return;
-        if (!okGeo) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(AppStrings.memberExternalMapOpenError),
@@ -2193,16 +2122,10 @@ class _MapShellScreenState extends State<MapShellScreen>
               onTap: () => Navigator.pop(ctx, 'maps'),
             ),
             ListTile(
-              leading: const Icon(Icons.satellite_alt_outlined),
-              title: const Text(AppStrings.memberOpenGoogleEarth),
-              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
-              onTap: () => Navigator.pop(ctx, 'earth'),
-            ),
-            ListTile(
               leading: const Icon(Icons.terrain_outlined),
-              title: const Text(AppStrings.mapPinActionOrganicMaps),
+              title: const Text(AppStrings.memberOpenOsm),
               subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
-              onTap: () => Navigator.pop(ctx, 'organic'),
+              onTap: () => Navigator.pop(ctx, 'osm'),
             ),
             ListTile(
               leading: const Icon(Icons.chat_outlined),

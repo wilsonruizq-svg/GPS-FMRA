@@ -90,7 +90,6 @@ abstract final class AppStrings {
   static const mapSavePlaceTooltip = 'Guardar lugar';
   static const mapPinActionSheetTitle = 'Ubicación';
   static const mapPinActionRecommendedHint = 'Recomendado';
-  static const mapPinActionOrganicMaps = 'Organic Maps';
   static const mapSavePlaceTitle = 'Guardar este lugar';
   static const mapSavePlaceNameLabel = 'Título';
   static const mapSavePlaceNameHint = 'Nombre del lugar';
@@ -257,10 +256,8 @@ abstract final class AppStrings {
   static const memberMapPinTooltip = 'Color en el mapa';
   static const mapMemberNoLivePin =
       'Sin pin en el mapa ahora (ubicación no compartida o sin señal).';
-  static const memberOpenGoogleEarth = 'Google Earth (vista 3D)';
   static const memberOpenExternalMap = 'Google Maps';
-  static const memberOpenOsm = 'OpenStreetMap (web)';
-  static const memberOpenGeoApp = 'Organic Maps u otra app (geo:)';
+  static const memberOpenOsm = 'OpenStreetMap';
   static const memberExternalMapSecondaryHint = 'Alternativa';
   static const memberShareLocationLink = 'Compartir enlace';
   static const memberExternalMapOpenError =
