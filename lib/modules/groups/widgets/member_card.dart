@@ -21,6 +21,7 @@ class MemberCard extends StatelessWidget {
     this.onLongPress,
     this.onMessage,
     this.onOpenExternalMap,
+    this.onFigurineTap,
     this.trailingExtra,
   });
 
@@ -36,6 +37,8 @@ class MemberCard extends StatelessWidget {
   final VoidCallback? onMessage;
   /// Icono discreto (p. ej. Earth) cuando hay lat/lng en vivo.
   final VoidCallback? onOpenExternalMap;
+  /// Tap en la figurita de color (misma acción que el muñeco del mapa).
+  final VoidCallback? onFigurineTap;
   /// P. ej. promover/quitar admin (detalle de grupo).
   final Widget? trailingExtra;
 
@@ -113,12 +116,16 @@ class MemberCard extends StatelessWidget {
                 ),
               ),
               if (mapPinColor != null) ...[
-                Tooltip(
-                  message: AppStrings.memberMapPinTooltip,
-                  child: Icon(
-                    female ? Icons.woman : Icons.man,
-                    color: mapPinColor,
-                    size: 28,
+                GestureDetector(
+                  onTap: onFigurineTap,
+                  behavior: HitTestBehavior.opaque,
+                  child: Tooltip(
+                    message: AppStrings.memberMapPinTooltip,
+                    child: Icon(
+                      female ? Icons.woman : Icons.man,
+                      color: mapPinColor,
+                      size: 28,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 2),

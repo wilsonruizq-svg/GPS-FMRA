@@ -561,6 +561,139 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   void _onMapCreated(MapLibreMapController controller) {
     _mapController = controller;
+    controller.onSymbolTapped.add((symbol) {
+      unawaited(_onMemberMapSymbolTapped(symbol));
+    });
+    controller.onCircleTapped.add((circle) {
+      unawaited(_onMemberMapCircleTapped(circle));
+    });
+  }
+
+  String? _userIdForMemberSymbol(Symbol symbol) {
+    for (final e in _figuresByUser.entries) {
+      if (e.value.id == symbol.id) return e.key;
+    }
+    for (final e in _labelsByUser.entries) {
+      if (e.value.id == symbol.id) return e.key;
+    }
+    return null;
+  }
+
+  String? _userIdForMemberCircle(Circle circle) {
+    for (final e in _accuracyByUser.entries) {
+      if (e.value.id == circle.id) return e.key;
+    }
+    return null;
+  }
+
+  String _displayNameForUserId(String userId) {
+    final member =
+        _members.where((m) => m.userId == userId).firstOrNull;
+    if (member != null && member.label.trim().isNotEmpty) {
+      return member.label.trim();
+    }
+    final isSelf =
+        userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+    return isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember;
+  }
+
+  Future<void> _onMemberMapSymbolTapped(Symbol symbol) async {
+    if (_savingPlace || !mounted) return;
+    final userId = _userIdForMemberSymbol(symbol);
+    if (userId == null) return;
+    final loc = _locationsByUser[userId];
+    if (loc == null) return;
+    await _runPinActionSheetAt(
+      lat: loc.lat,
+      lon: loc.lon,
+      locationLabel: _displayNameForUserId(userId),
+    );
+  }
+
+  Future<void> _onMemberMapCircleTapped(Circle circle) async {
+    if (_savingPlace || !mounted) return;
+    final userId = _userIdForMemberCircle(circle);
+    if (userId == null) return;
+    final loc = _locationsByUser[userId];
+    if (loc == null) return;
+    await _runPinActionSheetAt(
+      lat: loc.lat,
+      lon: loc.lon,
+      locationLabel: _displayNameForUserId(userId),
+    );
+  }
+
+  Future<void> _runPinActionSheetAt({
+    required double lat,
+    required double lon,
+    String? locationLabel,
+  }) async {
+    if (_savingPlace || !mounted) return;
+    final action = await _showMapPinActionSheet(
+      lat: lat,
+      lon: lon,
+      locationLabel: locationLabel,
+    );
+    if (!mounted || action == null) return;
+
+    final shareName = (locationLabel?.trim().isNotEmpty == true)
+        ? locationLabel!.trim()
+        : 'Mi ubicación';
+
+    switch (action) {
+      case 'earth':
+        final ok = await ExternalMapLinks.openGoogleEarth(lat: lat, lng: lon);
+        if (!mounted) return;
+        if (!ok) {
+          GpsFmraApp.messengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.memberExternalMapOpenError),
+            ),
+          );
+        }
+        return;
+      case 'organic':
+        final okOrganic = await ExternalMapLinks.openPreferredMapApp(
+          lat: lat,
+          lng: lon,
+          label: shareName,
+        );
+        if (!mounted) return;
+        if (!okOrganic) {
+          GpsFmraApp.messengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.memberExternalMapOpenError),
+            ),
+          );
+        }
+        return;
+      case 'wa':
+        final okWa = await WhatsAppShare.sharePlace(
+          name: shareName,
+          lat: lat,
+          lon: lon,
+        );
+        if (!mounted) return;
+        GpsFmraApp.messengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text(
+              okWa
+                  ? AppStrings.mapSavePlaceWhatsAppOk
+                  : AppStrings.mapSavePlaceWhatsAppError,
+            ),
+          ),
+        );
+        return;
+      case 'save':
+        await _openSavePlaceDialog(
+          lat: lat,
+          lon: lon,
+          suggestedName: locationLabel,
+        );
+        return;
+      default:
+        return;
+    }
   }
 
   Future<void> _onStyleLoaded() async {
@@ -2010,7 +2143,9 @@ class _MapShellScreenState extends State<MapShellScreen>
   Future<String?> _showMapPinActionSheet({
     required double lat,
     required double lon,
+    String? locationLabel,
   }) async {
+    final label = locationLabel?.trim();
     return showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -2021,7 +2156,9 @@ class _MapShellScreenState extends State<MapShellScreen>
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
               child: Text(
-                AppStrings.mapPinActionSheetTitle,
+                label != null && label.isNotEmpty
+                    ? label
+                    : AppStrings.mapPinActionSheetTitle,
                 style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       color: AppColors.deepBlue,
@@ -2077,74 +2214,21 @@ class _MapShellScreenState extends State<MapShellScreen>
       return;
     }
 
-    final action = await _showMapPinActionSheet(
-      lat: coords.lat,
-      lon: coords.lon,
-    );
-    if (!mounted || action == null) return;
-
-    switch (action) {
-      case 'earth':
-        final ok = await ExternalMapLinks.openGoogleEarth(
-          lat: coords.lat,
-          lng: coords.lon,
-        );
-        if (!mounted) return;
-        if (!ok) {
-          GpsFmraApp.messengerKey.currentState?.showSnackBar(
-            const SnackBar(
-              content: Text(AppStrings.memberExternalMapOpenError),
-            ),
-          );
-        }
-        return;
-      case 'organic':
-        final okOrganic = await ExternalMapLinks.openPreferredMapApp(
-          lat: coords.lat,
-          lng: coords.lon,
-        );
-        if (!mounted) return;
-        if (!okOrganic) {
-          GpsFmraApp.messengerKey.currentState?.showSnackBar(
-            const SnackBar(
-              content: Text(AppStrings.memberExternalMapOpenError),
-            ),
-          );
-        }
-        return;
-      case 'wa':
-        final okWa = await WhatsAppShare.sharePlace(
-          name: 'Mi ubicación',
-          lat: coords.lat,
-          lon: coords.lon,
-        );
-        if (!mounted) return;
-        GpsFmraApp.messengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Text(
-              okWa
-                  ? AppStrings.mapSavePlaceWhatsAppOk
-                  : AppStrings.mapSavePlaceWhatsAppError,
-            ),
-          ),
-        );
-        return;
-      case 'save':
-        await _openSavePlaceDialog(lat: coords.lat, lon: coords.lon);
-        return;
-      default:
-        return;
-    }
+    await _runPinActionSheetAt(lat: coords.lat, lon: coords.lon);
   }
 
   Future<void> _openSavePlaceDialog({
     required double lat,
     required double lon,
+    String? suggestedName,
   }) async {
     if (_savingPlace) return;
     if (!mounted) return;
 
-    final nameController = TextEditingController();
+    final initialName = suggestedName?.trim();
+    final nameController = TextEditingController(
+      text: initialName != null && initialName.isNotEmpty ? initialName : '',
+    );
     final descController = TextEditingController();
     // Si hay grupo seleccionado, por defecto compartir (así aparece en Grupos).
     var shareWithGroup = _selected != null;
@@ -3165,9 +3249,21 @@ class _MapShellScreenState extends State<MapShellScreen>
                                       ? null
                                       : () {
                                           unawaited(
-                                            _openMemberInGoogleEarth(
+                                            _runPinActionSheetAt(
                                               lat: live.lat,
                                               lon: live.lon,
+                                              locationLabel: m.label,
+                                            ),
+                                          );
+                                        },
+                                  onFigurineTap: live == null
+                                      ? null
+                                      : () {
+                                          unawaited(
+                                            _runPinActionSheetAt(
+                                              lat: live.lat,
+                                              lon: live.lon,
+                                              locationLabel: m.label,
                                             ),
                                           );
                                         },
@@ -3175,10 +3271,10 @@ class _MapShellScreenState extends State<MapShellScreen>
                                       ? null
                                       : () {
                                           unawaited(
-                                            _showMemberExternalMapSheet(
-                                              name: m.label,
+                                            _runPinActionSheetAt(
                                               lat: live.lat,
                                               lon: live.lon,
+                                              locationLabel: m.label,
                                             ),
                                           );
                                         },
