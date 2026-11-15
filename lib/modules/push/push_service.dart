@@ -13,7 +13,9 @@ import '../../core/supabase/supabase_bootstrap.dart';
 /// Handler de isolate para mensajes FCM en background.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('FCM background: ${message.messageId} type=${message.data['type']}');
+  debugPrint(
+    'FCM background: ${message.messageId} type=${message.data['type']}',
+  );
 }
 
 /// FCM opcional + notificaciones locales (SOS y chat).
@@ -27,6 +29,7 @@ class PushService {
 
   static const androidChannelId = 'sos_alerts';
   static const androidChannelName = 'Alertas SOS';
+
   /// v2: canales Android 8+ no cambian sonido tras creación; Realme puede dejar
   /// `chat_messages` en silencio — instalación nueva crea este canal audible.
   static const chatChannelId = 'chat_messages_v2';
@@ -34,30 +37,32 @@ class PushService {
 
   /// URI por defecto del tono de notificación del sistema (Android).
   static const UriAndroidNotificationSound chatDefaultSound =
-      UriAndroidNotificationSound('content://settings/system/notification_sound');
+      UriAndroidNotificationSound(
+        'content://settings/system/notification_sound',
+      );
 
   static const AndroidNotificationChannel _sosAndroidChannel =
       AndroidNotificationChannel(
-    androidChannelId,
-    androidChannelName,
-    description: 'Alertas de emergencia del grupo familiar',
-    importance: Importance.max,
-    playSound: true,
-    enableVibration: true,
-    audioAttributesUsage: AudioAttributesUsage.alarm,
-  );
+        androidChannelId,
+        androidChannelName,
+        description: 'Alertas de emergencia del grupo familiar',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+      );
 
   static const AndroidNotificationChannel _chatAndroidChannel =
       AndroidNotificationChannel(
-    chatChannelId,
-    chatChannelName,
-    description: 'Mensajes nuevos del chat familiar',
-    importance: Importance.max,
-    playSound: true,
-    sound: chatDefaultSound,
-    enableVibration: true,
-    audioAttributesUsage: AudioAttributesUsage.notification,
-  );
+        chatChannelId,
+        chatChannelName,
+        description: 'Mensajes nuevos del chat familiar',
+        importance: Importance.max,
+        playSound: true,
+        sound: chatDefaultSound,
+        enableVibration: true,
+        audioAttributesUsage: AudioAttributesUsage.notification,
+      );
 
   static bool _initialized = false;
   static bool _localReady = false;
@@ -102,8 +107,8 @@ class PushService {
         badge: true,
         sound: true,
       );
-      final enabled = settings.authorizationStatus ==
-              AuthorizationStatus.authorized ||
+      final enabled =
+          settings.authorizationStatus == AuthorizationStatus.authorized ||
           settings.authorizationStatus == AuthorizationStatus.provisional;
 
       if (!enabled && Platform.isIOS) {
@@ -145,8 +150,10 @@ class PushService {
     const initSettings = InitializationSettings(android: androidInit);
     await _local.initialize(settings: initSettings);
 
-    final androidPlugin = _local.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+    final androidPlugin = _local
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >();
     await androidPlugin?.createNotificationChannel(_sosAndroidChannel);
     await androidPlugin?.createNotificationChannel(_chatAndroidChannel);
     await androidPlugin?.requestNotificationsPermission();
@@ -156,7 +163,8 @@ class PushService {
     final type = message.data['type'];
     if (type == 'chat') {
       final title = message.notification?.title ?? AppStrings.chatPushTitle;
-      final body = message.notification?.body ?? AppStrings.chatPushBodyFallback;
+      final body =
+          message.notification?.body ?? AppStrings.chatPushBodyFallback;
       await showChatLocalNotification(
         id: message.hashCode,
         title: title,
@@ -191,6 +199,36 @@ class PushService {
     );
   }
 
+  NotificationDetails _chatTrayDetails({
+    required String title,
+    required String body,
+    bool withCustomSound = true,
+  }) {
+    return NotificationDetails(
+      android: AndroidNotificationDetails(
+        chatChannelId,
+        chatChannelName,
+        channelDescription: 'Mensajes nuevos del chat familiar',
+        importance: Importance.max,
+        priority: Priority.max,
+        playSound: true,
+        sound: withCustomSound ? chatDefaultSound : null,
+        enableVibration: true,
+        icon: '@mipmap/ic_launcher',
+        showWhen: true,
+        autoCancel: true,
+        channelShowBadge: true,
+        category: AndroidNotificationCategory.message,
+        visibility: NotificationVisibility.public,
+        ticker: title,
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+        ),
+      ),
+    );
+  }
+
   Future<bool> showChatLocalNotification({
     required int id,
     required String title,
@@ -203,27 +241,51 @@ class PushService {
       debugPrint('PushService.showChatLocalNotification: local not ready');
       return false;
     }
+    if (!kIsWeb && Platform.isAndroid) {
+      final androidPlugin = _local
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>();
+      final enabled = await androidPlugin?.areNotificationsEnabled();
+      if (enabled == false) {
+        await androidPlugin?.requestNotificationsPermission();
+        final after = await androidPlugin?.areNotificationsEnabled();
+        if (after == false) {
+          debugPrint(
+            'PushService.showChatLocalNotification: notifications disabled (Android)',
+          );
+          return false;
+        }
+      }
+    }
+    final payload = groupId ?? messageId;
     try {
       await _local.show(
         id: id,
         title: title,
         body: body,
-        notificationDetails: const NotificationDetails(
-          android: AndroidNotificationDetails(
-            chatChannelId,
-            chatChannelName,
-            channelDescription: 'Mensajes nuevos del chat familiar',
-            importance: Importance.max,
-            priority: Priority.high,
-            playSound: true,
-            sound: chatDefaultSound,
-            enableVibration: true,
-            category: AndroidNotificationCategory.message,
-            visibility: NotificationVisibility.public,
-          ),
-        ),
-        payload: groupId ?? messageId,
+        notificationDetails: _chatTrayDetails(title: title, body: body),
+        payload: payload,
       );
+      debugPrint(
+        'PushService: tray chat posted id=$id channel=$chatChannelId',
+      );
+      return true;
+    } catch (e) {
+      debugPrint('PushService.showChatLocalNotification (sound uri): $e');
+    }
+    try {
+      await _local.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: _chatTrayDetails(
+          title: title,
+          body: body,
+          withCustomSound: false,
+        ),
+        payload: payload,
+      );
+      debugPrint('PushService: tray chat posted id=$id (default sound)');
       return true;
     } catch (e) {
       debugPrint('PushService.showChatLocalNotification: $e');
@@ -239,10 +301,10 @@ class PushService {
     final platform = kIsWeb
         ? 'web'
         : Platform.isAndroid
-            ? 'android'
-            : Platform.isIOS
-                ? 'ios'
-                : 'unknown';
+        ? 'android'
+        : Platform.isIOS
+        ? 'ios'
+        : 'unknown';
 
     try {
       await _sb.from('device_push_tokens').upsert({

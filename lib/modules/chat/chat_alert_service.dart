@@ -38,16 +38,29 @@ class ChatAlertService extends ChangeNotifier {
   final Map<String, int> _unreadByDmPeer = {};
   DateTime? _startedAt;
 
-  int get totalUnread => ChatUnreadCounters.total([
-        _unreadByGroup,
-        _unreadByDmPeer,
-      ]);
+  int get totalUnread =>
+      ChatUnreadCounters.total([_unreadByGroup, _unreadByDmPeer]);
 
   int unreadCountForGroup(String groupId) =>
       ChatUnreadCounters.countFor(_unreadByGroup, groupId);
 
   int unreadCountForDmPeer(String peerUserId) =>
       ChatUnreadCounters.countFor(_unreadByDmPeer, peerUserId);
+
+  /// Toolbar mapa: chat del grupo activo + DMs con integrantes listados (sin
+  /// desglosar remitente).
+  int unreadCountForActiveGroupContext({
+    required String groupId,
+    required Iterable<String> memberUserIds,
+  }) {
+    var sum = unreadCountForGroup(groupId);
+    for (final raw in memberUserIds) {
+      final peer = ChatAlertLogic.normId(raw);
+      if (peer.isEmpty || peer == _myUid) continue;
+      sum += unreadCountForDmPeer(peer);
+    }
+    return sum;
+  }
 
   void clearGroupUnread(String groupId) {
     ChatUnreadCounters.clearThread(_unreadByGroup, groupId);
@@ -400,7 +413,9 @@ class ChatAlertService extends ChangeNotifier {
     if (delivered) {
       _recordSeen(id);
     } else if (id.isNotEmpty) {
-      debugPrint('ChatAlertService: alert undelivered msg=$id (unread=$totalUnread)');
+      debugPrint(
+        'ChatAlertService: alert undelivered msg=$id (unread=$totalUnread)',
+      );
     }
   }
 
@@ -473,19 +488,24 @@ class ChatAlertService extends ChangeNotifier {
     );
 
     var snackOk = false;
-    final messenger = GpsFmraApp.messengerKey.currentState;
-    if (messenger != null) {
-      snackOk = true;
-      messenger.clearSnackBars();
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(body),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 5),
-        ),
+    if (!notifOk) {
+      debugPrint(
+        'ChatAlertService: tray failed → snackbar fallback src=$source',
       );
-    } else {
-      debugPrint('ChatAlertService: messenger null (¿sin scaffoldMessenger?)');
+      final messenger = GpsFmraApp.messengerKey.currentState;
+      if (messenger != null) {
+        snackOk = true;
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(body),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      } else {
+        debugPrint('ChatAlertService: messenger null (¿sin scaffoldMessenger?)');
+      }
     }
     return notifOk || snackOk;
   }
