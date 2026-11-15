@@ -90,7 +90,7 @@ abstract final class AppStrings {
   static const mapSavePlaceTooltip = 'Guardar lugar';
   static const mapPinActionSheetTitle = 'Ubicación';
   static const mapPinActionRecommendedHint = 'Recomendado';
-  static const mapSavePlaceTitle = 'Guardar este lugar';
+  static const mapSavePlaceTitle = 'Guarda Ubicacion';
   static const mapSavePlaceNameLabel = 'Título';
   static const mapSavePlaceNameHint = 'Nombre del lugar';
   static const mapSavePlaceDescLabel = 'Detalle';
@@ -101,7 +101,8 @@ abstract final class AppStrings {
   static const mapSavePlacePhotoGallery = 'Galería';
   static const mapSavePlacePhotoClear = 'Quitar foto';
   static const mapSavePlaceOnlyMe = 'Solo yo';
-  static const mapSavePlaceShareGroup = 'Compartir con el grupo';
+  /// Mock GF-70: radio «grupo» (minúscula).
+  static const mapSavePlaceShareGroup = 'grupo';
   static const mapSavePlaceGroupLabel = 'Grupo destino';
   static const mapSavePlaceGroupHint =
       'Elige en qué grupo se guarda este lugar';
@@ -122,10 +123,13 @@ abstract final class AppStrings {
   static const mapSavePlaceApply =
       'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
       '(named_places_photos_ok = true). Guía: docs/PLACES_ES.md';
+  static const mapSavePlacePersonalCategoriesApply =
+      'Falta APPLY SQL: 20261115160000_personal_place_categories.sql '
+      '(personal_place_categories_ok = true).';
   static const groupsPlacesTitle = 'Lugares guardados';
   static const groupsPlacesEmpty =
       'Sin ubicaciones aún. Crea una categoría (ej. Restaurantes) '
-      'y guarda lugares desde el Mapa con “Compartir con el grupo”.';
+      'y guarda lugares desde el Mapa (Solo yo o grupo).';
   static const groupsPlacesDelete = 'Eliminar ubicación';
   static const groupsPlacesDeleted = 'Ubicación eliminada.';
   static const groupsPlacesDeleteConfirm =
@@ -135,7 +139,7 @@ abstract final class AppStrings {
   static const groupsPlacesSoloTitle = 'Solo yo';
   static const groupsPlacesSoloHint =
       'Guardados sin compartir con el grupo. En el Mapa elige '
-      '“Compartir con el grupo” para que los vea toda la familia.';
+      '«grupo» para que los vea toda la familia.';
   static const groupsPlacesSharedTitle = 'Lugares guardados';
   static const groupsPlacesSectionHint = 'Toca para ver lugares';
   static const groupsPlacesSearchHint =
@@ -154,7 +158,7 @@ abstract final class AppStrings {
   static const groupsCategoryEmpty = 'Sin ubicaciones en esta carpeta.';
   static String groupsCategoryPlaceCount(int n) =>
       n == 1 ? '1 ubicación' : '$n ubicaciones';
-  static const mapSavePlaceCategoryLabel = 'Categoría / carpeta';
+  static const mapSavePlaceCategoryLabel = 'Categoría';
   static const mapSavePlaceCategoryHint =
       'Elige una carpeta o pulsa «Nueva categoría» abajo';
   static const mapSavePlaceCategoryNone = 'Sin categoría';

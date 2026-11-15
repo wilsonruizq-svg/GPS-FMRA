@@ -105,6 +105,14 @@ class _GroupsScreenState extends State<GroupsScreen> {
     } catch (e) {
       debugPrint('listSoloMine: $e');
     }
+    try {
+      final personalCats = await _places.listPersonalCategories();
+      for (final c in personalCats) {
+        catsById[c.id] = c;
+      }
+    } catch (e) {
+      debugPrint('listPersonalCategories: $e');
+    }
     final merged = byId.values.toList()
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final cats = catsById.values.toList()
@@ -413,14 +421,13 @@ class _GroupsScreenState extends State<GroupsScreen> {
   }
 
   String _placeCategoryLabel(NamedPlace place) {
-    if (!place.isShared) return AppStrings.groupsPlacesSoloTitle;
     final cid = place.categoryId?.trim();
-    if (cid == null || cid.isEmpty) {
-      return AppStrings.groupsPlacesUncategorized;
+    if (cid != null && cid.isNotEmpty) {
+      for (final c in _categories) {
+        if (c.id == cid) return c.name;
+      }
     }
-    for (final c in _categories) {
-      if (c.id == cid) return c.name;
-    }
+    if (!place.isShared) return AppStrings.groupsPlacesSoloTitle;
     return AppStrings.groupsPlacesUncategorized;
   }
 

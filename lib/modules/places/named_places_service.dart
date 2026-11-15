@@ -8,22 +8,26 @@ import '../../core/supabase/supabase_bootstrap.dart';
 class PlaceCategory {
   const PlaceCategory({
     required this.id,
-    required this.groupId,
     required this.name,
     required this.createdBy,
     required this.createdAt,
+    this.groupId,
   });
 
   final String id;
-  final String groupId;
+  /// null = categoría personal (Solo yo) del [createdBy].
+  final String? groupId;
   final String name;
   final String createdBy;
   final DateTime createdAt;
 
+  bool get isPersonal => groupId == null || groupId!.trim().isEmpty;
+
   factory PlaceCategory.fromMap(Map<String, dynamic> map) {
+    final gid = map['group_id']?.toString().trim();
     return PlaceCategory(
       id: map['id'].toString(),
-      groupId: map['group_id'].toString(),
+      groupId: (gid == null || gid.isEmpty) ? null : gid,
       name: (map['name'] as String?)?.trim() ?? 'Categoría',
       createdBy: map['created_by'].toString(),
       createdAt: DateTime.parse(map['created_at'].toString()).toUtc(),
@@ -269,19 +273,44 @@ class NamedPlacesService {
     }
   }
 
+  /// Categorías Solo yo (group_id null) del usuario autenticado.
+  Future<List<PlaceCategory>> listPersonalCategories() async {
+    final uid = _uid;
+    try {
+      final rows = await _sb
+          .from('place_categories')
+          .select('id, group_id, name, created_by, created_at')
+          .isFilter('group_id', null)
+          .eq('created_by', uid)
+          .order('name', ascending: true);
+
+      return (rows as List)
+          .map(
+            (e) => PlaceCategory.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('listPersonalCategories: $e');
+      return const [];
+    }
+  }
+
+  /// [groupId] null → categoría personal (Solo yo).
   Future<PlaceCategory> createCategory({
-    required String groupId,
+    String? groupId,
     required String name,
   }) async {
     final trimmed = name.trim();
     if (trimmed.isEmpty) {
       throw ArgumentError('El nombre de la categoría no puede estar vacío.');
     }
+    final gid = groupId?.trim();
+    final groupArg = (gid != null && gid.isNotEmpty) ? gid : null;
     try {
       final row = await _sb.rpc(
         'create_place_category',
         params: {
-          'p_group_id': groupId.trim(),
+          'p_group_id': groupArg,
           'p_name': trimmed,
         },
       );
@@ -290,6 +319,12 @@ class NamedPlacesService {
       }
       throw StateError('Respuesta vacía de create_place_category.');
     } on PostgrestException catch (e) {
+      if (looksLikeMissingPersonalCategories(e)) {
+        throw StateError(
+          'Falta APPLY SQL: 20261115160000_personal_place_categories.sql '
+          '(personal_place_categories_ok = true).',
+        );
+      }
       if (looksLikeMissingPhotoColumns(e) || looksLikeMissingRpc(e)) {
         throw StateError(
           'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
@@ -298,6 +333,15 @@ class NamedPlacesService {
       }
       throw StateError(e.message);
     }
+  }
+
+  static bool looksLikeMissingPersonalCategories(Object error) {
+    final s = error.toString().toLowerCase();
+    return s.contains('null value in column "group_id"') ||
+        s.contains('place_categories_group_id_fkey') ||
+        (s.contains('group_id') &&
+            s.contains('not-null') &&
+            s.contains('place_categories'));
   }
 
   Future<void> deleteCategory(String categoryId) async {
@@ -357,6 +401,13 @@ class NamedPlacesService {
         'save_named_place PostgrestException: '
         'code=${e.code} message=${e.message} details=${e.details}',
       );
+      if (looksLikeMissingPersonalCategories(e) ||
+          e.message.toLowerCase().contains('category_group_mismatch')) {
+        throw StateError(
+          'Falta APPLY SQL: 20261115160000_personal_place_categories.sql '
+          '(personal_place_categories_ok = true).',
+        );
+      }
       if (looksLikeMissingRpc(e) || looksLikeMissingPhotoColumns(e)) {
         throw StateError(
           'Falta APPLY SQL: 20261102284300_named_places_photos.sql '
@@ -371,6 +422,13 @@ class NamedPlacesService {
         ].join(' · '),
       );
     } catch (e) {
+      if (looksLikeMissingPersonalCategories(e) ||
+          e.toString().toLowerCase().contains('category_group_mismatch')) {
+        throw StateError(
+          'Falta APPLY SQL: 20261115160000_personal_place_categories.sql '
+          '(personal_place_categories_ok = true).',
+        );
+      }
       if (looksLikeMissingRpc(e) || looksLikeMissingPhotoColumns(e)) {
         throw StateError(
           'Falta APPLY SQL: 20261102284300_named_places_photos.sql '

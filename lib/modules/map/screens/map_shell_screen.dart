@@ -1779,10 +1779,11 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
-  /// Nueva categoría — mismo patrón bc1cc73: rootNavigator + wait + no setState
+  /// Nueva categoría — [groupId] null = personal (Solo yo).
+  /// Mismo patrón bc1cc73: rootNavigator + wait + no setState
   /// mientras el route del diálogo anidado se desactiva (assert 6281).
   Future<PlaceCategory?> _promptCreatePlaceCategory({
-    required String groupId,
+    String? groupId,
   }) async {
     if (!mounted) return null;
     final controller = TextEditingController();
@@ -2010,10 +2011,19 @@ class _MapShellScreenState extends State<MapShellScreen>
     Future<void> ensureCategories(
       void Function(void Function()) setLocal,
     ) async {
-      final groupIdForCats = destinationGroup?.id;
-      if (categoriesLoaded || groupIdForCats == null) return;
+      if (categoriesLoaded) return;
       try {
-        final list = await _places.listCategories(groupIdForCats);
+        final List<PlaceCategory> list;
+        if (shareWithGroup) {
+          final groupIdForCats = destinationGroup?.id;
+          if (groupIdForCats == null) {
+            setLocal(() => categoriesLoaded = true);
+            return;
+          }
+          list = await _places.listCategories(groupIdForCats);
+        } else {
+          list = await _places.listPersonalCategories();
+        }
         setLocal(() {
           categories = list;
           categoriesLoaded = true;
@@ -2047,13 +2057,14 @@ class _MapShellScreenState extends State<MapShellScreen>
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setLocal) {
-            if (shareWithGroup && !categoriesLoaded && !scheduledCatLoad) {
+            if (!categoriesLoaded && !scheduledCatLoad) {
               scheduledCatLoad = true;
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 unawaited(ensureCategories(setLocal));
               });
             }
             final scheme = Theme.of(ctx).colorScheme;
+            final fieldRadius = BorderRadius.circular(14);
             final pillShape = RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(999),
             );
@@ -2065,7 +2076,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 8,
-                    vertical: 10,
+                    vertical: 12,
                   ),
                   visualDensity: VisualDensity.compact,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2074,11 +2085,11 @@ class _MapShellScreenState extends State<MapShellScreen>
               return OutlinedButton.styleFrom(
                 shape: pillShape,
                 foregroundColor: AppColors.deepBlue,
-                backgroundColor: AppColors.surface,
+                backgroundColor: Colors.white,
                 side: BorderSide(color: scheme.outlineVariant),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 8,
-                  vertical: 10,
+                  vertical: 12,
                 ),
                 visualDensity: VisualDensity.compact,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -2106,7 +2117,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -2127,129 +2138,133 @@ class _MapShellScreenState extends State<MapShellScreen>
               );
             }
 
+            InputDecoration fieldDecoration({
+              String? hint,
+              String? label,
+            }) {
+              final border = OutlineInputBorder(
+                borderRadius: fieldRadius,
+                borderSide: BorderSide(
+                  color: AppColors.signalCyan.withValues(alpha: 0.55),
+                  width: 1,
+                ),
+              );
+              return InputDecoration(
+                isDense: true,
+                labelText: label,
+                hintText: hint,
+                hintStyle: TextStyle(
+                  color: AppColors.midBlue.withValues(alpha: 0.75),
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+                labelStyle: TextStyle(
+                  color: AppColors.midBlue.withValues(alpha: 0.9),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                border: border,
+                enabledBorder: border,
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: fieldRadius,
+                  borderSide: const BorderSide(
+                    color: AppColors.signalCyan,
+                    width: 1.4,
+                  ),
+                ),
+                counterText: '',
+              );
+            }
+
+            Widget labeledField({
+              required TextEditingController controller,
+              required String label,
+              required String hint,
+              int maxLines = 1,
+              int? maxLength,
+              bool autofocus = false,
+            }) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.deepBlue,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: controller,
+                    autofocus: autofocus,
+                    textCapitalization: TextCapitalization.sentences,
+                    maxLines: maxLines,
+                    maxLength: maxLength,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.deepBlue,
+                    ),
+                    decoration: fieldDecoration(hint: hint),
+                  ),
+                ],
+              );
+            }
+
             return AlertDialog(
-              titlePadding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              contentPadding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              backgroundColor: const Color(0xFFE8EEF4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              contentPadding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
               actionsPadding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
               title: Text(
                 AppStrings.mapSavePlaceTitle,
-                style: Theme.of(ctx).textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                textAlign: TextAlign.center,
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.deepBlue,
+                    ),
               ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Builder(
-                      builder: (_) {
-                        InputDecoration pillDecoration(String hint) {
-                          final border = OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(999),
-                            borderSide: BorderSide(
-                              color: scheme.outlineVariant,
-                              width: 1,
-                            ),
-                          );
-                          return InputDecoration(
-                            isDense: true,
-                            hintText: hint,
-                            hintStyle: TextStyle(
-                              color: AppColors.midBlue.withValues(alpha: 0.85),
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
-                            filled: true,
-                            fillColor: Colors.white,
-                            // Hint siempre visible (no se apaga con tema claro/oscuro).
-                            floatingLabelBehavior: FloatingLabelBehavior.never,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 12,
-                            ),
-                            border: border,
-                            enabledBorder: border,
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(999),
-                              borderSide: const BorderSide(
-                                color: AppColors.signalCyan,
-                                width: 1.2,
-                              ),
-                            ),
-                            counterText: '',
-                          );
-                        }
-
-                        Widget labeledPill({
-                          required TextEditingController controller,
-                          required String label,
-                          required String hint,
-                          int maxLines = 1,
-                          int? maxLength,
-                          bool autofocus = false,
-                        }) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                label,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(ctx).textTheme.labelLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.deepBlue,
-                                    ),
-                              ),
-                              const SizedBox(height: 6),
-                              TextField(
-                                controller: controller,
-                                autofocus: autofocus,
-                                textAlign: TextAlign.center,
-                                textCapitalization:
-                                    TextCapitalization.sentences,
-                                maxLines: maxLines,
-                                maxLength: maxLength,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.deepBlue,
-                                ),
-                                decoration: pillDecoration(hint),
-                              ),
-                            ],
-                          );
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            labeledPill(
-                              controller: nameController,
-                              label: AppStrings.mapSavePlaceNameLabel,
-                              hint: AppStrings.mapSavePlaceNameHint,
-                              maxLength: 80,
-                              autofocus: true,
-                            ),
-                            const SizedBox(height: 10),
-                            labeledPill(
-                              controller: descController,
-                              label: AppStrings.mapSavePlaceDescLabel,
-                              hint: AppStrings.mapSavePlaceDescHint,
-                              maxLines: 2,
-                              maxLength: 280,
-                            ),
-                          ],
-                        );
-                      },
+                    labeledField(
+                      controller: nameController,
+                      label: AppStrings.mapSavePlaceNameLabel,
+                      hint: AppStrings.mapSavePlaceNameHint,
+                      maxLength: 80,
+                      autofocus: true,
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 10),
+                    labeledField(
+                      controller: descController,
+                      label: AppStrings.mapSavePlaceDescLabel,
+                      hint: AppStrings.mapSavePlaceDescHint,
+                      maxLines: 2,
+                      maxLength: 280,
+                    ),
+                    const SizedBox(height: 10),
                     Text(
                       AppStrings.mapSavePlacePhoto,
-                      style: Theme.of(ctx).textTheme.labelLarge,
+                      style: Theme.of(ctx).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.deepBlue,
+                          ),
                     ),
                     if (photoBytes != null) ...[
                       const SizedBox(height: 6),
                       ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(10),
                         child: Image.memory(
                           photoBytes!,
                           height: 88,
@@ -2293,34 +2308,55 @@ class _MapShellScreenState extends State<MapShellScreen>
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    RadioListTile<bool>(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      contentPadding: EdgeInsets.zero,
-                      value: false,
-                      groupValue: shareWithGroup,
-                      title: const Text(AppStrings.mapSavePlaceOnlyMe),
-                      onChanged: (_) => setLocal(() {
-                        shareWithGroup = false;
-                        selectedCategoryId = null;
-                      }),
-                    ),
-                    RadioListTile<bool>(
-                      dense: true,
-                      visualDensity: VisualDensity.compact,
-                      contentPadding: EdgeInsets.zero,
-                      value: true,
-                      groupValue: shareWithGroup,
-                      title: const Text(AppStrings.mapSavePlaceShareGroup),
-                      onChanged: (_) {
-                        setLocal(() {
-                          shareWithGroup = true;
-                          destinationGroup ??=
-                              _groupsList.isNotEmpty ? _groupsList.first : null;
-                        });
-                        unawaited(ensureCategories(setLocal));
-                      },
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            value: false,
+                            groupValue: shareWithGroup,
+                            title: const Text(AppStrings.mapSavePlaceOnlyMe),
+                            onChanged: (_) {
+                              setLocal(() {
+                                shareWithGroup = false;
+                                selectedCategoryId = null;
+                                categories = const [];
+                                categoriesLoaded = false;
+                                scheduledCatLoad = false;
+                              });
+                              unawaited(ensureCategories(setLocal));
+                            },
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<bool>(
+                            dense: true,
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: EdgeInsets.zero,
+                            value: true,
+                            groupValue: shareWithGroup,
+                            title: const Text(
+                              AppStrings.mapSavePlaceShareGroup,
+                            ),
+                            onChanged: (_) {
+                              setLocal(() {
+                                shareWithGroup = true;
+                                destinationGroup ??= _groupsList.isNotEmpty
+                                    ? _groupsList.first
+                                    : null;
+                                selectedCategoryId = null;
+                                categories = const [];
+                                categoriesLoaded = false;
+                                scheduledCatLoad = false;
+                              });
+                              unawaited(ensureCategories(setLocal));
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                     if (shareWithGroup) ...[
                       const SizedBox(height: 2),
@@ -2338,10 +2374,8 @@ class _MapShellScreenState extends State<MapShellScreen>
                           ),
                           initialValue: destinationGroup,
                           isDense: true,
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            labelText: AppStrings.mapSavePlaceGroupLabel,
-                            helperText: AppStrings.mapSavePlaceGroupHint,
+                          decoration: fieldDecoration(
+                            label: AppStrings.mapSavePlaceGroupLabel,
                           ),
                           items: [
                             for (final g in _groupsList)
@@ -2357,61 +2391,61 @@ class _MapShellScreenState extends State<MapShellScreen>
                           onChanged: (g) =>
                               selectDestinationGroup(g, setLocal),
                         ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<String?>(
-                        key: ValueKey(
-                          'cat-${destinationGroup?.id ?? 'x'}-'
-                          '${selectedCategoryId ?? 'none'}',
-                        ),
-                        initialValue: selectedCategoryId,
-                        isDense: true,
-                        decoration: const InputDecoration(
-                          isDense: true,
-                          labelText: AppStrings.mapSavePlaceCategoryLabel,
-                          helperText: AppStrings.mapSavePlaceCategoryHint,
-                        ),
-                        items: [
-                          const DropdownMenuItem<String?>(
-                            value: null,
-                            child: Text(AppStrings.mapSavePlaceCategoryNone),
-                          ),
-                          for (final c in categories)
-                            DropdownMenuItem<String?>(
-                              value: c.id,
-                              child: Text(c.name),
-                            ),
-                        ],
-                        onChanged: (v) =>
-                            setLocal(() => selectedCategoryId = v),
-                      ),
-                      const SizedBox(height: 6),
-                      actionPill(
-                        onPressed: destinationGroup == null
-                            ? null
-                            : () async {
-                                final created =
-                                    await _promptCreatePlaceCategory(
-                                      groupId: destinationGroup!.id,
-                                    );
-                                await _waitFrames(2);
-                                if (created == null || !ctx.mounted) {
-                                  return;
-                                }
-                                setLocal(() {
-                                  categories = [...categories, created]
-                                    ..sort(
-                                      (a, b) => a.name.toLowerCase().compareTo(
-                                        b.name.toLowerCase(),
-                                      ),
-                                    );
-                                  selectedCategoryId = created.id;
-                                  categoriesLoaded = true;
-                                });
-                              },
-                        icon: Icons.create_new_folder_outlined,
-                        label: AppStrings.mapSavePlaceCategoryNew,
-                      ),
                     ],
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String?>(
+                      key: ValueKey(
+                        'cat-${shareWithGroup ? destinationGroup?.id : 'solo'}-'
+                        '${selectedCategoryId ?? 'none'}',
+                      ),
+                      initialValue: selectedCategoryId,
+                      isDense: true,
+                      decoration: fieldDecoration(
+                        label: AppStrings.mapSavePlaceCategoryLabel,
+                      ),
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text(AppStrings.mapSavePlaceCategoryNone),
+                        ),
+                        for (final c in categories)
+                          DropdownMenuItem<String?>(
+                            value: c.id,
+                            child: Text(c.name),
+                          ),
+                      ],
+                      onChanged: (v) =>
+                          setLocal(() => selectedCategoryId = v),
+                    ),
+                    const SizedBox(height: 6),
+                    actionPill(
+                      onPressed: shareWithGroup && destinationGroup == null
+                          ? null
+                          : () async {
+                              final created =
+                                  await _promptCreatePlaceCategory(
+                                groupId: shareWithGroup
+                                    ? destinationGroup?.id
+                                    : null,
+                              );
+                              await _waitFrames(2);
+                              if (created == null || !ctx.mounted) {
+                                return;
+                              }
+                              setLocal(() {
+                                categories = [...categories, created]
+                                  ..sort(
+                                    (a, b) => a.name.toLowerCase().compareTo(
+                                          b.name.toLowerCase(),
+                                        ),
+                                  );
+                                selectedCategoryId = created.id;
+                                categoriesLoaded = true;
+                              });
+                            },
+                      icon: Icons.create_new_folder_outlined,
+                      label: AppStrings.mapSavePlaceCategoryNew,
+                    ),
                   ],
                 ),
               ),
@@ -2427,7 +2461,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                           label: AppStrings.cancel,
                         ),
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: actionPill(
                           onPressed: () => Navigator.of(
@@ -2462,7 +2496,8 @@ class _MapShellScreenState extends State<MapShellScreen>
     final placeName = name.isEmpty ? 'Mi ubicación' : name;
     final groupIdForSave = shareWithGroup ? destinationGroup?.id : null;
     final wantGroup = shareWithGroup;
-    final categoryIdForSave = wantGroup ? selectedCategoryId : null;
+    // GF-70: categoría válida en Solo yo (personal) y en grupo.
+    final categoryIdForSave = selectedCategoryId;
 
     // Crítico (assert 6281): route deactivated → _dependents.isEmpty.
     // Cero setState / MapLibre hasta que el diálogo termine de morir.
