@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../places/named_places_service.dart';
+import '../../places/whatsapp_share.dart';
 import '../groups_service.dart';
 import 'accept_invite_screen.dart';
 import 'group_detail_screen.dart';
@@ -347,6 +349,31 @@ class _GroupsScreenState extends State<GroupsScreen> {
     await _refresh();
   }
 
+  Future<void> _sharePlace(NamedPlace place) async {
+    Uint8List? photo;
+    if (place.hasPhoto) {
+      photo = await _places.downloadPhotoBytes(place);
+    }
+    final detailParts = <String>[
+      if ((place.description ?? '').trim().isNotEmpty)
+        place.description!.trim(),
+      '${place.lat.toStringAsFixed(5)}, ${place.lon.toStringAsFixed(5)}',
+    ];
+    final ok = await WhatsAppShare.sharePlace(
+      name: place.name,
+      lat: place.lat,
+      lon: place.lon,
+      detail: detailParts.join('\n'),
+      photoJpeg: photo,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.groupsPlacesShareError)),
+      );
+    }
+  }
+
   Future<void> _deletePlace(NamedPlace place) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -623,10 +650,20 @@ class _GroupsScreenState extends State<GroupsScreen> {
                     ].join('\n'),
                   ),
                   isThreeLine: true,
-                  trailing: IconButton(
-                    tooltip: AppStrings.groupsPlacesDelete,
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => unawaited(_deletePlace(p)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: AppStrings.groupsPlacesShare,
+                        icon: const Icon(Icons.share_outlined),
+                        onPressed: () => unawaited(_sharePlace(p)),
+                      ),
+                      IconButton(
+                        tooltip: AppStrings.groupsPlacesDelete,
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => unawaited(_deletePlace(p)),
+                      ),
+                    ],
                   ),
                 ),
               ),

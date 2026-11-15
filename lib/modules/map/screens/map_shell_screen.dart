@@ -702,6 +702,32 @@ class _MapShellScreenState extends State<MapShellScreen>
     );
   }
 
+  Future<void> _focusMemberOnMap({
+    required String userId,
+    required bool isSelf,
+  }) async {
+    final c = _mapController;
+    if (c == null) return;
+    final loc = _locationsByUser[userId];
+    if (loc != null) {
+      await c.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(loc.lat, loc.lon),
+          _myLocationZoom,
+        ),
+      );
+      return;
+    }
+    if (isSelf) {
+      await _centerOnMyLocation(fromUser: true);
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text(AppStrings.mapMemberNoLivePin)),
+    );
+  }
+
   bool _iAmGroupAdmin() {
     if (_myUid.isEmpty) return false;
     final me = _members.where((m) => m.userId == _myUid).firstOrNull;
@@ -2280,6 +2306,8 @@ class _MapShellScreenState extends State<MapShellScreen>
         name: placeName,
         lat: lat,
         lon: lon,
+        detail: description.isEmpty ? null : description,
+        photoJpeg: photoJpeg,
       );
       if (!mounted) return;
       toast(
@@ -2829,27 +2857,21 @@ class _MapShellScreenState extends State<MapShellScreen>
                                     gender: m.gender,
                                     displayName: m.label,
                                   ),
+                                  trailingExtra: _iAmGroupAdmin() && !isSelf
+                                      ? IconButton(
+                                          tooltip: AppStrings.historyMapTooltip,
+                                          icon: const Icon(Icons.schedule_outlined),
+                                          color: AppColors.deepBlue,
+                                          onPressed: () => _openMemberHistory(
+                                            userId: m.userId,
+                                          ),
+                                        )
+                                      : null,
                                   onTap: () {
-                                    // Yo → recientes propios.
-                                    // Admin → recientes de ese integrante.
-                                    // Otros → centrar pin en vivo.
-                                    if (isSelf) {
-                                      _openOwnHistory();
-                                      return;
-                                    }
-                                    if (_iAmGroupAdmin()) {
-                                      _openMemberHistory(userId: m.userId);
-                                      return;
-                                    }
-                                    final loc = _locationsByUser[m.userId];
-                                    final c = _mapController;
-                                    if (loc == null || c == null) return;
                                     unawaited(
-                                      c.animateCamera(
-                                        CameraUpdate.newLatLngZoom(
-                                          LatLng(loc.lat, loc.lon),
-                                          _myLocationZoom,
-                                        ),
+                                      _focusMemberOnMap(
+                                        userId: m.userId,
+                                        isSelf: isSelf,
                                       ),
                                     );
                                   },

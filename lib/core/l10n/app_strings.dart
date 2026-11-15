@@ -80,9 +80,12 @@ abstract final class AppStrings {
       'Elige un grupo para compartir el lugar.';
   static const mapSavePlaceSaved = 'Lugar guardado.';
   static const mapSavePlaceShared = 'Lugar compartido con el grupo.';
-  static const mapSavePlaceWhatsAppOk = 'Abriendo WhatsApp…';
+  static const mapSavePlaceWhatsAppOk = 'Abriendo compartir…';
   static const mapSavePlaceWhatsAppError =
-      'No se pudo abrir WhatsApp. ¿Está instalado?';
+      'No se pudo abrir la hoja de compartir.';
+  static const groupsPlacesShare = 'Compartir lugar';
+  static const groupsPlacesShareError =
+      'No se pudo compartir el lugar.';
   static const mapSavePlaceError =
       'No se pudo guardar el lugar. Revisa la conexión.';
   static const mapSavePlaceApply =
@@ -223,6 +226,8 @@ abstract final class AppStrings {
   static const memberLastUpdateUnknown = 'Actualizado: —';
   /// Figurita de color en lista del mapa (mismo color que el pin).
   static const memberMapPinTooltip = 'Color en el mapa';
+  static const mapMemberNoLivePin =
+      'Sin pin en el mapa ahora (ubicación no compartida o sin señal).';
 
   static const inviteAction = 'Invitar';
   static const inviteTitle = 'Código listo para compartir';

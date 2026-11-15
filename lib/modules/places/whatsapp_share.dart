@@ -1,6 +1,12 @@
-import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui';
 
-/// Comparte un lugar por WhatsApp (texto + enlace de mapas).
+import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+
+/// Comparte un lugar (hoja de compartir de Android; WhatsApp si el usuario elige).
 class WhatsAppShare {
   WhatsAppShare._();
 
@@ -11,33 +17,63 @@ class WhatsAppShare {
     required String name,
     required double lat,
     required double lon,
+    String? detail,
   }) {
     final n = name.trim().isEmpty ? 'Mi ubicación' : name.trim();
-    return '$n\n${mapsUrl(lat: lat, lon: lon)}';
+    final lines = <String>[n];
+    final d = detail?.trim();
+    if (d != null && d.isNotEmpty) lines.add(d);
+    lines.add(mapsUrl(lat: lat, lon: lon));
+    return lines.join('\n');
   }
 
-  /// Abre WhatsApp con el texto listo (o el selector si no hay WhatsApp).
+  /// Abre la hoja de compartir del sistema (texto + foto JPEG opcional).
   static Future<bool> sharePlace({
     required String name,
     required double lat,
     required double lon,
+    String? detail,
+    Uint8List? photoJpeg,
   }) async {
-    final text = message(name: name, lat: lat, lon: lon);
-    final encoded = Uri.encodeComponent(text);
-
-    final candidates = <Uri>[
-      Uri.parse('whatsapp://send?text=$encoded'),
-      Uri.parse('https://wa.me/?text=$encoded'),
-    ];
-
-    for (final uri in candidates) {
-      try {
-        if (await canLaunchUrl(uri)) {
-          final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-          if (ok) return true;
-        }
-      } catch (_) {}
+    final text = message(name: name, lat: lat, lon: lon, detail: detail);
+    try {
+      if (photoJpeg != null && photoJpeg.isNotEmpty) {
+        final dir = await getTemporaryDirectory();
+        final path =
+            '${dir.path}/gps_fmra_place_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final file = File(path);
+        await file.writeAsBytes(photoJpeg, flush: true);
+        final box = await _shareOriginBox();
+        final result = await Share.shareXFiles(
+          [XFile(file.path, mimeType: 'image/jpeg', name: 'lugar.jpg')],
+          text: text,
+          subject: name.trim().isEmpty ? 'Ubicación' : name.trim(),
+          sharePositionOrigin: box,
+        );
+        return _shareOk(result);
+      }
+      final box = await _shareOriginBox();
+      final result = await Share.share(
+        text,
+        subject: name.trim().isEmpty ? 'Ubicación' : name.trim(),
+        sharePositionOrigin: box,
+      );
+      return _shareOk(result);
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('WhatsAppShare.sharePlace: $e\n$st');
+      }
+      return false;
     }
-    return false;
+  }
+
+  static bool _shareOk(ShareResult result) {
+    return result.status == ShareResultStatus.success ||
+        result.status == ShareResultStatus.dismissed;
+  }
+
+  static Future<Rect?> _shareOriginBox() async {
+    // En móvil no hace falta; en tablet/web evita fallos de origin.
+    return null;
   }
 }

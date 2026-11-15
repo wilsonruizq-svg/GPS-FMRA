@@ -106,6 +106,18 @@ class NamedPlacesService {
     return '$url${url.contains('?') ? '&' : '?'}v=$bust';
   }
 
+  /// Descarga la foto del lugar desde Storage (pública o con sesión).
+  Future<Uint8List?> downloadPhotoBytes(NamedPlace place) async {
+    final path = place.photoPath?.trim();
+    if (path == null || path.isEmpty) return null;
+    try {
+      return await _sb.storage.from(photoBucket).download(path);
+    } catch (e) {
+      debugPrint('downloadPhotoBytes($path): $e');
+      return null;
+    }
+  }
+
   Future<List<NamedPlace>> listVisible({String? groupId}) async {
     final uid = _uid;
     final gid = groupId?.trim();
