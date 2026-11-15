@@ -10,6 +10,7 @@ import 'modules/chat/widgets/chat_unread_badge.dart';
 import 'modules/groups/exit_pin_service.dart';
 import 'modules/groups/screens/groups_screen.dart';
 import 'modules/groups/widgets/exit_pin_dialog.dart';
+import 'modules/location/location_share_session.dart';
 import 'modules/map/map_place_focus.dart';
 import 'modules/map/screens/map_shell_screen.dart';
 import 'modules/places/named_places_service.dart';
@@ -19,6 +20,7 @@ import 'modules/settings/screens/settings_screen.dart';
 ///
 /// **No IndexedStack con MapLibre:** el platform view del mapa tapa Grupos
 /// (AppBar sí se ve; la lista queda en blanco). Solo montamos la pestaña activa.
+/// Publicación GPS: [LocationShareSession] en attach/detach (GF-65), no en Mapa.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -42,6 +44,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(ChatAlertService.instance.start());
+    LocationShareSession.instance.attach();
     MapPlaceFocus.revision.addListener(_onMapFocusRequested);
   }
 
@@ -49,6 +52,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     MapPlaceFocus.revision.removeListener(_onMapFocusRequested);
+    LocationShareSession.instance.detach();
     unawaited(ChatAlertService.instance.stop());
     super.dispose();
   }
@@ -57,6 +61,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(ChatAlertService.instance.onForeground());
+      LocationShareSession.instance.onAppResumed();
     }
   }
 
