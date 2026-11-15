@@ -31,6 +31,26 @@ abstract final class AppStrings {
   static const registerButton = 'Crear cuenta';
   static const registerHint = '¿No tienes cuenta? Regístrate';
   static const loginHint = '¿Ya tienes cuenta? Inicia sesión';
+  static const loginForgotHint = 'Olvidé mi contraseña';
+  static const loginForgotBack = 'Volver al inicio de sesión';
+  static const loginForgotTitle = 'Recuperar contraseña';
+  static const loginForgotSubtitle =
+      'Escribe el correo electrónico de tu cuenta. '
+      'Te enviaremos un enlace por correo; ábrelo en este teléfono '
+      'para elegir una clave nueva.';
+  static const loginForgotEmailHelper =
+      'Usa el mismo correo con el que te registraste.';
+  static const loginForgotSend = 'Enviar enlace al correo';
+  static const loginForgotSent =
+      'Revisa tu correo (bandeja de entrada y spam). '
+      'Si existe una cuenta con ese correo, enviamos el enlace de recuperación. '
+      'Ábrelo en este teléfono.';
+  static const loginRegisterEmailNote =
+      'Usa un correo electrónico válido; ahí llegará la recuperación de clave.';
+  static const loginResetTitle = 'Nueva contraseña';
+  static const loginResetSubtitle =
+      'Enlace de recuperación válido. Elige una clave nueva (mínimo 6 caracteres).';
+  static const loginResetSave = 'Guardar clave y entrar';
   static const loginShellNote =
       'Usa el correo y contraseña de tu cuenta GPS-FMRA.';
   static const loginValidationError =

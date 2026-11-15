@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'core/l10n/app_strings.dart';
+import 'core/theme/app_theme.dart';
 import 'modules/chat/chat_alert_service.dart';
 import 'modules/groups/exit_pin_service.dart';
 import 'modules/groups/screens/groups_screen.dart';
@@ -134,27 +135,47 @@ class _AppShellState extends State<AppShell> {
             : AppBar(title: Text(_titles[_index])),
         // Una sola pestaña montada: evita que MapLibre tape Grupos/Ajustes.
         body: _bodyForIndex(),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _onTabSelected,
-          height: 72,
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.map_outlined),
-              selectedIcon: Icon(Icons.map),
-              label: AppStrings.navMap,
+        bottomNavigationBar: Material(
+          color: AppColors.deepBlue,
+          elevation: 8,
+          child: SafeArea(
+            top: false,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: AppColors.onDeep.withValues(alpha: 0.14),
+                  ),
+                ),
+              ),
+              child: NavigationBar(
+                selectedIndex: _index,
+                onDestinationSelected: _onTabSelected,
+                backgroundColor: AppColors.deepBlue,
+                surfaceTintColor: Colors.transparent,
+                indicatorColor: AppColors.signalCyan,
+                elevation: 0,
+                height: 72,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.map_outlined),
+                    selectedIcon: Icon(Icons.map),
+                    label: AppStrings.navMap,
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.groups_outlined),
+                    selectedIcon: Icon(Icons.groups),
+                    label: AppStrings.navGroups,
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings),
+                    label: AppStrings.navSettings,
+                  ),
+                ],
+              ),
             ),
-            NavigationDestination(
-              icon: Icon(Icons.groups_outlined),
-              selectedIcon: Icon(Icons.groups),
-              label: AppStrings.navGroups,
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: AppStrings.navSettings,
-            ),
-          ],
+          ),
         ),
       ),
     );
