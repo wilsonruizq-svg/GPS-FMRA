@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -3086,19 +3087,31 @@ class _MapShellScreenState extends State<MapShellScreen>
     return Column(
       children: [
         ?sosBanner,
-        // Franja superior (siempre): grupo + ampliar + chat + refresh.
-        Material(
-          color: Colors.white,
-          elevation: 1,
-          child: SafeArea(
-            bottom: false,
+        // Franja superior (GF-54): deepBlue hasta status bar, como AppBar Grupos/Ajustes.
+        AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+          ),
+          child: Material(
+            color: AppColors.deepBlue,
+            elevation: 0,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: EdgeInsets.only(
+                top: MediaQuery.paddingOf(context).top,
+                left: 12,
+                right: 12,
+                bottom: 4,
+              ),
               child: Row(
                 children: [
                   Text(
                     AppStrings.mapGroupSelector,
-                    style: Theme.of(context).textTheme.titleSmall,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: AppColors.onDeep,
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -3111,15 +3124,20 @@ class _MapShellScreenState extends State<MapShellScreen>
                                 .textTheme
                                 .bodyMedium
                                 ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
+                                  color:
+                                      AppColors.onDeep.withValues(alpha: 0.88),
                                 ),
                           )
                         : DropdownButtonHideUnderline(
                             child: DropdownButton<FamilyGroup>(
                               isExpanded: true,
                               value: _selected,
+                              dropdownColor: Colors.white,
+                              style: const TextStyle(
+                                color: AppColors.onDeep,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              iconEnabledColor: AppColors.onDeep,
                               items: _groupsList
                                   .map(
                                     (g) => DropdownMenuItem(
@@ -3128,6 +3146,9 @@ class _MapShellScreenState extends State<MapShellScreen>
                                         g.name,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: AppColors.deepBlue,
+                                        ),
                                       ),
                                     ),
                                   )
@@ -3143,6 +3164,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                     onPressed: () {
                       setState(() => _mapExpanded = !_mapExpanded);
                     },
+                    color: AppColors.onDeep,
                     icon: Icon(
                       _mapExpanded
                           ? Icons.fullscreen_exit
@@ -3151,6 +3173,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                   ),
                   IconButton(
                     tooltip: AppStrings.chatAction,
+                    color: AppColors.onDeep,
                     onPressed: () {
                       final group = _selected;
                       if (group == null) {
@@ -3171,6 +3194,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                   ),
                   IconButton(
                     tooltip: AppStrings.retry,
+                    color: AppColors.onDeep,
                     onPressed: _loading ? null : _load,
                     icon: const Icon(Icons.refresh),
                   ),
