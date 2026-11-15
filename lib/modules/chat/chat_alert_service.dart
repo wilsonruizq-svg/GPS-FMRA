@@ -30,6 +30,8 @@ class ChatAlertService extends ChangeNotifier {
   bool _running = false;
   int _muteGroupDepth = 0;
   int _mutePeerDepth = 0;
+  /// Índice de [AppShell] (0=Mapa, 1=Grupos, 2=Ajustes). GF-71: sin SnackBar en Grupos.
+  int _shellTabIndex = 0;
   String? mutedGroupId;
   String? mutedPeerId;
   final Set<String> _seenIds = {};
@@ -37,6 +39,13 @@ class ChatAlertService extends ChangeNotifier {
   final Map<String, int> _unreadByGroup = {};
   final Map<String, int> _unreadByDmPeer = {};
   DateTime? _startedAt;
+
+  /// Actualiza la pestaña activa del shell (para no mostrar aviso flotante en Grupos).
+  void setShellTabIndex(int index) {
+    _shellTabIndex = index;
+  }
+
+  bool get _onGroupsTab => _shellTabIndex == 1;
 
   int get totalUnread =>
       ChatUnreadCounters.total([_unreadByGroup, _unreadByDmPeer]);
@@ -489,22 +498,33 @@ class ChatAlertService extends ChangeNotifier {
 
     var snackOk = false;
     if (!notifOk) {
-      debugPrint(
-        'ChatAlertService: tray failed → snackbar fallback src=$source',
-      );
-      final messenger = GpsFmraApp.messengerKey.currentState;
-      if (messenger != null) {
-        snackOk = true;
-        messenger.clearSnackBars();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(body),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 5),
-          ),
+      // GF-71: en pestaña Grupos no mostrar SnackBar/banner; badges y bandeja sí.
+      if (_onGroupsTab) {
+        debugPrint(
+          'ChatAlertService: skip snackbar on Groups tab src=$source',
         );
+        // Consumir intento: evita re-poll infinito; badge ya refleja unread.
+        snackOk = true;
       } else {
-        debugPrint('ChatAlertService: messenger null (¿sin scaffoldMessenger?)');
+        debugPrint(
+          'ChatAlertService: tray failed → snackbar fallback src=$source',
+        );
+        final messenger = GpsFmraApp.messengerKey.currentState;
+        if (messenger != null) {
+          snackOk = true;
+          messenger.clearSnackBars();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(body),
+              behavior: SnackBarBehavior.floating,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        } else {
+          debugPrint(
+            'ChatAlertService: messenger null (¿sin scaffoldMessenger?)',
+          );
+        }
       }
     }
     return notifOk || snackOk;

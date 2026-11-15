@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'app.dart';
 import 'core/l10n/app_strings.dart';
 import 'core/theme/app_theme.dart';
 import 'modules/chat/chat_alert_service.dart';
@@ -43,6 +44,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    ChatAlertService.instance.setShellTabIndex(_index);
     unawaited(ChatAlertService.instance.start());
     LocationShareSession.instance.attach();
     MapPlaceFocus.revision.addListener(_onMapFocusRequested);
@@ -70,11 +72,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_index != 0) {
       setState(() => _index = 0);
     }
+    ChatAlertService.instance.setShellTabIndex(0);
     unawaited(ChatAlertService.instance.ensureRunning());
   }
 
   void _onTabSelected(int i) {
     setState(() => _index = i);
+    ChatAlertService.instance.setShellTabIndex(i);
+    // GF-71: al entrar a Grupos, quitar aviso flotante de chat si aún visible.
+    if (i == 1) {
+      GpsFmraApp.messengerKey.currentState?.clearSnackBars();
+    }
     // Mapa, Grupos y Ajustes: reconecta Realtime + poll (el mapa no montado no debe cortar alertas).
     unawaited(ChatAlertService.instance.ensureRunning());
   }
@@ -89,6 +97,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ),
     );
     setState(() => _index = 0);
+    ChatAlertService.instance.setShellTabIndex(0);
     unawaited(ChatAlertService.instance.ensureRunning());
   }
 
