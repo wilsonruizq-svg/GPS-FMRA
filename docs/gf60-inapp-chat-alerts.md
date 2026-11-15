@@ -11,7 +11,7 @@
 | Pestañas | `ensureRunning()` en **Mapa, Grupos y Ajustes** (antes solo Mapa) |
 | Ciclo de vida | `AppShell` observa `resumed` → `onForeground()` |
 | Mute | IDs de grupo/peer normalizados (`trim` + `lowerCase`) |
-| Canal Android | Sin cambio de ID: `chat_messages` en `PushService` |
+| Canal Android | `chat_messages_v2` (`Importance.max`, sonido + vibración; FCM `notify-chat` alineado) |
 | FCM login | `syncTokenAfterLogin` reintenta si el primer `ensureInitialized` falló |
 
 ## Prueba mínima (2 usuarios)

@@ -219,7 +219,7 @@ async function sendFcmV1(args: {
         android: {
           priority: "HIGH",
           notification: {
-            channelId: "chat_messages",
+            channelId: "chat_messages_v2",
             priority: "HIGH",
             defaultSound: true,
           },

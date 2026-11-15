@@ -27,8 +27,37 @@ class PushService {
 
   static const androidChannelId = 'sos_alerts';
   static const androidChannelName = 'Alertas SOS';
-  static const chatChannelId = 'chat_messages';
+  /// v2: canales Android 8+ no cambian sonido tras creación; Realme puede dejar
+  /// `chat_messages` en silencio — instalación nueva crea este canal audible.
+  static const chatChannelId = 'chat_messages_v2';
   static const chatChannelName = 'Mensajes del grupo';
+
+  /// URI por defecto del tono de notificación del sistema (Android).
+  static const UriAndroidNotificationSound chatDefaultSound =
+      UriAndroidNotificationSound('content://settings/system/notification_sound');
+
+  static const AndroidNotificationChannel _sosAndroidChannel =
+      AndroidNotificationChannel(
+    androidChannelId,
+    androidChannelName,
+    description: 'Alertas de emergencia del grupo familiar',
+    importance: Importance.max,
+    playSound: true,
+    enableVibration: true,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
+  );
+
+  static const AndroidNotificationChannel _chatAndroidChannel =
+      AndroidNotificationChannel(
+    chatChannelId,
+    chatChannelName,
+    description: 'Mensajes nuevos del chat familiar',
+    importance: Importance.max,
+    playSound: true,
+    sound: chatDefaultSound,
+    enableVibration: true,
+    audioAttributesUsage: AudioAttributesUsage.notification,
+  );
 
   static bool _initialized = false;
   static bool _localReady = false;
@@ -118,22 +147,8 @@ class PushService {
 
     final androidPlugin = _local.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        androidChannelId,
-        androidChannelName,
-        description: 'Alertas de emergencia del grupo familiar',
-        importance: Importance.high,
-      ),
-    );
-    await androidPlugin?.createNotificationChannel(
-      const AndroidNotificationChannel(
-        chatChannelId,
-        chatChannelName,
-        description: 'Mensajes nuevos del chat familiar',
-        importance: Importance.high,
-      ),
-    );
+    await androidPlugin?.createNotificationChannel(_sosAndroidChannel);
+    await androidPlugin?.createNotificationChannel(_chatAndroidChannel);
     await androidPlugin?.requestNotificationsPermission();
   }
 
@@ -165,8 +180,10 @@ class PushService {
           androidChannelId,
           androidChannelName,
           channelDescription: 'Alertas de emergencia del grupo familiar',
-          importance: Importance.high,
+          importance: Importance.max,
           priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
           category: AndroidNotificationCategory.alarm,
         ),
       ),
@@ -196,9 +213,13 @@ class PushService {
             chatChannelId,
             chatChannelName,
             channelDescription: 'Mensajes nuevos del chat familiar',
-            importance: Importance.high,
+            importance: Importance.max,
             priority: Priority.high,
+            playSound: true,
+            sound: chatDefaultSound,
+            enableVibration: true,
             category: AndroidNotificationCategory.message,
+            visibility: NotificationVisibility.public,
           ),
         ),
         payload: groupId ?? messageId,
