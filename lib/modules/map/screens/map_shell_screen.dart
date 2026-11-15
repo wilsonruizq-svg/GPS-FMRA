@@ -3133,11 +3133,31 @@ class _MapShellScreenState extends State<MapShellScreen>
                               isExpanded: true,
                               value: _selected,
                               dropdownColor: Colors.white,
-                              style: const TextStyle(
-                                color: AppColors.onDeep,
-                                fontWeight: FontWeight.w600,
-                              ),
                               iconEnabledColor: AppColors.onDeep,
+                              // Cerrado: texto claro sobre barra deepBlue (GF-54).
+                              // Abierto: ítems deepBlue en menú blanco.
+                              selectedItemBuilder: (context) {
+                                return _groupsList
+                                    .map(
+                                      (g) => Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          g.name,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: AppColors.onDeep,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: Theme.of(context)
+                                                .textTheme
+                                                .bodyLarge
+                                                ?.fontSize,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList();
+                              },
                               items: _groupsList
                                   .map(
                                     (g) => DropdownMenuItem(
@@ -3148,6 +3168,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                                         overflow: TextOverflow.ellipsis,
                                         style: const TextStyle(
                                           color: AppColors.deepBlue,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ),
