@@ -648,6 +648,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             onPressed: _mutating
                 ? null
                 : () {
+                    // GF-71b: al abrir chat grupal desde Grupos, limpia unread del grupo.
+                    ChatAlertService.instance.clearGroupUnread(_group.id);
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => GroupChatScreen(group: _group),
@@ -781,6 +783,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               onMessage: m.userId == uid
                                   ? null
                                   : () {
+                                      // GF-71b: al abrir DM desde Grupos, limpia unread del peer.
+                                      ChatAlertService.instance
+                                          .clearDmUnread(m.userId);
                                       Navigator.of(context).push(
                                         MaterialPageRoute<void>(
                                           builder: (_) => DirectChatScreen(

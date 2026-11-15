@@ -7,7 +7,6 @@ import 'app.dart';
 import 'core/l10n/app_strings.dart';
 import 'core/theme/app_theme.dart';
 import 'modules/chat/chat_alert_service.dart';
-import 'modules/chat/widgets/chat_unread_badge.dart';
 import 'modules/groups/exit_pin_service.dart';
 import 'modules/groups/screens/groups_screen.dart';
 import 'modules/groups/widgets/exit_pin_dialog.dart';
@@ -158,62 +157,49 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             : AppBar(title: Text(_titles[_index])),
         // Una sola pestaña montada: evita que MapLibre tape Grupos/Ajustes.
         body: _bodyForIndex(),
-        bottomNavigationBar: ListenableBuilder(
-          listenable: ChatAlertService.instance,
-          builder: (context, _) {
-            final chatUnread = ChatAlertService.instance.totalUnread;
-            return Material(
-              color: AppColors.deepBlue,
-              elevation: 8,
-              child: SafeArea(
-                top: false,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(
-                        color: AppColors.onDeep.withValues(alpha: 0.14),
-                      ),
-                    ),
-                  ),
-                  child: NavigationBar(
-                    selectedIndex: _index,
-                    onDestinationSelected: _onTabSelected,
-                    backgroundColor: AppColors.deepBlue,
-                    surfaceTintColor: Colors.transparent,
-                    indicatorColor: AppColors.signalCyan,
-                    elevation: 0,
-                    height: 72,
-                    destinations: [
-                      const NavigationDestination(
-                        icon: Icon(Icons.map_outlined),
-                        selectedIcon: Icon(Icons.map),
-                        label: AppStrings.navMap,
-                      ),
-                      NavigationDestination(
-                        icon: NavGroupsUnreadIcon(
-                          icon: Icons.groups_outlined,
-                          count: chatUnread,
-                        ),
-                        selectedIcon: NavGroupsUnreadIcon(
-                          icon: Icons.groups,
-                          count: chatUnread,
-                          selected: true,
-                        ),
-                        label: chatUnread > 0
-                            ? '${AppStrings.navGroups} ($chatUnread)'
-                            : AppStrings.navGroups,
-                      ),
-                      const NavigationDestination(
-                        icon: Icon(Icons.settings_outlined),
-                        selectedIcon: Icon(Icons.settings),
-                        label: AppStrings.navSettings,
-                      ),
-                    ],
+        // GF-71b: tab Grupos sin badge ni «Grupos (N)» — contadores viven en
+        // mapa (toolbar/DM) y pills de lista; bandeja Android aparte.
+        bottomNavigationBar: Material(
+          color: AppColors.deepBlue,
+          elevation: 8,
+          child: SafeArea(
+            top: false,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(
+                    color: AppColors.onDeep.withValues(alpha: 0.14),
                   ),
                 ),
               ),
-            );
-          },
+              child: NavigationBar(
+                selectedIndex: _index,
+                onDestinationSelected: _onTabSelected,
+                backgroundColor: AppColors.deepBlue,
+                surfaceTintColor: Colors.transparent,
+                indicatorColor: AppColors.signalCyan,
+                elevation: 0,
+                height: 72,
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.map_outlined),
+                    selectedIcon: Icon(Icons.map),
+                    label: AppStrings.navMap,
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.groups_outlined),
+                    selectedIcon: Icon(Icons.groups),
+                    label: AppStrings.navGroups,
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.settings_outlined),
+                    selectedIcon: Icon(Icons.settings),
+                    label: AppStrings.navSettings,
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
