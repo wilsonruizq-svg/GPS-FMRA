@@ -157,12 +157,7 @@ class DmService {
   Future<void> deleteMessage({required String messageId}) async {
     final id = messageId.trim();
     if (id.isEmpty) throw ArgumentError('Mensaje inválido.');
-    final me = _uid;
-    await _sb
-        .from('direct_messages')
-        .delete()
-        .eq('id', id)
-        .eq('sender_id', me);
+    await _sb.from('direct_messages').delete().eq('id', id);
   }
 
   Future<DirectMessage> enrich(DirectMessage message) async {

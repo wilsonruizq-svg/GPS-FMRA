@@ -601,20 +601,23 @@ abstract final class AppStrings {
 
   static const chatDeleteTitle = '¿Eliminar mensaje?';
   static const chatDeleteConfirm =
-      'Se borrará para todos en el grupo. No se puede deshacer.';
-  static const chatDeleteConfirmAdmin =
-      'Como admin, borrarás este mensaje para todos. No se puede deshacer.';
+      'Como administrador del grupo, borrarás este mensaje para todos. '
+      'No se puede deshacer.';
+  static const chatDeleteAdminOnly =
+      'Solo los administradores del grupo pueden eliminar mensajes.';
   static const dmDeleteConfirm =
-      'Se borrará de esta conversación. No se puede deshacer.';
+      'Cualquier participante puede borrar mensajes del chat. '
+      'Se eliminará del hilo. No se puede deshacer.';
   static const chatDeleteAction = 'Eliminar';
   static const chatDeleteCancel = 'Cancelar';
   static const chatDeleteDone = 'Mensaje eliminado.';
   static const chatDeleteMissingSql =
       'Falta APPLY del SQL de borrar mensajes. '
-      'SQL Editor → supabase/migrations/20261115120000_chat_messages_delete.sql '
-      '→ Run (group_messages_delete_ok = true).';
+      'SQL Editor → 20261115140000_chat_delete_group_admin_only.sql '
+      '(o 20261115120000 actualizado) → Run.';
   static const dmDeleteMissingSql =
       'Falta APPLY del SQL de borrar mensajes 1:1. '
-      'Misma migración 20261115120000_chat_messages_delete.sql en Supabase.';
-  static const chatDeleteHint = 'Mantén pulsado un mensaje propio para eliminarlo.';
+      'Migraciones chat_messages_delete en Supabase.';
+  static const chatDeleteHint =
+      'Admin del grupo: mantén pulsado un mensaje para eliminarlo.';
 }

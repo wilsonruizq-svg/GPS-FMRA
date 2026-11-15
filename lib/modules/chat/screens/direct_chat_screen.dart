@@ -286,8 +286,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
           message: m,
           isMine: mine,
           timeLabel: _clock(m.createdAt),
-          onLongPress:
-              mine ? () => unawaited(_confirmDelete(m)) : null,
+          onLongPress: () => unawaited(_confirmDelete(m)),
         );
       },
     );

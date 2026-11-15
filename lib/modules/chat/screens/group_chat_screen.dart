@@ -165,14 +165,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     }
   }
 
-  Future<void> _confirmDelete(GroupMessage m, {required bool asAdmin}) async {
+  Future<void> _confirmDelete(GroupMessage m) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text(AppStrings.chatDeleteTitle),
-        content: Text(
-          asAdmin ? AppStrings.chatDeleteConfirmAdmin : AppStrings.chatDeleteConfirm,
-        ),
+        content: const Text(AppStrings.chatDeleteConfirm),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -205,9 +203,12 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      final raw = e.toString().toLowerCase();
       final msg = ChatService.looksLikeMissingDeletePolicy(e)
           ? AppStrings.chatDeleteMissingSql
-          : e.toString();
+          : (raw.contains('42501') || raw.contains('policy'))
+              ? AppStrings.chatDeleteAdminOnly
+              : e.toString();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
@@ -291,16 +292,11 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         final m = _messages[i];
         final mine =
             m.senderId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
-        final canDelete = mine || (_iAmAdmin && !mine);
         return _Bubble(
           message: m,
           isMine: mine,
           timeLabel: _clock(m.createdAt),
-          onLongPress: canDelete
-              ? () => unawaited(
-                    _confirmDelete(m, asAdmin: _iAmAdmin && !mine),
-                  )
-              : null,
+          onLongPress: _iAmAdmin ? () => unawaited(_confirmDelete(m)) : null,
         );
       },
     );
