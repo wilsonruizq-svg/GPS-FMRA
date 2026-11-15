@@ -715,6 +715,8 @@ class _MapShellScreenState extends State<MapShellScreen> {
           flex: 2,
           child: Material(
             color: AppColors.surface,
+            elevation: 2,
+            shadowColor: AppColors.deepBlue.withValues(alpha: 0.12),
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
@@ -742,6 +744,7 @@ class _MapShellScreenState extends State<MapShellScreen> {
                             ),
                           )
                         : ListView.separated(
+                            padding: const EdgeInsets.only(bottom: 16),
                             itemCount: _members.length,
                             separatorBuilder: (_, _) =>
                                 const Divider(height: 1),

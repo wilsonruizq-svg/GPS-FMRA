@@ -68,11 +68,34 @@ abstract final class AppTheme {
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: Colors.white,
-        indicatorColor: AppColors.signalCyan.withValues(alpha: 0.25),
-        labelTextStyle: WidgetStatePropertyAll(
-          const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-        ),
+        backgroundColor: AppColors.deepBlue,
+        surfaceTintColor: Colors.transparent,
+        elevation: 8,
+        height: 72,
+        indicatorColor: AppColors.signalCyan,
+        iconTheme: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const IconThemeData(color: AppColors.deepBlue, size: 24);
+          }
+          return IconThemeData(
+            color: AppColors.onDeep.withValues(alpha: 0.82),
+            size: 24,
+          );
+        }),
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.deepBlue,
+            );
+          }
+          return TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: AppColors.onDeep.withValues(alpha: 0.88),
+          );
+        }),
       ),
     );
   }
