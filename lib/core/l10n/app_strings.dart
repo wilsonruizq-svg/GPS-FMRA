@@ -62,6 +62,9 @@ abstract final class AppStrings {
   static const mapCollapseTooltip = 'Mostrar integrantes';
 
   static const mapSavePlaceTooltip = 'Guardar lugar';
+  static const mapPinActionSheetTitle = 'Ubicación';
+  static const mapPinActionEarthHint = 'Recomendado';
+  static const mapPinActionOrganicMaps = 'Organic Maps';
   static const mapSavePlaceTitle = 'Guardar este lugar';
   static const mapSavePlaceNameLabel = 'Título';
   static const mapSavePlaceNameHint = 'Nombre del lugar';

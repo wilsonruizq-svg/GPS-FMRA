@@ -1976,32 +1976,173 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
-  Future<void> _onSavePlacePressed() async {
-    if (_savingPlace) return;
+  /// Coordenadas para pin / guardar: GPS reciente o centro del mapa.
+  Future<({double lat, double lon})?> _resolvePinActionCoordinates() async {
     Position? fix = _lastAcceptedFix;
     if (fix == null) {
       final ok = await _ensureOsPermission(
         requestIfNeeded: true,
         showFeedback: true,
       );
-      if (!ok || !mounted) return;
-      try {
-        fix = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-          ),
-        );
-      } catch (_) {
-        fix = null;
+      if (ok) {
+        try {
+          fix = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+            ),
+          );
+        } catch (_) {
+          fix = null;
+        }
       }
     }
+    if (fix != null) {
+      return (lat: fix.latitude, lon: fix.longitude);
+    }
+    final cam = _mapController?.cameraPosition;
+    if (cam != null) {
+      return (lat: cam.target.latitude, lon: cam.target.longitude);
+    }
+    return null;
+  }
+
+  /// GF-48: al pulsar el pin, elegir acción antes del diálogo de guardar.
+  Future<String?> _showMapPinActionSheet({
+    required double lat,
+    required double lon,
+  }) async {
+    return showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+              child: Text(
+                AppStrings.mapPinActionSheetTitle,
+                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.deepBlue,
+                    ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}',
+                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                      color: AppColors.midBlue,
+                    ),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.satellite_alt_outlined),
+              title: const Text(AppStrings.memberOpenGoogleEarth),
+              subtitle: const Text(AppStrings.mapPinActionEarthHint),
+              onTap: () => Navigator.pop(ctx, 'earth'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.terrain_outlined),
+              title: const Text(AppStrings.mapPinActionOrganicMaps),
+              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
+              onTap: () => Navigator.pop(ctx, 'organic'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.chat_outlined),
+              title: const Text(AppStrings.mapSavePlaceWhatsApp),
+              onTap: () => Navigator.pop(ctx, 'wa'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.push_pin_outlined),
+              title: const Text(AppStrings.mapSavePlaceSave),
+              onTap: () => Navigator.pop(ctx, 'save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onSavePlacePressed() async {
+    if (_savingPlace) return;
     if (!mounted) return;
-    if (fix == null) {
+    final coords = await _resolvePinActionCoordinates();
+    if (!mounted) return;
+    if (coords == null) {
       GpsFmraApp.messengerKey.currentState?.showSnackBar(
         const SnackBar(content: Text(AppStrings.mapSavePlaceNeedGps)),
       );
       return;
     }
+
+    final action = await _showMapPinActionSheet(
+      lat: coords.lat,
+      lon: coords.lon,
+    );
+    if (!mounted || action == null) return;
+
+    switch (action) {
+      case 'earth':
+        final ok = await ExternalMapLinks.openGoogleEarth(
+          lat: coords.lat,
+          lng: coords.lon,
+        );
+        if (!mounted) return;
+        if (!ok) {
+          GpsFmraApp.messengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.memberExternalMapOpenError),
+            ),
+          );
+        }
+        return;
+      case 'organic':
+        final okOrganic = await ExternalMapLinks.openPreferredMapApp(
+          lat: coords.lat,
+          lng: coords.lon,
+        );
+        if (!mounted) return;
+        if (!okOrganic) {
+          GpsFmraApp.messengerKey.currentState?.showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.memberExternalMapOpenError),
+            ),
+          );
+        }
+        return;
+      case 'wa':
+        final okWa = await WhatsAppShare.sharePlace(
+          name: 'Mi ubicación',
+          lat: coords.lat,
+          lon: coords.lon,
+        );
+        if (!mounted) return;
+        GpsFmraApp.messengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Text(
+              okWa
+                  ? AppStrings.mapSavePlaceWhatsAppOk
+                  : AppStrings.mapSavePlaceWhatsAppError,
+            ),
+          ),
+        );
+        return;
+      case 'save':
+        await _openSavePlaceDialog(lat: coords.lat, lon: coords.lon);
+        return;
+      default:
+        return;
+    }
+  }
+
+  Future<void> _openSavePlaceDialog({
+    required double lat,
+    required double lon,
+  }) async {
+    if (_savingPlace) return;
+    if (!mounted) return;
 
     final nameController = TextEditingController();
     final descController = TextEditingController();
@@ -2439,8 +2580,6 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
 
     final placeName = name.isEmpty ? 'Mi ubicación' : name;
-    final lat = fix.latitude;
-    final lon = fix.longitude;
     final groupIdForSave = shareWithGroup ? _selected?.id : null;
     final wantGroup = shareWithGroup;
     final categoryIdForSave = wantGroup ? selectedCategoryId : null;
