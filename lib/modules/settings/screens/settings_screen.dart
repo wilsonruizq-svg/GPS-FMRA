@@ -218,6 +218,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  Text(
+                    AppStrings.settingsAboutCreditPhone,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
                 ],
               ),
               isThreeLine: true,

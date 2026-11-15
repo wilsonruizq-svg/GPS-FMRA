@@ -84,10 +84,12 @@ abstract final class AppStrings {
       '(así el registro no manda email y entra al instante).';
 
   // GF-72 — licencia demo / bloqueo
+  static const licenseAdminPhone = '0989067887';
   static const licenseExpiredTitle = 'Demo vencida';
   static const licenseExpiredBody =
       'Tu período de prueba de 2 días terminó. '
-      'Contacta al administrador para activar tu licencia.';
+      'Contacta al administrador para activar tu licencia: '
+      '0989067887.';
   static const licenseEmailTitle = 'Confirma tu correo';
   static const licenseEmailBody =
       'Debes validar tu correo electrónico antes de usar GPS-FMRA. '
@@ -95,7 +97,8 @@ abstract final class AppStrings {
   static const licenseUnavailableTitle = 'Licencia no disponible';
   static const licenseUnavailableBody =
       'No se pudo verificar la licencia. '
-      'Si el problema continúa, contacta al administrador.';
+      'Si el problema continúa, contacta al administrador: '
+      '0989067887.';
   static const licenseSignOut = 'Cerrar sesión';
 
   static const mapTitle = 'Mapa';
@@ -353,6 +356,7 @@ abstract final class AppStrings {
   static const settingsVersion = 'Versión 1.0.0 — Fase 1';
   static const settingsAboutCreditLabel = 'Desarrollador:';
   static const settingsAboutCreditName = 'Wilson Ruiz Quezada';
+  static const settingsAboutCreditPhone = '0989067887';
   static const settingsSectionAccount = 'Tu cuenta';
   static const settingsSectionPrivacy = 'Privacidad';
   /// Sección neutra (sin delatar GPS).
