@@ -621,61 +621,101 @@ class _GroupsScreenState extends State<GroupsScreen> {
             for (final p in places)
               Card(
                 margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  leading: _placePhotoLeading(p),
-                  title: InkWell(
-                    onTap: widget.onOpenPlaceOnMap == null
-                        ? null
-                        : () => widget.onOpenPlaceOnMap!(p),
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        p.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.deepBlue,
-                          decoration: TextDecoration.underline,
-                          decorationColor: AppColors.signalCyan,
-                        ),
-                      ),
-                    ),
-                  ),
-                  subtitle: Text(
-                    [
-                      if ((p.description ?? '').trim().isNotEmpty)
-                        p.description!.trim(),
-                      _placeCategoryLabel(p),
-                      '${p.lat.toStringAsFixed(5)}, ${p.lon.toStringAsFixed(5)}',
-                    ].join('\n'),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  isThreeLine: true,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        tooltip: AppStrings.groupsPlacesShare,
-                        icon: const Icon(Icons.share_outlined),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
+                      _placePhotoLeading(p),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            InkWell(
+                              onTap: widget.onOpenPlaceOnMap == null
+                                  ? null
+                                  : () => widget.onOpenPlaceOnMap!(p),
+                              borderRadius: BorderRadius.circular(4),
+                              child: Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 2),
+                                child: Text(
+                                  p.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.deepBlue,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: AppColors.signalCyan,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if ((p.description ?? '').trim().isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Text(
+                                p.description!.trim(),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodyMedium
+                                    ?.copyWith(color: AppColors.midBlue),
+                              ),
+                            ],
+                            const SizedBox(height: 2),
+                            Text(
+                              _placeCategoryLabel(p),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: AppColors.midBlue),
+                            ),
+                            Text(
+                              '${p.lat.toStringAsFixed(5)}, ${p.lon.toStringAsFixed(5)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: AppColors.midBlue),
+                            ),
+                          ],
                         ),
-                        onPressed: () => unawaited(_sharePlace(p)),
                       ),
-                      IconButton(
-                        tooltip: AppStrings.groupsPlacesDelete,
-                        icon: const Icon(Icons.delete_outline),
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
-                        constraints: const BoxConstraints(
-                          minWidth: 40,
-                          minHeight: 40,
+                      SizedBox(
+                        width: 48,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: AppStrings.groupsPlacesShare,
+                              icon: const Icon(Icons.share_outlined),
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                minWidth: 40,
+                                minHeight: 36,
+                              ),
+                              onPressed: () => unawaited(_sharePlace(p)),
+                            ),
+                            IconButton(
+                              tooltip: AppStrings.groupsPlacesDelete,
+                              icon: const Icon(Icons.delete_outline),
+                              padding: EdgeInsets.zero,
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(
+                                minWidth: 40,
+                                minHeight: 32,
+                              ),
+                              onPressed: () => unawaited(_deletePlace(p)),
+                            ),
+                          ],
                         ),
-                        onPressed: () => unawaited(_deletePlace(p)),
                       ),
                     ],
                   ),
