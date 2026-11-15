@@ -102,6 +102,9 @@ abstract final class AppStrings {
   static const mapSavePlacePhotoClear = 'Quitar foto';
   static const mapSavePlaceOnlyMe = 'Solo yo';
   static const mapSavePlaceShareGroup = 'Compartir con el grupo';
+  static const mapSavePlaceGroupLabel = 'Grupo destino';
+  static const mapSavePlaceGroupHint =
+      'Elige en qué grupo se guarda este lugar';
   static const mapSavePlaceSave = 'Guardar';
   static const mapSavePlaceWhatsApp = 'WhatsApp';
   static const mapSavePlaceNeedGroup =

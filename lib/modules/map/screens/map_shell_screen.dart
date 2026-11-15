@@ -2171,14 +2171,24 @@ class _MapShellScreenState extends State<MapShellScreen>
       text: initialName != null && initialName.isNotEmpty ? initialName : '',
     );
     final descController = TextEditingController();
-    // Si hay grupo seleccionado, por defecto compartir (así aparece en Grupos).
-    var shareWithGroup = _selected != null;
+    // Grupo destino editable en el diálogo (no solo el del toolbar del mapa).
+    FamilyGroup? destinationGroup = _selected;
+    if (destinationGroup == null && _groupsList.isNotEmpty) {
+      destinationGroup = _groupsList.first;
+    } else if (destinationGroup != null && _groupsList.isNotEmpty) {
+      destinationGroup = _groupsList.cast<FamilyGroup?>().firstWhere(
+            (g) => g?.id == destinationGroup!.id,
+            orElse: () => _groupsList.first,
+          );
+    }
+    // Si hay grupo disponible, por defecto compartir (así aparece en Grupos).
+    var shareWithGroup = destinationGroup != null;
     Uint8List? photoBytes;
     String? selectedCategoryId;
     List<PlaceCategory> categories = const [];
     var categoriesLoaded = false;
     final picker = ImagePicker();
-    final groupIdForCats = _selected?.id;
+    var scheduledCatLoad = false;
 
     Future<void> pickPhoto(
       ImageSource source,
@@ -2203,6 +2213,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     Future<void> ensureCategories(
       void Function(void Function()) setLocal,
     ) async {
+      final groupIdForCats = destinationGroup?.id;
       if (categoriesLoaded || groupIdForCats == null) return;
       try {
         final list = await _places.listCategories(groupIdForCats);
@@ -2216,7 +2227,20 @@ class _MapShellScreenState extends State<MapShellScreen>
       }
     }
 
-    var scheduledCatLoad = false;
+    void selectDestinationGroup(
+      FamilyGroup? group,
+      void Function(void Function()) setLocal,
+    ) {
+      if (group == null) return;
+      setLocal(() {
+        destinationGroup = group;
+        selectedCategoryId = null;
+        categories = const [];
+        categoriesLoaded = false;
+        scheduledCatLoad = false;
+      });
+      unawaited(ensureCategories(setLocal));
+    }
 
     // null = cancel; 'save' | 'wa'
     final action = await showDialog<String>(
@@ -2493,14 +2517,55 @@ class _MapShellScreenState extends State<MapShellScreen>
                       groupValue: shareWithGroup,
                       title: const Text(AppStrings.mapSavePlaceShareGroup),
                       onChanged: (_) {
-                        setLocal(() => shareWithGroup = true);
+                        setLocal(() {
+                          shareWithGroup = true;
+                          destinationGroup ??=
+                              _groupsList.isNotEmpty ? _groupsList.first : null;
+                        });
                         unawaited(ensureCategories(setLocal));
                       },
                     ),
                     if (shareWithGroup) ...[
                       const SizedBox(height: 2),
+                      if (_groupsList.isEmpty)
+                        Text(
+                          AppStrings.mapNoGroup,
+                          style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurfaceVariant,
+                              ),
+                        )
+                      else
+                        DropdownButtonFormField<FamilyGroup>(
+                          key: ValueKey(
+                            'save-group-${destinationGroup?.id ?? 'none'}',
+                          ),
+                          initialValue: destinationGroup,
+                          isDense: true,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            labelText: AppStrings.mapSavePlaceGroupLabel,
+                            helperText: AppStrings.mapSavePlaceGroupHint,
+                          ),
+                          items: [
+                            for (final g in _groupsList)
+                              DropdownMenuItem<FamilyGroup>(
+                                value: g,
+                                child: Text(
+                                  g.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: (g) =>
+                              selectDestinationGroup(g, setLocal),
+                        ),
+                      const SizedBox(height: 8),
                       DropdownButtonFormField<String?>(
-                        key: ValueKey(selectedCategoryId ?? 'none'),
+                        key: ValueKey(
+                          'cat-${destinationGroup?.id ?? 'x'}-'
+                          '${selectedCategoryId ?? 'none'}',
+                        ),
                         initialValue: selectedCategoryId,
                         isDense: true,
                         decoration: const InputDecoration(
@@ -2524,12 +2589,12 @@ class _MapShellScreenState extends State<MapShellScreen>
                       ),
                       const SizedBox(height: 6),
                       actionPill(
-                        onPressed: groupIdForCats == null
+                        onPressed: destinationGroup == null
                             ? null
                             : () async {
                                 final created =
                                     await _promptCreatePlaceCategory(
-                                      groupId: groupIdForCats,
+                                      groupId: destinationGroup!.id,
                                     );
                                 await _waitFrames(2);
                                 if (created == null || !ctx.mounted) {
@@ -2606,7 +2671,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
 
     final placeName = name.isEmpty ? 'Mi ubicación' : name;
-    final groupIdForSave = shareWithGroup ? _selected?.id : null;
+    final groupIdForSave = shareWithGroup ? destinationGroup?.id : null;
     final wantGroup = shareWithGroup;
     final categoryIdForSave = wantGroup ? selectedCategoryId : null;
 
