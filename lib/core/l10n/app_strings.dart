@@ -28,6 +28,12 @@ abstract final class AppStrings {
   static const passwordHide = 'Ocultar contraseña';
   static const displayNameLabel = 'Nombre para mostrar';
   static const loginButton = 'Entrar';
+  static const loginGoogleButton = 'Continuar con Google';
+  static const loginGoogleDivider = 'o';
+  static const loginGoogleLaunchError =
+      'No se pudo abrir el inicio de sesión con Google.';
+  static const loginGoogleCancelled =
+      'Inicio con Google cancelado. Intenta de nuevo.';
   static const registerButton = 'Crear cuenta';
   static const registerHint = '¿No tienes cuenta? Regístrate';
   static const loginHint = '¿Ya tienes cuenta? Inicia sesión';

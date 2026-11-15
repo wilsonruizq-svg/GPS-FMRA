@@ -3,8 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/supabase/supabase_bootstrap.dart';
 import 'auth_email.dart';
 
-/// Deep link que Wilson debe añadir en Auth → URL Configuration.
+/// Deep links que Wilson debe añadir en Auth → URL Configuration.
 const kPasswordRecoveryRedirectTo = 'gpsfmra://auth/recovery';
+const kGoogleOAuthRedirectTo = 'gpsfmra://auth/callback';
 
 /// Auth mínima Fase 1 (email/password).
 class AuthService {
@@ -56,5 +57,13 @@ class AuthService {
 
   Future<UserResponse> updatePassword(String password) {
     return _sb.auth.updateUser(UserAttributes(password: password));
+  }
+
+  /// Abre el navegador de Google; la sesión llega por deep link [kGoogleOAuthRedirectTo].
+  Future<bool> signInWithGoogle() {
+    return _sb.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: kGoogleOAuthRedirectTo,
+    );
   }
 }

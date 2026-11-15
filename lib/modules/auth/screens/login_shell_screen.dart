@@ -34,6 +34,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
   bool _forgotMode = false;
   bool _resetPasswordMode = false;
   bool _obscurePassword = true;
+  bool _googleOAuthPending = false;
   String? _error;
   String? _info;
 
@@ -52,6 +53,12 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
           _error = null;
           _info = null;
         });
+        return;
+      }
+      if (state.event == AuthChangeEvent.signedIn &&
+          state.session != null &&
+          _googleOAuthPending) {
+        unawaited(_completeGoogleSignIn());
       }
     });
   }
@@ -260,6 +267,73 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
     );
   }
 
+  bool get _showGoogleSignIn =>
+      widget.supabaseReady &&
+      !_registerMode &&
+      !_forgotMode &&
+      !_resetPasswordMode;
+
+  Future<void> _signInWithGoogle() async {
+    if (!widget.supabaseReady || _busy) return;
+
+    setState(() {
+      _busy = true;
+      _googleOAuthPending = true;
+      _error = null;
+      _info = null;
+    });
+
+    try {
+      final launched = await _auth.signInWithGoogle();
+      if (!mounted) return;
+      if (!launched) {
+        setState(() {
+          _googleOAuthPending = false;
+          _error = AppStrings.loginGoogleLaunchError;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _googleOAuthPending = false;
+        _error = authErrorMessage(e);
+      });
+    } finally {
+      if (mounted && !_googleOAuthPending) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _completeGoogleSignIn() async {
+    if (!mounted) return;
+    setState(() {
+      _busy = true;
+      _googleOAuthPending = false;
+      _error = null;
+    });
+    try {
+      final user = _auth.currentUser;
+      final rawName = user?.userMetadata?['full_name'] as String? ??
+          user?.userMetadata?['name'] as String?;
+      String? displayName;
+      if (rawName != null) {
+        final trimmed = rawName.trim();
+        if (trimmed.isNotEmpty) displayName = trimmed;
+      }
+      await _profiles.ensureOwnProfile(displayName: displayName);
+      await PushService().syncTokenAfterLogin();
+      await BiometricUnlockService().enableAfterPasswordLogin();
+      if (!mounted) return;
+      _goApp();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = authErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   String get _headline {
     if (_resetPasswordMode) return AppStrings.loginResetTitle;
     if (_forgotMode) return AppStrings.loginForgotTitle;
@@ -316,6 +390,31 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
               ),
             ],
             const SizedBox(height: 28),
+            if (_showGoogleSignIn) ...[
+              OutlinedButton.icon(
+                onPressed: _busy ? null : _signInWithGoogle,
+                icon: const Icon(Icons.g_mobiledata, size: 28),
+                label: const Text(AppStrings.loginGoogleButton),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      AppStrings.loginGoogleDivider,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
             if (_registerMode) ...[
               TextField(
                 controller: _nameController,
