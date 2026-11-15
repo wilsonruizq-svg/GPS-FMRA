@@ -228,6 +228,20 @@ abstract final class AppStrings {
   static const memberMapPinTooltip = 'Color en el mapa';
   static const mapMemberNoLivePin =
       'Sin pin en el mapa ahora (ubicación no compartida o sin señal).';
+  static const memberOpenGoogleEarth = 'Google Earth (vista 3D)';
+  static const memberOpenExternalMap = 'Google Maps';
+  static const memberOpenOsm = 'OpenStreetMap (web)';
+  static const memberOpenGeoApp = 'Organic Maps u otra app (geo:)';
+  static const memberExternalMapSecondaryHint = 'Alternativa';
+  static const memberShareLocationLink = 'Compartir enlace';
+  static const memberExternalMapOpenError =
+      'No se pudo abrir el mapa externo.';
+  static const shareOsmLinePrefix = 'Mapa libre (OSM):';
+  static const shareOptionalAlternativesHeader = 'Alternativas (opcional):';
+  static const shareGeoLinePrefix = 'geo (Organic / app de mapas):';
+  static const shareGeoOrganicNote =
+      'Enlace geo: selector de Android → Organic Maps si está instalada.';
+  static const memberExternalMapIconTooltip = 'Ver en Google Earth (3D)';
 
   static const inviteAction = 'Invitar';
   static const inviteTitle = 'Código listo para compartir';

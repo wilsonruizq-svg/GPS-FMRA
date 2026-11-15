@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../app.dart';
@@ -23,6 +24,7 @@ import '../../location/location_fix_filter.dart';
 import '../../location/location_keep_alive.dart';
 import '../../location/location_share_service.dart';
 import '../../location/screens/location_history_screen.dart';
+import '../../places/external_map_links.dart';
 import '../../places/named_places_service.dart';
 import '../../places/whatsapp_share.dart';
 import '../../profiles/avatar_compress.dart';
@@ -702,6 +704,130 @@ class _MapShellScreenState extends State<MapShellScreen>
         ),
       ),
     );
+  }
+
+  Future<void> _openMemberInGoogleEarth({
+    required double lat,
+    required double lon,
+  }) async {
+    final ok = await ExternalMapLinks.openGoogleEarth(lat: lat, lng: lon);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.memberExternalMapOpenError)),
+      );
+    }
+  }
+
+  Future<void> _openMemberInPreferredMapApp({
+    required String name,
+    required double lat,
+    required double lon,
+  }) async {
+    final ok = await ExternalMapLinks.openPreferredMapApp(
+      lat: lat,
+      lng: lon,
+      label: name,
+    );
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.memberExternalMapOpenError)),
+      );
+    }
+  }
+
+  Future<void> _showMemberExternalMapSheet({
+    required String name,
+    required double lat,
+    required double lon,
+  }) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.satellite_alt_outlined),
+              title: const Text(AppStrings.memberOpenGoogleEarth),
+              onTap: () => Navigator.pop(ctx, 'earth'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.map_outlined),
+              title: const Text(AppStrings.memberOpenExternalMap),
+              onTap: () => Navigator.pop(ctx, 'maps'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.terrain_outlined),
+              title: const Text(AppStrings.memberOpenOsm),
+              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
+              onTap: () => Navigator.pop(ctx, 'osm'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.apps_outlined),
+              title: const Text(AppStrings.memberOpenGeoApp),
+              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
+              onTap: () => Navigator.pop(ctx, 'geo'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.share_outlined),
+              title: const Text(AppStrings.memberShareLocationLink),
+              onTap: () => Navigator.pop(ctx, 'share'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    switch (action) {
+      case 'earth':
+        await _openMemberInGoogleEarth(lat: lat, lon: lon);
+      case 'maps':
+        final ok =
+            await ExternalMapLinks.openGoogleMaps(lat: lat, lng: lon);
+        if (!mounted) return;
+        if (!ok) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.memberExternalMapOpenError),
+            ),
+          );
+        }
+      case 'osm':
+        final okOsm =
+            await ExternalMapLinks.openOpenStreetMap(lat: lat, lng: lon);
+        if (!mounted) return;
+        if (!okOsm) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.memberExternalMapOpenError),
+            ),
+          );
+        }
+      case 'geo':
+        final okGeo = await ExternalMapLinks.openPreferredMapApp(
+          lat: lat,
+          lng: lon,
+          label: name,
+        );
+        if (!mounted) return;
+        if (!okGeo) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(AppStrings.memberExternalMapOpenError),
+            ),
+          );
+        }
+      case 'share':
+        await Share.share(
+          WhatsAppShare.message(name: name, lat: lat, lon: lon),
+          subject: name.trim().isEmpty ? 'Ubicación' : name.trim(),
+        );
+      default:
+        break;
+    }
   }
 
   Future<void> _focusMemberOnMap({
@@ -2847,6 +2973,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                                   m.userId,
                                   isSelf: isSelf,
                                 );
+                                final live = _locationsByUser[m.userId];
                                 return MemberCard(
                                   name: m.label,
                                   photoUrl: m.photoUrl,
@@ -2869,6 +2996,27 @@ class _MapShellScreenState extends State<MapShellScreen>
                                           ),
                                         )
                                       : null,
+                                  onOpenExternalMap: live == null
+                                      ? null
+                                      : () {
+                                          unawaited(
+                                            _openMemberInGoogleEarth(
+                                              lat: live.lat,
+                                              lon: live.lon,
+                                            ),
+                                          );
+                                        },
+                                  onLongPress: live == null
+                                      ? null
+                                      : () {
+                                          unawaited(
+                                            _showMemberExternalMapSheet(
+                                              name: m.label,
+                                              lat: live.lat,
+                                              lon: live.lon,
+                                            ),
+                                          );
+                                        },
                                   onTap: () {
                                     unawaited(
                                       _focusMemberOnMap(

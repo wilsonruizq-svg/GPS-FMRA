@@ -18,7 +18,9 @@ class MemberCard extends StatelessWidget {
     this.mapPinColor,
     this.female = false,
     this.onTap,
+    this.onLongPress,
     this.onMessage,
+    this.onOpenExternalMap,
     this.trailingExtra,
   });
 
@@ -30,7 +32,10 @@ class MemberCard extends StatelessWidget {
   final Color? mapPinColor;
   final bool female;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
   final VoidCallback? onMessage;
+  /// Icono discreto (p. ej. Earth) cuando hay lat/lng en vivo.
+  final VoidCallback? onOpenExternalMap;
   /// P. ej. promover/quitar admin (detalle de grupo).
   final Widget? trailingExtra;
 
@@ -45,6 +50,7 @@ class MemberCard extends StatelessWidget {
       color: Colors.white,
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
@@ -118,6 +124,13 @@ class MemberCard extends StatelessWidget {
                 const SizedBox(width: 2),
               ],
               if (trailingExtra != null) trailingExtra!,
+              if (onOpenExternalMap != null)
+                IconButton(
+                  tooltip: AppStrings.memberExternalMapIconTooltip,
+                  onPressed: onOpenExternalMap,
+                  icon: const Icon(Icons.satellite_alt_outlined),
+                  color: scheme.onSurfaceVariant,
+                ),
               if (onMessage != null && !isSelf)
                 IconButton(
                   tooltip: AppStrings.dmAction,
@@ -125,7 +138,7 @@ class MemberCard extends StatelessWidget {
                   icon: const Icon(Icons.chat_bubble_outline),
                   color: AppColors.deepBlue,
                 )
-              else if (trailingExtra == null)
+              else if (trailingExtra == null && onOpenExternalMap == null)
                 Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
             ],
           ),
