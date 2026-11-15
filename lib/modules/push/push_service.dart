@@ -174,7 +174,7 @@ class PushService {
     );
   }
 
-  Future<void> showChatLocalNotification({
+  Future<bool> showChatLocalNotification({
     required int id,
     required String title,
     required String body,
@@ -182,23 +182,32 @@ class PushService {
     String? messageId,
   }) async {
     await ensureLocalNotificationsReady();
-    if (!_localReady) return;
-    await _local.show(
-      id: id,
-      title: title,
-      body: body,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          chatChannelId,
-          chatChannelName,
-          channelDescription: 'Mensajes nuevos del chat familiar',
-          importance: Importance.high,
-          priority: Priority.high,
-          category: AndroidNotificationCategory.message,
+    if (!_localReady) {
+      debugPrint('PushService.showChatLocalNotification: local not ready');
+      return false;
+    }
+    try {
+      await _local.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: const NotificationDetails(
+          android: AndroidNotificationDetails(
+            chatChannelId,
+            chatChannelName,
+            channelDescription: 'Mensajes nuevos del chat familiar',
+            importance: Importance.high,
+            priority: Priority.high,
+            category: AndroidNotificationCategory.message,
+          ),
         ),
-      ),
-      payload: groupId ?? messageId,
-    );
+        payload: groupId ?? messageId,
+      );
+      return true;
+    } catch (e) {
+      debugPrint('PushService.showChatLocalNotification: $e');
+      return false;
+    }
   }
 
   /// Guarda / actualiza el token FCM del usuario autenticado.
@@ -229,6 +238,8 @@ class PushService {
   /// Reintenta registrar el token tras login.
   Future<void> syncTokenAfterLogin() async {
     if (!ready) {
+      // Reintenta si el primer ensure falló (p. ej. FCM frío).
+      if (_initialized) _initialized = false;
       await ensureInitialized();
     }
     if (!ready) return;

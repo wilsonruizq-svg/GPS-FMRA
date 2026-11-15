@@ -180,6 +180,7 @@ class DmService {
 
   RealtimeChannel subscribeMine({
     required void Function(DirectMessage message) onInsert,
+    void Function(RealtimeSubscribeStatus status, Object? error)? onStatus,
   }) {
     final channel = _sb.channel(
       'direct_messages_mine_${DateTime.now().millisecondsSinceEpoch}',
@@ -201,7 +202,7 @@ class DmService {
             }
           },
         )
-        .subscribe();
+        .subscribe(onStatus);
     return channel;
   }
 

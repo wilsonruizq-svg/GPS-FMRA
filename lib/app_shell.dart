@@ -25,7 +25,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _index = 0;
   final _exitPin = ExitPinService();
   bool _exitGateBusy = false;
@@ -39,15 +39,24 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     unawaited(ChatAlertService.instance.start());
     MapPlaceFocus.revision.addListener(_onMapFocusRequested);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     MapPlaceFocus.revision.removeListener(_onMapFocusRequested);
     unawaited(ChatAlertService.instance.stop());
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(ChatAlertService.instance.onForeground());
+    }
   }
 
   void _onMapFocusRequested() {
@@ -60,9 +69,8 @@ class _AppShellState extends State<AppShell> {
 
   void _onTabSelected(int i) {
     setState(() => _index = i);
-    if (i == 0) {
-      unawaited(ChatAlertService.instance.ensureRunning());
-    }
+    // Mapa, Grupos y Ajustes: reconecta Realtime + poll (el mapa no montado no debe cortar alertas).
+    unawaited(ChatAlertService.instance.ensureRunning());
   }
 
   void _openPlaceOnMap(NamedPlace place) {

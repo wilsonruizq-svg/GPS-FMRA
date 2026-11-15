@@ -9,6 +9,7 @@ import '../../core/l10n/app_strings.dart';
 import '../../core/supabase/supabase_bootstrap.dart';
 import '../groups/groups_service.dart';
 import '../push/push_service.dart';
+import 'chat_alert_logic.dart';
 import 'chat_service.dart';
 import 'dm_service.dart';
 
@@ -46,7 +47,7 @@ class ChatAlertService {
       }
       return;
     }
-    mutedGroupId = id;
+    mutedGroupId = ChatAlertLogic.normId(id);
     _muteGroupDepth += 1;
   }
 
@@ -60,7 +61,7 @@ class ChatAlertService {
       }
       return;
     }
-    mutedPeerId = id;
+    mutedPeerId = ChatAlertLogic.normId(id);
     _mutePeerDepth += 1;
   }
 
@@ -86,7 +87,7 @@ class ChatAlertService {
       debugPrint('ChatAlertService seed: $e');
     }
 
-    _subscribeRealtime();
+    unawaited(_subscribeRealtime());
     _pollTimer?.cancel();
     _pollTimer = Timer.periodic(const Duration(seconds: 6), (_) {
       unawaited(_pollRecent());
@@ -125,13 +126,23 @@ class ChatAlertService {
       return;
     }
     if (_groupChannel == null || _dmChannel == null) {
-      _subscribeRealtime();
+      await _subscribeRealtime();
     }
+    unawaited(_pollRecent());
   }
 
-  void _subscribeRealtime() {
-    unawaited(_chat.unsubscribe(_groupChannel));
-    unawaited(_dm.unsubscribe(_dmChannel));
+  /// Tras volver de background o cambiar pestaña (reconecta Realtime + poll).
+  Future<void> onForeground() async {
+    await ensureRunning();
+  }
+
+  Future<void> _subscribeRealtime() async {
+    final prevG = _groupChannel;
+    final prevD = _dmChannel;
+    _groupChannel = null;
+    _dmChannel = null;
+    await _chat.unsubscribe(prevG);
+    await _dm.unsubscribe(prevD);
 
     _groupChannel = supabase.channel(
       'group_messages_alerts_${DateTime.now().millisecondsSinceEpoch}',
@@ -152,6 +163,9 @@ class ChatAlertService {
     _dmChannel = _dm.subscribeMine(
       onInsert: (msg) {
         unawaited(_maybeAlertDm(msg, source: 'rt-dm'));
+      },
+      onStatus: (status, err) {
+        debugPrint('ChatAlertService dm rt=$status err=$err');
       },
     );
   }
@@ -211,19 +225,12 @@ class ChatAlertService {
     }
   }
 
-  bool _markSeen(String id) {
-    if (id.isEmpty || _seenIds.contains(id)) return false;
+  void _recordSeen(String id) {
+    if (id.isEmpty) return;
     _seenIds.add(id);
     if (_seenIds.length > 400) {
       _seenIds.remove(_seenIds.first);
     }
-    return true;
-  }
-
-  bool _tooOld(DateTime createdAt) {
-    final started = _startedAt;
-    if (started == null) return false;
-    return createdAt.isBefore(started.subtract(const Duration(seconds: 2)));
   }
 
   Future<void> _maybeAlertGroup(
@@ -231,17 +238,18 @@ class ChatAlertService {
     required String source,
   }) async {
     final id = msg.id.trim();
-    if (!_markSeen(id)) return;
-
-    final sender = msg.senderId.trim().toLowerCase();
-    if (sender.isEmpty || sender == _myUid) return;
-    if (_tooOld(msg.createdAt)) return;
-
-    final muted = mutedGroupId?.trim();
-    if (_muteGroupDepth > 0 &&
-        muted != null &&
-        muted.isNotEmpty &&
-        msg.groupId.trim() == muted) {
+    if (ChatAlertLogic.ignoreGroupMessage(
+      messageId: id,
+      senderId: msg.senderId,
+      myUid: _myUid,
+      groupId: msg.groupId,
+      createdAt: msg.createdAt,
+      serviceStartedAt: _startedAt,
+      alreadySeen: _seenIds.contains(id),
+      mutedGroupId: mutedGroupId,
+      muteGroupDepth: _muteGroupDepth,
+    )) {
+      if (id.isNotEmpty) _recordSeen(id);
       return;
     }
 
@@ -250,13 +258,14 @@ class ChatAlertService {
       enriched = await _chat.enrich(msg);
     } catch (_) {}
 
-    await _showAlert(
+    final delivered = await _showAlert(
       title: AppStrings.chatPushTitle,
       body: AppStrings.chatPushBody(enriched.senderLabel, enriched.body),
       notifId: id.hashCode & 0x7fffffff,
       payload: enriched.groupId,
       source: source,
     );
+    if (delivered) _recordSeen(id);
   }
 
   Future<void> _maybeAlertDm(
@@ -264,20 +273,18 @@ class ChatAlertService {
     required String source,
   }) async {
     final id = msg.id.trim();
-    if (!_markSeen(id)) return;
-
-    final sender = msg.senderId.trim().toLowerCase();
-    final recipient = msg.recipientId.trim().toLowerCase();
-    if (sender.isEmpty || sender == _myUid) return;
-    // Solo alertar si soy el destinatario.
-    if (recipient != _myUid) return;
-    if (_tooOld(msg.createdAt)) return;
-
-    final muted = mutedPeerId?.trim().toLowerCase();
-    if (_mutePeerDepth > 0 &&
-        muted != null &&
-        muted.isNotEmpty &&
-        sender == muted) {
+    if (ChatAlertLogic.ignoreDmMessage(
+      messageId: id,
+      senderId: msg.senderId,
+      recipientId: msg.recipientId,
+      myUid: _myUid,
+      createdAt: msg.createdAt,
+      serviceStartedAt: _startedAt,
+      alreadySeen: _seenIds.contains(id),
+      mutedPeerId: mutedPeerId,
+      mutePeerDepth: _mutePeerDepth,
+      )) {
+      if (id.isNotEmpty) _recordSeen(id);
       return;
     }
 
@@ -286,16 +293,17 @@ class ChatAlertService {
       enriched = await _dm.enrich(msg);
     } catch (_) {}
 
-    await _showAlert(
+    final delivered = await _showAlert(
       title: AppStrings.dmPushTitle,
       body: AppStrings.chatPushBody(enriched.senderLabel, enriched.body),
       notifId: id.hashCode & 0x7fffffff,
-      payload: sender,
+      payload: ChatAlertLogic.normId(msg.senderId),
       source: source,
     );
+    if (delivered) _recordSeen(id);
   }
 
-  Future<void> _showAlert({
+  Future<bool> _showAlert({
     required String title,
     required String body,
     required int notifId,
@@ -303,7 +311,7 @@ class ChatAlertService {
     required String source,
   }) async {
     debugPrint('ChatAlertService: ALERT $source → $body');
-    await _push.showChatLocalNotification(
+    final notifOk = await _push.showChatLocalNotification(
       id: notifId,
       title: title,
       body: body,
@@ -311,8 +319,10 @@ class ChatAlertService {
       messageId: '$notifId',
     );
 
+    var snackOk = false;
     final messenger = GpsFmraApp.messengerKey.currentState;
     if (messenger != null) {
+      snackOk = true;
       messenger.clearSnackBars();
       messenger.showSnackBar(
         SnackBar(
@@ -321,6 +331,9 @@ class ChatAlertService {
           duration: const Duration(seconds: 5),
         ),
       );
+    } else {
+      debugPrint('ChatAlertService: messenger null (¿sin scaffoldMessenger?)');
     }
+    return notifOk || snackOk;
   }
 }
