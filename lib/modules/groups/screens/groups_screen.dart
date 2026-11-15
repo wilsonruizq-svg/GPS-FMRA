@@ -648,38 +648,36 @@ class _GroupsScreenState extends State<GroupsScreen> {
                       _placeCategoryLabel(p),
                       '${p.lat.toStringAsFixed(5)}, ${p.lon.toStringAsFixed(5)}',
                     ].join('\n'),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   isThreeLine: true,
-                  trailing: SizedBox(
-                    width: 48,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          tooltip: AppStrings.groupsPlacesShare,
-                          icon: const Icon(Icons.share_outlined),
-                          padding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints(
-                            minWidth: 40,
-                            minHeight: 36,
-                          ),
-                          onPressed: () => unawaited(_sharePlace(p)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: AppStrings.groupsPlacesShare,
+                        icon: const Icon(Icons.share_outlined),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
                         ),
-                        IconButton(
-                          tooltip: AppStrings.groupsPlacesDelete,
-                          icon: const Icon(Icons.delete_outline),
-                          padding: EdgeInsets.zero,
-                          visualDensity: VisualDensity.compact,
-                          constraints: const BoxConstraints(
-                            minWidth: 40,
-                            minHeight: 32,
-                          ),
-                          onPressed: () => unawaited(_deletePlace(p)),
+                        onPressed: () => unawaited(_sharePlace(p)),
+                      ),
+                      IconButton(
+                        tooltip: AppStrings.groupsPlacesDelete,
+                        icon: const Icon(Icons.delete_outline),
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
                         ),
-                      ],
-                    ),
+                        onPressed: () => unawaited(_deletePlace(p)),
+                      ),
+                    ],
                   ),
                 ),
               ),

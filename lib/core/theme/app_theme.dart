@@ -84,10 +84,11 @@ abstract final class AppTheme {
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
+            // La etiqueta va sobre el fondo azul del bar, no sobre el chip cyan.
             return const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: AppColors.deepBlue,
+              color: AppColors.signalCyan,
             );
           }
           return TextStyle(
