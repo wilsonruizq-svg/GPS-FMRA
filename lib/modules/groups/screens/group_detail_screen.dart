@@ -418,6 +418,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 AppStrings.exitPinTitle,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
+                      color: AppColors.deepBlue,
                     ),
               ),
               const SizedBox(height: 6),
@@ -425,7 +426,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 _exitPinSet
                     ? AppStrings.exitPinStatusOn
                     : AppStrings.exitPinStatusOff,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.midBlue,
+                    ),
               ),
               const SizedBox(height: 12),
               if (_exitPinBusy)
@@ -604,6 +607,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 AppStrings.inviteLastHeading,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.w700,
+                      color: AppColors.deepBlue,
                     ),
               ),
               const SizedBox(height: 6),
@@ -612,12 +616,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 style: const TextStyle(
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.w600,
+                  color: AppColors.deepBlue,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 AppStrings.inviteFamilySteps,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.midBlue,
+                    ),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -717,9 +724,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                               : AppStrings.groupsYouAreMember,
                           style:
                               Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant,
+                                    color: AppColors.midBlue,
+                                    fontWeight: FontWeight.w500,
                                   ),
                         ),
                       ),
@@ -772,6 +778,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                           style:
                               Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w700,
+                                    color: AppColors.deepBlue,
                                   ),
                         ),
                       ),

@@ -324,6 +324,10 @@ class _LocationHistoryScreenState extends State<LocationHistoryScreen> {
                                   '${_fmt(p.recordedAt)}  ·  '
                                   '${p.lat.toStringAsFixed(5)}, '
                                   '${p.lon.toStringAsFixed(5)}',
+                                  style: const TextStyle(
+                                    color: AppColors.midBlue,
+                                    fontSize: 14,
+                                  ),
                                 ),
                                 onTap: () => _openPointOnMap(p),
                               );

@@ -738,6 +738,10 @@ class _GroupsScreenState extends State<GroupsScreen> {
             controller: _searchCtrl,
             onChanged: (v) => setState(() => _query = v),
             textInputAction: TextInputAction.search,
+            style: const TextStyle(
+              color: AppColors.deepBlue,
+              fontSize: 16,
+            ),
             decoration: InputDecoration(
               hintText: AppStrings.groupsPlacesSearchHint,
               prefixIcon: const Icon(Icons.search),
@@ -806,19 +810,25 @@ class _GroupsScreenState extends State<GroupsScreen> {
           const SizedBox(height: 16),
           Text(
             AppStrings.groupsEmpty,
-            style: Theme.of(context).textTheme.bodyLarge,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppColors.deepBlue,
+                ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
           Text(
             AppStrings.groupsEmptyCreateHint,
-            style: Theme.of(context).textTheme.bodySmall,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.midBlue,
+                ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
             AppStrings.groupsEmptyJoinHint,
-            style: Theme.of(context).textTheme.bodySmall,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppColors.midBlue,
+                ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
@@ -835,31 +845,43 @@ class _GroupsScreenState extends State<GroupsScreen> {
       children: [
         for (var i = 0; i < _groups.length; i++) ...[
           if (i > 0) const Divider(height: 1),
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 10,
-            ),
-            leading: CircleAvatar(
-              backgroundColor: Theme.of(context)
-                  .colorScheme
-                  .primary
-                  .withValues(alpha: 0.12),
-              child: Icon(
-                Icons.family_restroom,
-                color: Theme.of(context).colorScheme.primary,
+          Material(
+            color: Colors.white,
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 10,
               ),
-            ),
-            title: Text(
-              _groups[i].name,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 17,
+              leading: CircleAvatar(
+                backgroundColor: AppColors.deepBlue.withValues(alpha: 0.12),
+                child: const Icon(
+                  Icons.family_restroom,
+                  color: AppColors.deepBlue,
+                ),
               ),
+              title: Text(
+                _groups[i].name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 17,
+                  color: AppColors.deepBlue,
+                ),
+              ),
+              subtitle: const Text(
+                AppStrings.groupsTapMembers,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.midBlue,
+                ),
+              ),
+              trailing: const Icon(
+                Icons.chevron_right,
+                color: AppColors.midBlue,
+              ),
+              onTap: () => unawaited(_openGroupDetail(_groups[i])),
             ),
-            subtitle: const Text(AppStrings.groupsTapMembers),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => unawaited(_openGroupDetail(_groups[i])),
           ),
         ],
         const Divider(height: 16),

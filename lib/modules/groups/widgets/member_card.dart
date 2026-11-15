@@ -88,7 +88,10 @@ class MemberCard extends StatelessWidget {
                             style: Theme.of(context)
                                 .textTheme
                                 .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.deepBlue,
+                                ),
                           ),
                           if (isSelf)
                             TextSpan(
@@ -96,7 +99,7 @@ class MemberCard extends StatelessWidget {
                               style: Theme.of(context)
                                   .textTheme
                                   .bodySmall
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
+                                  ?.copyWith(color: AppColors.midBlue),
                             ),
                         ],
                       ),

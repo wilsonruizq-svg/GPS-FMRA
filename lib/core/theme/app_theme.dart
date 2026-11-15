@@ -12,13 +12,17 @@ abstract final class AppColors {
 
 abstract final class AppTheme {
   static ThemeData get light {
-    final scheme = ColorScheme.fromSeed(
+    final base = ColorScheme.fromSeed(
       seedColor: AppColors.deepBlue,
       primary: AppColors.deepBlue,
       secondary: AppColors.signalCyan,
       error: AppColors.accentRed,
       brightness: Brightness.light,
       surface: AppColors.surface,
+    );
+    final scheme = base.copyWith(
+      onSurface: AppColors.deepBlue,
+      onSurfaceVariant: AppColors.midBlue,
     );
 
     return ThemeData(
@@ -54,6 +58,16 @@ abstract final class AppTheme {
       listTileTheme: const ListTileThemeData(
         minVerticalPadding: 12,
         iconColor: AppColors.deepBlue,
+        textColor: AppColors.deepBlue,
+        titleTextStyle: TextStyle(
+          fontWeight: FontWeight.w600,
+          fontSize: 17,
+          color: AppColors.deepBlue,
+        ),
+        subtitleTextStyle: TextStyle(
+          fontSize: 14,
+          color: AppColors.midBlue,
+        ),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.deepBlue,
