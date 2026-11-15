@@ -176,17 +176,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         label: AppStrings.navMap,
                       ),
                       NavigationDestination(
-                        icon: ChatUnreadBadge(
+                        icon: NavGroupsUnreadIcon(
+                          icon: Icons.groups_outlined,
                           count: chatUnread,
-                          compact: true,
-                          child: const Icon(Icons.groups_outlined),
                         ),
-                        selectedIcon: ChatUnreadBadge(
+                        selectedIcon: NavGroupsUnreadIcon(
+                          icon: Icons.groups,
                           count: chatUnread,
-                          compact: true,
-                          child: const Icon(Icons.groups),
+                          selected: true,
                         ),
-                        label: AppStrings.navGroups,
+                        label: chatUnread > 0
+                            ? '${AppStrings.navGroups} ($chatUnread)'
+                            : AppStrings.navGroups,
                       ),
                       const NavigationDestination(
                         icon: Icon(Icons.settings_outlined),

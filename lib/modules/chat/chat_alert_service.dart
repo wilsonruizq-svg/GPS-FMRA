@@ -205,14 +205,20 @@ class ChatAlertService extends ChangeNotifier {
       final list = await _chat.listRecent(groupId: g.id, limit: 40);
       for (final m in list) {
         final id = m.id.trim();
-        if (id.isNotEmpty) _seenIds.add(id);
+        if (id.isNotEmpty) {
+          _seenIds.add(id);
+          _unreadCountedIds.add(id);
+        }
       }
     }
     try {
       final dms = await _dm.listMyRecent(limit: 40);
       for (final m in dms) {
         final id = m.id.trim();
-        if (id.isNotEmpty) _seenIds.add(id);
+        if (id.isNotEmpty) {
+          _seenIds.add(id);
+          _unreadCountedIds.add(id);
+        }
       }
     } catch (e) {
       debugPrint('ChatAlertService seed dm: $e');
@@ -262,7 +268,12 @@ class ChatAlertService extends ChangeNotifier {
     }
   }
 
-  void _bumpUnreadOnce(String messageId, {required String threadId, required bool dm}) {
+  void _bumpUnreadOnce(
+    String messageId, {
+    required String threadId,
+    required bool dm,
+    required String source,
+  }) {
     final mid = messageId.trim();
     if (mid.isEmpty || _unreadCountedIds.contains(mid)) return;
     _unreadCountedIds.add(mid);
@@ -271,7 +282,51 @@ class ChatAlertService extends ChangeNotifier {
     } else {
       ChatUnreadCounters.bump(_unreadByGroup, threadId);
     }
+    debugPrint(
+      'ChatAlertService: unread +1 ${dm ? "dm" : "group"}='
+      '${ChatAlertLogic.normId(threadId)} total=$totalUnread src=$source',
+    );
     notifyListeners();
+  }
+
+  void _trackUnreadGroup(GroupMessage msg, {required String source}) {
+    final id = msg.id.trim();
+    if (id.isEmpty || _unreadCountedIds.contains(id)) {
+      return;
+    }
+    if (!ChatAlertLogic.isNewUnreadGroupMessage(
+      messageId: id,
+      senderId: msg.senderId,
+      myUid: _myUid,
+      groupId: msg.groupId,
+      createdAt: msg.createdAt,
+      serviceStartedAt: _startedAt,
+      mutedGroupId: mutedGroupId,
+      muteGroupDepth: _muteGroupDepth,
+    )) {
+      return;
+    }
+    _bumpUnreadOnce(id, threadId: msg.groupId, dm: false, source: source);
+  }
+
+  void _trackUnreadDm(DirectMessage msg, {required String source}) {
+    final id = msg.id.trim();
+    if (id.isEmpty || _unreadCountedIds.contains(id)) {
+      return;
+    }
+    if (!ChatAlertLogic.isNewUnreadDmMessage(
+      messageId: id,
+      senderId: msg.senderId,
+      recipientId: msg.recipientId,
+      myUid: _myUid,
+      createdAt: msg.createdAt,
+      serviceStartedAt: _startedAt,
+      mutedPeerId: mutedPeerId,
+      mutePeerDepth: _mutePeerDepth,
+    )) {
+      return;
+    }
+    _bumpUnreadOnce(id, threadId: msg.senderId, dm: true, source: source);
   }
 
   Future<void> _maybeAlertGroup(
@@ -279,6 +334,9 @@ class ChatAlertService extends ChangeNotifier {
     required String source,
   }) async {
     final id = msg.id.trim();
+    // Badge in-app: siempre antes de notif/snackbar (no depende de delivered).
+    _trackUnreadGroup(msg, source: source);
+
     if (ChatAlertLogic.ignoreGroupMessage(
       messageId: id,
       senderId: msg.senderId,
@@ -290,11 +348,22 @@ class ChatAlertService extends ChangeNotifier {
       mutedGroupId: mutedGroupId,
       muteGroupDepth: _muteGroupDepth,
     )) {
-      if (id.isNotEmpty) _recordSeen(id);
+      if (id.isNotEmpty &&
+          !_unreadCountedIds.contains(id) &&
+          !ChatAlertLogic.isNewUnreadGroupMessage(
+            messageId: id,
+            senderId: msg.senderId,
+            myUid: _myUid,
+            groupId: msg.groupId,
+            createdAt: msg.createdAt,
+            serviceStartedAt: _startedAt,
+            mutedGroupId: mutedGroupId,
+            muteGroupDepth: _muteGroupDepth,
+          )) {
+        _recordSeen(id);
+      }
       return;
     }
-
-    _bumpUnreadOnce(id, threadId: msg.groupId, dm: false);
 
     var enriched = msg;
     try {
@@ -308,7 +377,11 @@ class ChatAlertService extends ChangeNotifier {
       payload: enriched.groupId,
       source: source,
     );
-    if (delivered) _recordSeen(id);
+    if (delivered) {
+      _recordSeen(id);
+    } else if (id.isNotEmpty) {
+      debugPrint('ChatAlertService: alert undelivered msg=$id (unread=$totalUnread)');
+    }
   }
 
   Future<void> _maybeAlertDm(
@@ -316,6 +389,8 @@ class ChatAlertService extends ChangeNotifier {
     required String source,
   }) async {
     final id = msg.id.trim();
+    _trackUnreadDm(msg, source: source);
+
     if (ChatAlertLogic.ignoreDmMessage(
       messageId: id,
       senderId: msg.senderId,
@@ -326,12 +401,23 @@ class ChatAlertService extends ChangeNotifier {
       alreadySeen: _seenIds.contains(id),
       mutedPeerId: mutedPeerId,
       mutePeerDepth: _mutePeerDepth,
-      )) {
-      if (id.isNotEmpty) _recordSeen(id);
+    )) {
+      if (id.isNotEmpty &&
+          !_unreadCountedIds.contains(id) &&
+          !ChatAlertLogic.isNewUnreadDmMessage(
+            messageId: id,
+            senderId: msg.senderId,
+            recipientId: msg.recipientId,
+            myUid: _myUid,
+            createdAt: msg.createdAt,
+            serviceStartedAt: _startedAt,
+            mutedPeerId: mutedPeerId,
+            mutePeerDepth: _mutePeerDepth,
+          )) {
+        _recordSeen(id);
+      }
       return;
     }
-
-    _bumpUnreadOnce(id, threadId: msg.senderId, dm: true);
 
     var enriched = msg;
     try {
@@ -345,7 +431,9 @@ class ChatAlertService extends ChangeNotifier {
       payload: ChatAlertLogic.normId(msg.senderId),
       source: source,
     );
-    if (delivered) _recordSeen(id);
+    if (delivered) {
+      _recordSeen(id);
+    }
   }
 
   Future<bool> _showAlert({

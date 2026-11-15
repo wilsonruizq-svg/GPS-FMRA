@@ -57,6 +57,24 @@ void main() {
     });
   });
 
+  group('ChatAlertLogic.isNewUnreadGroupMessage', () {
+    test('cuenta mensaje ajeno nuevo', () {
+      expect(
+        ChatAlertLogic.isNewUnreadGroupMessage(
+          messageId: 'm2',
+          senderId: 'user-b',
+          myUid: 'user-a',
+          groupId: 'g1',
+          createdAt: started,
+          serviceStartedAt: started,
+          mutedGroupId: null,
+          muteGroupDepth: 0,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('ChatAlertLogic.ignoreDmMessage', () {
     test('solo destinatario recibe alerta', () {
       expect(

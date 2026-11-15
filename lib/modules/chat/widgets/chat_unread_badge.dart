@@ -2,41 +2,66 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 
-/// Burbuja numérica alineada con AppColors (cyan en nav, rojo si hay muchos).
-class ChatUnreadBadge extends StatelessWidget {
-  const ChatUnreadBadge({
+/// Icono de nav con overlay numérico (NavigationBar recorta [Badge] Material).
+class NavGroupsUnreadIcon extends StatelessWidget {
+  const NavGroupsUnreadIcon({
     super.key,
+    required this.icon,
     required this.count,
-    required this.child,
-    this.compact = false,
+    this.selected = false,
   });
 
+  final IconData icon;
   final int count;
-  final Widget child;
-  final bool compact;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    if (count <= 0) return child;
+    final iconWidget = Icon(
+      icon,
+      size: 24,
+      color: selected
+          ? AppColors.deepBlue
+          : AppColors.onDeep.withValues(alpha: 0.82),
+    );
+    if (count <= 0) return iconWidget;
     final label = count > 99 ? '99+' : '$count';
-    final urgent = count >= 10;
-    return Badge(
-      isLabelVisible: true,
-      label: Text(
-        label,
-        style: TextStyle(
-          fontSize: compact ? 10 : 11,
-          fontWeight: FontWeight.w700,
-        ),
+    return SizedBox(
+      width: 30,
+      height: 26,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          iconWidget,
+          Positioned(
+            top: -8,
+            right: -12,
+            child: Material(
+              elevation: 3,
+              shadowColor: Colors.black45,
+              color: AppColors.accentRed,
+              borderRadius: BorderRadius.circular(11),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minWidth: 18),
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      height: 1.1,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      backgroundColor:
-          urgent ? AppColors.accentRed : AppColors.signalCyan,
-      textColor: urgent ? Colors.white : AppColors.deepBlue,
-      padding: compact
-          ? const EdgeInsets.symmetric(horizontal: 5)
-          : const EdgeInsets.symmetric(horizontal: 6),
-      offset: compact ? const Offset(6, -4) : const Offset(8, -4),
-      child: child,
     );
   }
 }
@@ -51,22 +76,28 @@ class ChatUnreadCountPill extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count <= 0) return const SizedBox.shrink();
     final label = count > 99 ? '99+' : '$count';
-    final urgent = count >= 10;
     return Container(
       margin: const EdgeInsets.only(right: 8),
+      constraints: const BoxConstraints(minWidth: 26),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: urgent
-            ? AppColors.accentRed
-            : AppColors.signalCyan.withValues(alpha: 0.95),
+        color: AppColors.accentRed,
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.accentRed.withValues(alpha: 0.35),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Text(
         label,
-        style: TextStyle(
+        textAlign: TextAlign.center,
+        style: const TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: urgent ? Colors.white : AppColors.deepBlue,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
         ),
       ),
     );
