@@ -24,19 +24,18 @@ abstract final class AppStrings {
   static const loginForgotBack = 'Volver al inicio de sesión';
   static const loginForgotTitle = 'Recuperar contraseña';
   static const loginForgotSubtitle =
-      'Escribe el correo electrónico de tu cuenta (Gmail). '
+      'Escribe el correo electrónico de tu cuenta. '
       'Te enviaremos un enlace por correo; ábrelo en este teléfono '
       'para elegir una clave nueva.';
   static const loginForgotEmailHelper =
-      'Debe ser Gmail (@gmail.com) para que llegue el correo de recuperación.';
+      'Usa el mismo correo con el que te registraste.';
   static const loginForgotSend = 'Enviar enlace al correo';
   static const loginForgotSent =
       'Revisa tu correo (bandeja de entrada y spam). '
-      'Si existe una cuenta con ese Gmail, enviamos el enlace de recuperación. '
+      'Si existe una cuenta con ese correo, enviamos el enlace de recuperación. '
       'Ábrelo en este teléfono.';
-  static const loginRegisterGmailNote =
-      'El registro solo admite Gmail (@gmail.com o @googlemail.com) para que '
-      'la recuperación de clave funcione con Google.';
+  static const loginRegisterEmailNote =
+      'Usa un correo electrónico válido; ahí llegará la recuperación de clave.';
   static const loginResetTitle = 'Nueva contraseña';
   static const loginResetSubtitle =
       'Enlace de recuperación válido. Elige una clave nueva (mínimo 6 caracteres).';

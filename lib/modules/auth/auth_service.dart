@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
-import 'gmail_auth_email.dart';
+import 'auth_email.dart';
 
 /// Deep link que Wilson debe añadir en Auth → URL Configuration.
 const kPasswordRecoveryRedirectTo = 'gpsfmra://auth/recovery';
@@ -25,7 +25,7 @@ class AuthService {
     required String password,
   }) {
     return _sb.auth.signInWithPassword(
-      email: GmailAuthEmail.normalize(email),
+      email: AuthEmail.normalize(email),
       password: password,
     );
   }
@@ -36,7 +36,7 @@ class AuthService {
     String? displayName,
   }) {
     return _sb.auth.signUp(
-      email: GmailAuthEmail.normalize(email),
+      email: AuthEmail.normalize(email),
       password: password,
       data: {
         if (displayName != null && displayName.trim().isNotEmpty)
@@ -49,7 +49,7 @@ class AuthService {
 
   Future<void> requestPasswordReset({required String email}) {
     return _sb.auth.resetPasswordForEmail(
-      GmailAuthEmail.normalize(email),
+      AuthEmail.normalize(email),
       redirectTo: kPasswordRecoveryRedirectTo,
     );
   }

@@ -8,7 +8,7 @@ import '../../location/screens/consent_screen.dart';
 import '../../profiles/profile_service.dart';
 import '../auth_error_message.dart';
 import '../auth_service.dart';
-import '../gmail_auth_email.dart';
+import '../auth_email.dart';
 
 /// Login / registro email-password contra Supabase (si está configurado).
 class LoginShellScreen extends StatefulWidget {
@@ -71,7 +71,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
 
   Future<void> _submit() async {
     final rawEmail = _emailController.text;
-    final email = GmailAuthEmail.normalize(rawEmail);
+    final email = AuthEmail.normalize(rawEmail);
     final password = _passwordController.text;
     final displayName = _nameController.text.trim();
 
@@ -88,10 +88,10 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
     }
 
     if (_forgotMode) {
-      final gmailError = GmailAuthEmail.validateForNewAccount(rawEmail);
-      if (gmailError != null) {
+      final emailError = AuthEmail.validateForNewAccount(rawEmail);
+      if (emailError != null) {
         setState(() {
-          _error = gmailError;
+          _error = emailError;
           _info = null;
         });
         return;
@@ -101,10 +101,10 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
     }
 
     if (_registerMode) {
-      final gmailError = GmailAuthEmail.validateForNewAccount(rawEmail);
-      if (gmailError != null) {
+      final emailError = AuthEmail.validateForNewAccount(rawEmail);
+      if (emailError != null) {
         setState(() {
-          _error = gmailError;
+          _error = emailError;
           _info = null;
         });
         return;
@@ -263,7 +263,7 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
   String get _subtitle {
     if (_resetPasswordMode) return AppStrings.loginResetSubtitle;
     if (_forgotMode) return AppStrings.loginForgotSubtitle;
-    if (_registerMode) return AppStrings.loginRegisterGmailNote;
+    if (_registerMode) return AppStrings.loginRegisterEmailNote;
     return AppStrings.loginSubtitle;
   }
 
