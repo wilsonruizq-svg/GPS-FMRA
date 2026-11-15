@@ -49,7 +49,9 @@ class _MapShellScreenState extends State<MapShellScreen>
     zoom: 11,
   );
 
-  static const _myLocationZoom = 15.0;
+  /// GF-46: nivel calle al centrar pines (rural: densidad de etiquetas depende del tileset).
+  static const _myLocationZoom = 16.5;
+  static const _memberFocusZoom = 17.0;
   static const _placeFocusZoom = 16.5;
 
   /// Heartbeat de publicación (documentado): cada 8 s como máximo de espera
@@ -713,7 +715,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       await c.animateCamera(
         CameraUpdate.newLatLngZoom(
           LatLng(loc.lat, loc.lon),
-          _myLocationZoom,
+          _memberFocusZoom,
         ),
       );
       return;
