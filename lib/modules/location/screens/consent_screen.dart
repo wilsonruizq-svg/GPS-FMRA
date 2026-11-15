@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../../app_shell.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../groups/groups_service.dart';
+import '../../license/license_gate.dart';
 import '../consent_service.dart';
 
 /// Explica el consentimiento de ubicación y permite aceptar o pausar (sin tracking silencioso).
@@ -111,10 +111,12 @@ class _ConsentScreenState extends State<ConsentScreen> {
     }
   }
 
-  void _finish() {
+  Future<void> _finish() async {
     if (widget.isOnboarding) {
+      final home = await resolvePostAuthHome();
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const AppShell()),
+        MaterialPageRoute<void>(builder: (_) => home),
       );
     } else {
       Navigator.of(context).maybePop();

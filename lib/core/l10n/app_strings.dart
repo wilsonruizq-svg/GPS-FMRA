@@ -83,6 +83,21 @@ abstract final class AppStrings {
       'Sign In / Providers → Email → desactiva “Confirm email” → Save '
       '(así el registro no manda email y entra al instante).';
 
+  // GF-72 — licencia demo / bloqueo
+  static const licenseExpiredTitle = 'Demo vencida';
+  static const licenseExpiredBody =
+      'Tu período de prueba de 2 días terminó. '
+      'Contacta al administrador para activar tu licencia.';
+  static const licenseEmailTitle = 'Confirma tu correo';
+  static const licenseEmailBody =
+      'Debes validar tu correo electrónico antes de usar GPS-FMRA. '
+      'Revisa tu bandeja (y spam) y abre el enlace de confirmación.';
+  static const licenseUnavailableTitle = 'Licencia no disponible';
+  static const licenseUnavailableBody =
+      'No se pudo verificar la licencia. '
+      'Si el problema continúa, contacta al administrador.';
+  static const licenseSignOut = 'Cerrar sesión';
+
   static const mapTitle = 'Mapa';
   static const mapExpandTooltip = 'Ampliar mapa';
   static const mapCollapseTooltip = 'Mostrar integrantes';

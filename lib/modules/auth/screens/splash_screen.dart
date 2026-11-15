@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../app_shell.dart';
+import '../../license/license_gate.dart';
 import '../../profiles/profile_service.dart';
 import '../../push/push_service.dart';
 import '../biometric_unlock_service.dart';
@@ -53,7 +53,7 @@ class _SplashScreenState extends State<SplashScreen> {
     } else if (await BiometricUnlockService().shouldGateWithBiometrics()) {
       next = BiometricUnlockScreen(supabaseReady: widget.supabaseReady);
     } else {
-      next = const AppShell();
+      next = await resolvePostAuthHome(supabaseReady: widget.supabaseReady);
     }
 
     if (!mounted) return;

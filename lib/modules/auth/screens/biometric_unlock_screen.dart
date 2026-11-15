@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../app_shell.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../license/license_gate.dart';
 import '../biometric_unlock_service.dart';
 import 'login_shell_screen.dart';
 
@@ -41,8 +41,11 @@ class _BiometricUnlockScreenState extends State<BiometricUnlockScreen> {
     );
     if (!mounted) return;
     if (ok) {
+      final home =
+          await resolvePostAuthHome(supabaseReady: widget.supabaseReady);
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(builder: (_) => const AppShell()),
+        MaterialPageRoute<void>(builder: (_) => home),
       );
       return;
     }

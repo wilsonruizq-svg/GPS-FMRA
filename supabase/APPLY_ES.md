@@ -69,10 +69,16 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       (**APPLY para figuritas mujer/hombre:** columna `profiles.gender`
       (`female`|`male`). Éxito: `profiles_gender_ok = true`. Sin esto la app
       estima por el nombre.)
+   17. `supabase/migrations/20261115170000_license_demo_2d.sql`
+      (**APPLY GF-72 licencia demo 2 días:** tabla `license_entitlements` +
+      RPC `ensure_my_license_access`. Sin esto la app bloquea el acceso
+      (fail-closed). Éxito: `license_demo_2d_ok = true`.
+      Admin permanente: `wilsonruizq@gmail.com`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,
-   `device_push_tokens`, `sos_acks`, `group_messages`, `direct_messages`.
+   `device_push_tokens`, `sos_acks`, `group_messages`, `direct_messages`,
+   `license_entitlements`.
 5. En **Storage → Buckets** confirma el bucket **`avatars`** (público).
 6. En **Database → Functions** confirma `accept_invitation(text)`,
    `set_group_exit_pin`, `clear_group_exit_pin`, `group_has_exit_pin`,

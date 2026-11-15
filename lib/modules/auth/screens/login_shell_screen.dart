@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../app_shell.dart';
 import '../../../core/l10n/app_strings.dart';
+import '../../license/license_gate.dart';
 import '../../profiles/profile_service.dart';
 import '../../push/push_service.dart';
 import '../auth_error_message.dart';
@@ -260,10 +260,12 @@ class _LoginShellScreenState extends State<LoginShellScreen> {
     }
   }
 
-  void _goApp() {
-    // Sin wizard de consentimiento ni opciones GPS visibles (GF-38).
+  Future<void> _goApp() async {
+    // GF-72: AppShell solo con licencia; si no → pantalla bloqueo (sin mapa/chat).
+    final home = await resolvePostAuthHome(supabaseReady: widget.supabaseReady);
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const AppShell()),
+      MaterialPageRoute<void>(builder: (_) => home),
     );
   }
 
