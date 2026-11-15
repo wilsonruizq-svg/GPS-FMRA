@@ -62,7 +62,6 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   static const _pollInterval = Duration(seconds: 15);
   static const _sosPollInterval = Duration(seconds: 5);
-  static const _consentCacheTtl = Duration(seconds: 45);
 
   final _groups = GroupsService();
   final _consent = ConsentService();
@@ -239,7 +238,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   void _onShareSessionSelfFix() {
     final loc = LocationShareSession.instance.selfFix.value;
     if (loc == null || !mounted) return;
-  if (loc.userId != _myUid) return;
+    if (loc.userId != _myUid) return;
     _lastAcceptedFix = Position(
       longitude: loc.lon,
       latitude: loc.lat,
@@ -251,6 +250,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       headingAccuracy: 0,
       speed: 0,
       speedAccuracy: 0,
+      isMocked: false,
     );
     setState(() {
       _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
@@ -1056,6 +1056,7 @@ class _MapShellScreenState extends State<MapShellScreen>
         showFeedback: fromUser,
       );
       if (!granted) return;
+      _syncShareSessionGroup();
 
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -1082,53 +1083,13 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
-  // --- Publicar / refrescar / Realtime ------------------------------------
+  // --- Refrescar pares / Realtime (publicación: LocationShareSession) ----
 
-  LocationSettings _trackingSettings() {
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      // GF-38: FGS discreto (notificación obligatoria del OS; texto neutro).
-      // No bypass: si el usuario apaga GPS en Android, no hay fix.
-      return AndroidSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 8,
-        intervalDuration: const Duration(seconds: 5),
-        maxUpdateAge: const Duration(seconds: 20),
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: LocationKeepAlive.fgsTitle,
-          notificationText: LocationKeepAlive.fgsBody,
-          notificationChannelName: LocationKeepAlive.fgsChannel,
-          notificationIcon: AndroidResource(
-            name: 'ic_launcher',
-            defType: 'mipmap',
-          ),
-          enableWakeLock: true,
-          setOngoing: true,
-        ),
-      );
-    }
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return AppleSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 8,
-        activityType: ActivityType.other,
-        pauseLocationUpdatesAutomatically: true,
-      );
-    }
-    return const LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 8,
-    );
-  }
-
-  void _stopSharingLoop() {
-    _publishTimer?.cancel();
-    _publishTimer = null;
+  void _stopMapRefreshLoops() {
     _pollTimer?.cancel();
     _pollTimer = null;
     _sosPollTimer?.cancel();
     _sosPollTimer = null;
-    unawaited(_positionSub?.cancel());
-    _positionSub = null;
   }
 
   void _unsubscribeRealtime() {
@@ -1141,170 +1102,6 @@ class _MapShellScreenState extends State<MapShellScreen>
     _sosChannel = null;
     if (sos != null) {
       unawaited(_sos.unsubscribe(sos));
-    }
-  }
-
-  void _restartSharingLoop() {
-    _publishTimer?.cancel();
-    _publishTimer = null;
-    unawaited(_positionSub?.cancel());
-    _positionSub = null;
-    _lastAcceptedFix = null;
-    _lastPublishedFix = null;
-    _lastPublishedAt = null;
-    _cachedCanPublish = null;
-    _cachedCanPublishAt = null;
-
-    final group = _selected;
-    if (group == null) return;
-
-    // Sin wizard: asegura consent RLS en background y publica si Android OK.
-    unawaited(
-      _consent
-          .acceptShareWithGroup(group.id)
-          .then((_) {
-            if (!mounted) return;
-            _myConsent = LocationConsent(
-              id: _myConsent?.id ?? 'local',
-              sharerId: _myUid,
-              scope: 'group',
-              status: 'active',
-              groupId: group.id,
-            );
-          })
-          .catchError((_) {}),
-    );
-
-    unawaited(
-      _ensureOsPermission(requestIfNeeded: false, showFeedback: false).then((
-        granted,
-      ) {
-        if (!granted || !mounted) return;
-        unawaited(LocationKeepAlive.startNativeKeepAlive());
-        unawaited(LocationKeepAlive.maybeRequestBatteryExemptionOnce());
-        _positionSub = Geolocator.getPositionStream(
-          locationSettings: _trackingSettings(),
-        ).listen(_onPositionFix, onError: (_) {}, cancelOnError: false);
-      }),
-    );
-
-    unawaited(_publishFromFix(force: true));
-    _publishTimer = Timer.periodic(_publishHeartbeat, (_) {
-      unawaited(_publishFromFix(force: true));
-    });
-  }
-
-  void _onPositionFix(Position pos) {
-    if (!_fixFilter.accept(pos, previous: _lastAcceptedFix)) return;
-    _lastAcceptedFix = pos;
-    _applySelfLocal(pos);
-    unawaited(_publishFromFix(force: false));
-  }
-
-  void _applySelfLocal(Position pos) {
-    if (!mounted || _myUid.isEmpty) return;
-    final self = MemberLocation(
-      userId: _myUid,
-      lat: pos.latitude,
-      lon: pos.longitude,
-      recordedAt: DateTime.now().toUtc(),
-      accuracyM: pos.accuracy.isFinite ? pos.accuracy : null,
-    );
-    setState(() {
-      _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-        ..[self.userId] = self;
-    });
-    unawaited(_syncMarkers());
-  }
-
-  Future<bool> _canPublishCached(String groupId) async {
-    final now = DateTime.now().toUtc();
-    final cachedAt = _cachedCanPublishAt;
-    if (_cachedCanPublish != null &&
-        cachedAt != null &&
-        now.difference(cachedAt) < _consentCacheTtl) {
-      return _cachedCanPublish!;
-    }
-    try {
-      final allowed = await _locationShare
-          .canPublishForGroup(groupId)
-          .timeout(const Duration(seconds: 8), onTimeout: () => false);
-      _cachedCanPublish = allowed;
-      _cachedCanPublishAt = now;
-      return allowed;
-    } catch (_) {
-      return _cachedCanPublish ?? false;
-    }
-  }
-
-  Future<void> _publishFromFix({required bool force}) async {
-    if (_publishing) return;
-    final group = _selected;
-    if (group == null) return;
-
-    final granted = await _ensureOsPermission(
-      requestIfNeeded: false,
-      showFeedback: false,
-    );
-    if (!granted) return;
-
-    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-
-    Position? pos = _lastAcceptedFix;
-    final acceptedAge = pos == null
-        ? null
-        : DateTime.now().toUtc().difference(
-            pos.timestamp.isUtc ? pos.timestamp : pos.timestamp.toUtc(),
-          );
-    final needsFresh =
-        pos == null ||
-        (force &&
-            (acceptedAge == null || acceptedAge > const Duration(seconds: 15)));
-
-    if (needsFresh) {
-      try {
-        final fresh = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(
-            accuracy: LocationAccuracy.high,
-            timeLimit: Duration(seconds: 8),
-          ),
-        );
-        if (_fixFilter.accept(fresh, previous: _lastAcceptedFix)) {
-          pos = fresh;
-          _lastAcceptedFix = fresh;
-          _applySelfLocal(fresh);
-        }
-      } catch (_) {
-        // Usa lastAccepted si existe.
-      }
-    }
-
-    if (pos == null) return;
-    if (!_fixFilter.shouldPublish(
-      pos,
-      lastPublished: _lastPublishedFix,
-      lastPublishedAt: _lastPublishedAt,
-    )) {
-      return;
-    }
-
-    // Consentimiento con caché + timeout: no bloquear el candado _publishing.
-    final allowed = await _canPublishCached(group.id);
-    if (!allowed) return;
-
-    _publishing = true;
-    try {
-      await _locationShare
-          .publishPosition(pos)
-          .timeout(const Duration(seconds: 10));
-      _lastPublishedFix = pos;
-      _lastPublishedAt = DateTime.now().toUtc();
-      _applySelfLocal(pos);
-    } catch (_) {
-      // Silencioso: el siguiente heartbeat / stream reintenta.
-    } finally {
-      _publishing = false;
     }
   }
 
