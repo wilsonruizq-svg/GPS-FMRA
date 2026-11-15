@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../chat/widgets/chat_unread_badge.dart';
 
 /// Fila compacta de integrante: foto, nombre, estado; figurita GPS + DM.
 ///
@@ -23,32 +24,37 @@ class MemberCard extends StatelessWidget {
     this.onOpenExternalMap,
     this.onFigurineTap,
     this.trailingExtra,
+    this.dmUnreadCount = 0,
   });
 
   final String name;
   final String shareStatusLabel;
   final String? photoUrl;
   final bool isSelf;
+
   /// Color del pin GPS en el mapa; si null, no se muestra figurita.
   final Color? mapPinColor;
   final bool female;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
   final VoidCallback? onMessage;
+
   /// Icono discreto (p. ej. Earth) cuando hay lat/lng en vivo.
   final VoidCallback? onOpenExternalMap;
+
   /// Tap en la figurita de color (misma acción que el muñeco del mapa).
   final VoidCallback? onFigurineTap;
+
   /// P. ej. promover/quitar admin (detalle de grupo).
   final Widget? trailingExtra;
+  final int dmUnreadCount;
 
   bool get _hasPhoto => photoUrl != null && photoUrl!.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final initial =
-        name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
+    final initial = name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
     return Material(
       color: Colors.white,
       child: InkWell(
@@ -61,8 +67,9 @@ class MemberCard extends StatelessWidget {
               CircleAvatar(
                 radius: 22,
                 backgroundColor: AppColors.midBlue.withValues(alpha: 0.15),
-                foregroundImage:
-                    _hasPhoto ? NetworkImage(photoUrl!.trim()) : null,
+                foregroundImage: _hasPhoto
+                    ? NetworkImage(photoUrl!.trim())
+                    : null,
                 onForegroundImageError: _hasPhoto
                     ? (Object error, StackTrace? stackTrace) {}
                     : null,
@@ -85,9 +92,7 @@ class MemberCard extends StatelessWidget {
                         children: [
                           TextSpan(
                             text: name,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
+                            style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.deepBlue,
@@ -96,9 +101,7 @@ class MemberCard extends StatelessWidget {
                           if (isSelf)
                             TextSpan(
                               text: ' ${AppStrings.memberYouSuffix}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
+                              style: Theme.of(context).textTheme.bodySmall
                                   ?.copyWith(color: AppColors.midBlue),
                             ),
                         ],
@@ -111,9 +114,8 @@ class MemberCard extends StatelessWidget {
                       shareStatusLabel,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.midBlue,
-                          ),
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: AppColors.midBlue),
                     ),
                   ],
                 ),
@@ -145,8 +147,18 @@ class MemberCard extends StatelessWidget {
                 IconButton(
                   tooltip: AppStrings.dmAction,
                   onPressed: onMessage,
-                  icon: const Icon(Icons.chat_bubble_outline),
-                  color: AppColors.deepBlue,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: 40,
+                    minHeight: 40,
+                  ),
+                  icon: ChatIconUnreadBadge(
+                    count: dmUnreadCount,
+                    child: const Icon(
+                      Icons.chat_bubble_outline,
+                      color: AppColors.deepBlue,
+                    ),
+                  ),
                 )
               else if (trailingExtra == null && onOpenExternalMap == null)
                 Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),

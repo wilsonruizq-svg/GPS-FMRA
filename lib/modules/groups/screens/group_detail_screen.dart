@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../chat/chat_alert_service.dart';
 import '../../chat/screens/direct_chat_screen.dart';
 import '../../chat/screens/group_chat_screen.dart';
 import '../../location/consent_service.dart';
@@ -57,14 +58,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       final members = await _groups.listMembers(_group.id);
       final consents = await _consent.listOwnGroupConsents();
       final mine = consents.cast<LocationConsent?>().firstWhere(
-            (c) => c?.groupId == _group.id,
-            orElse: () => null,
-          );
+        (c) => c?.groupId == _group.id,
+        orElse: () => null,
+      );
       final uid = Supabase.instance.client.auth.currentUser?.id;
       final me = members.cast<GroupMember?>().firstWhere(
-            (m) => m?.userId == uid,
-            orElse: () => null,
-          );
+        (m) => m?.userId == uid,
+        orElse: () => null,
+      );
       var pinSet = false;
       try {
         pinSet = await _exitPin.groupHasPin(_group.id);
@@ -104,8 +105,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     return '$roleBit${AppStrings.memberShareUnknown}';
   }
 
-  int get _adminCount =>
-      _members.where((m) => m.role == 'group_admin').length;
+  int get _adminCount => _members.where((m) => m.role == 'group_admin').length;
 
   Future<void> _promoteAdmin(GroupMember m) async {
     if (!_iAmAdmin) return;
@@ -122,10 +122,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       final msg = raw.contains('max 2')
           ? AppStrings.memberAdminMaxReached
           : (raw.contains('promote_group_admin') ||
-                  raw.contains('pgrst202') ||
-                  raw.contains('could not find'))
-              ? AppStrings.memberAdminNeedSql
-              : e.toString();
+                raw.contains('pgrst202') ||
+                raw.contains('could not find'))
+          ? AppStrings.memberAdminNeedSql
+          : e.toString();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
@@ -145,10 +145,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       final msg = raw.contains('last group admin')
           ? AppStrings.memberAdminLastBlocked
           : (raw.contains('demote_group_admin') ||
-                  raw.contains('pgrst202') ||
-                  raw.contains('could not find'))
-              ? AppStrings.memberAdminNeedSql
-              : e.toString();
+                raw.contains('pgrst202') ||
+                raw.contains('could not find'))
+          ? AppStrings.memberAdminNeedSql
+          : e.toString();
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
@@ -219,9 +219,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Future<void> _createInvite() async {
     if (!_iAmAdmin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.inviteAdminOnly)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.inviteAdminOnly)));
       return;
     }
     try {
@@ -243,9 +243,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Theme.of(ctx)
-                          .colorScheme
-                          .surfaceContainerHighest
+                      color: Theme.of(ctx).colorScheme.surfaceContainerHighest
                           .withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -261,9 +259,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   const SizedBox(height: 12),
                   Text(
                     AppStrings.inviteFamilySteps,
-                    style: Theme.of(ctx).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                    style: Theme.of(ctx).textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 8),
                   SelectableText(
@@ -307,9 +304,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -322,8 +318,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }
     final pin = await showExitPinComposeDialog(
       context: context,
-      purpose:
-          changing ? ExitPinPurpose.changePin : ExitPinPurpose.setPin,
+      purpose: changing ? ExitPinPurpose.changePin : ExitPinPurpose.setPin,
     );
     if (pin == null || !mounted) return;
     setState(() => _exitPinBusy = true);
@@ -334,15 +329,13 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         _exitPinSet = true;
         _exitPinBusy = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.exitPinSaved)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text(AppStrings.exitPinSaved)));
     } catch (e) {
       if (!mounted) return;
       setState(() => _exitPinBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -374,15 +367,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         _exitPinSet = false;
         _exitPinBusy = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.exitPinCleared)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.exitPinCleared)));
     } catch (e) {
       if (!mounted) return;
       setState(() => _exitPinBusy = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -393,9 +385,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Text(
           AppStrings.exitPinStatusOn,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       );
     }
@@ -417,18 +408,17 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               Text(
                 AppStrings.exitPinTitle,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.deepBlue,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.deepBlue,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 _exitPinSet
                     ? AppStrings.exitPinStatusOn
                     : AppStrings.exitPinStatusOff,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.midBlue,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AppColors.midBlue),
               ),
               const SizedBox(height: 12),
               if (_exitPinBusy)
@@ -444,9 +434,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   runSpacing: 8,
                   children: [
                     FilledButton.tonalIcon(
-                      onPressed: () => _setOrChangeExitPin(
-                        changing: _exitPinSet,
-                      ),
+                      onPressed: () =>
+                          _setOrChangeExitPin(changing: _exitPinSet),
                       icon: Icon(
                         _exitPinSet ? Icons.lock_reset : Icons.lock_outline,
                         size: 18,
@@ -474,9 +463,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Future<void> _renameGroup() async {
     if (!_iAmAdmin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.groupsAdminOnly)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.groupsAdminOnly)));
       return;
     }
     final controller = TextEditingController(text: _group.name);
@@ -517,23 +506,22 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         _group = updated;
         _mutating = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.groupsRenamed)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.groupsRenamed)));
     } catch (e) {
       if (!mounted) return;
       setState(() => _mutating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
   Future<void> _deleteGroup() async {
     if (!_iAmAdmin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.groupsAdminOnly)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.groupsAdminOnly)));
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -561,16 +549,15 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     try {
       await _groups.deleteGroup(_group.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.groupsDeleted)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text(AppStrings.groupsDeleted)));
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _mutating = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString())),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
 
@@ -582,9 +569,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Text(
           AppStrings.groupsInviteHowTo,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
       );
     }
@@ -606,9 +592,9 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               Text(
                 AppStrings.inviteLastHeading,
                 style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.deepBlue,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.deepBlue,
+                ),
               ),
               const SizedBox(height: 6),
               SelectableText(
@@ -622,9 +608,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               const SizedBox(height: 8),
               Text(
                 AppStrings.inviteFamilySteps,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.midBlue,
-                    ),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AppColors.midBlue),
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -700,93 +685,94 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
+                      _iAmAdmin
+                          ? AppStrings.groupsYouAreAdmin
+                          : AppStrings.groupsYouAreMember,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppColors.midBlue,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                        child: Text(
-                          _iAmAdmin
-                              ? AppStrings.groupsYouAreAdmin
-                              : AppStrings.groupsYouAreMember,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppColors.midBlue,
-                                    fontWeight: FontWeight.w500,
+                  _inviteBanner(context),
+                  _exitPinSection(context),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => LocationHistoryScreen(
+                                    initialGroup: _group,
                                   ),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.schedule),
+                            label: const Text(AppStrings.historyOpenAction),
+                          ),
                         ),
-                      ),
-                      _inviteBanner(context),
-                      _exitPinSection(context),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => LocationHistoryScreen(
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      SosEmergencyAudioHistoryScreen(
                                         initialGroup: _group,
                                       ),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.schedule),
-                                label: const Text(AppStrings.historyOpenAction),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) =>
-                                          SosEmergencyAudioHistoryScreen(
-                                        initialGroup: _group,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                icon: const Icon(Icons.hearing),
-                                label:
-                                    const Text(AppStrings.sosAudioHistoryAction),
-                              ),
-                            ),
-                          ],
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.hearing),
+                            label: const Text(AppStrings.sosAudioHistoryAction),
+                          ),
                         ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Text(
+                      AppStrings.membersHeading,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.deepBlue,
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                        child: Text(
-                          AppStrings.membersHeading,
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.deepBlue,
-                                  ),
-                        ),
-                      ),
-                      const Divider(height: 1),
-                      ..._members.map(
-                        (m) => Column(
-                          children: [
-                            MemberCard(
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  ..._members.map(
+                    (m) => Column(
+                      children: [
+                        ListenableBuilder(
+                          listenable: ChatAlertService.instance,
+                          builder: (context, _) {
+                            final dmUnread = ChatAlertService.instance
+                                .unreadCountForDmPeer(m.userId);
+                            return MemberCard(
+                              dmUnreadCount: dmUnread,
                               name: m.label,
                               photoUrl: m.photoUrl,
                               isSelf: m.userId == uid,
@@ -805,22 +791,24 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                                         ),
                                       );
                                     },
-                            ),
-                            const Divider(height: 1),
-                          ],
+                            );
+                          },
                         ),
-                      ),
-                      if (_members.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Text(
-                            AppStrings.membersEmpty,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                    ],
+                        const Divider(height: 1),
+                      ],
+                    ),
                   ),
-                ),
+                  if (_members.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(32),
+                      child: Text(
+                        AppStrings.membersEmpty,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 }

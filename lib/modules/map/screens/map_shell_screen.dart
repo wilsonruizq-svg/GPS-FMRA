@@ -16,8 +16,10 @@ import '../../../core/config/env.dart';
 import '../../../core/l10n/app_strings.dart';
 import '../../../core/supabase/supabase_bootstrap.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../chat/chat_alert_service.dart';
 import '../../chat/screens/direct_chat_screen.dart';
 import '../../chat/screens/group_chat_screen.dart';
+import '../../chat/widgets/chat_unread_badge.dart';
 import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
@@ -32,7 +34,9 @@ import '../../profiles/avatar_compress.dart';
 import '../../sos/sos_audio_access.dart';
 import '../../sos/sos_audio_recorder.dart';
 import '../../sos/sos_service.dart';
+
 import 'package:image_picker/image_picker.dart';
+
 import '../map_place_focus.dart';
 import '../person_marker_bitmaps.dart';
 
@@ -127,9 +131,12 @@ class _MapShellScreenState extends State<MapShellScreen>
   bool _sosSending = false;
   List<SosEvent> _activeSos = const [];
   SosAckProgress? _sosAckProgress;
+
   /// Receptores: ocultar tras Aceptar en este dispositivo (además del ack en servidor).
   static final Set<String> _sosDismissedLocally = <String>{};
-  static final Map<String, DateTime> _sosDismissedSenderAt = <String, DateTime>{};
+  static final Map<String, DateTime> _sosDismissedSenderAt =
+      <String, DateTime>{};
+
   /// Invalida refrescos in-flight para que un poll viejo no resuscite el banner.
   int _sosRefreshEpoch = 0;
 
@@ -306,13 +313,11 @@ class _MapShellScreenState extends State<MapShellScreen>
         members = await _groups.listMembers(selected.id);
         final ownConsents = await _consent.listOwnGroupConsents();
         mine = ownConsents.cast<LocationConsent?>().firstWhere(
-              (c) => c?.groupId == selected!.id,
-              orElse: () => null,
-            );
+          (c) => c?.groupId == selected!.id,
+          orElse: () => null,
+        );
         final groupConsents = await _consent.listGroupConsents(selected.id);
-        consentsBySharer = {
-          for (final c in groupConsents) c.sharerId: c,
-        };
+        consentsBySharer = {for (final c in groupConsents) c.sharerId: c};
         locations = await _fetchLocationsMap(members, groupId: selected.id);
       }
       if (!mounted) return;
@@ -350,15 +355,12 @@ class _MapShellScreenState extends State<MapShellScreen>
       final members = await _groups.listMembers(group.id);
       final ownConsents = await _consent.listOwnGroupConsents();
       final mine = ownConsents.cast<LocationConsent?>().firstWhere(
-            (c) => c?.groupId == group.id,
-            orElse: () => null,
-          );
+        (c) => c?.groupId == group.id,
+        orElse: () => null,
+      );
       final groupConsents = await _consent.listGroupConsents(group.id);
-      final consentsBySharer = {
-        for (final c in groupConsents) c.sharerId: c,
-      };
-      final locations =
-          await _fetchLocationsMap(members, groupId: group.id);
+      final consentsBySharer = {for (final c in groupConsents) c.sharerId: c};
+      final locations = await _fetchLocationsMap(members, groupId: group.id);
       if (!mounted) return;
       setState(() {
         _members = members;
@@ -485,12 +487,7 @@ class _MapShellScreenState extends State<MapShellScreen>
           final cLoc = desired[cand]!;
           for (final member in cluster) {
             final mLoc = desired[member]!;
-            if (_approxMeters(
-                  mLoc.lat,
-                  mLoc.lon,
-                  cLoc.lat,
-                  cLoc.lon,
-                ) <=
+            if (_approxMeters(mLoc.lat, mLoc.lon, cLoc.lat, cLoc.lon) <=
                 clusterM) {
               cluster.add(cand);
               assigned.add(cand);
@@ -533,8 +530,7 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   String _shareFor(GroupMember m) {
     final c = _consentsBySharer[m.userId];
-    final isSelf =
-        m.userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+    final isSelf = m.userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
     if (isSelf) {
       if (_myConsent?.isActive == true) return AppStrings.memberShareActive;
       if (_myConsent?.isPaused == true) return AppStrings.memberSharePaused;
@@ -554,8 +550,7 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   /// Figurita de color en lista: misma regla que pin (consentimiento activo).
   bool _isSharingForList(GroupMember m) {
-    final isSelf =
-        m.userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+    final isSelf = m.userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
     if (isSelf) return _myConsent?.isActive == true;
     return _consentsBySharer[m.userId]?.isActive == true;
   }
@@ -588,13 +583,11 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   String _displayNameForUserId(String userId) {
-    final member =
-        _members.where((m) => m.userId == userId).firstOrNull;
+    final member = _members.where((m) => m.userId == userId).firstOrNull;
     if (member != null && member.label.trim().isNotEmpty) {
       return member.label.trim();
     }
-    final isSelf =
-        userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+    final isSelf = userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
     return isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember;
   }
 
@@ -752,13 +745,13 @@ class _MapShellScreenState extends State<MapShellScreen>
         !_namedPlaces.any((p) => p.id == req.placeId)) {
       await _loadNamedPlaces();
     }
-    if (req.placeId != null &&
-        !_namedPlaces.any((p) => p.id == req.placeId)) {
+    if (req.placeId != null && !_namedPlaces.any((p) => p.id == req.placeId)) {
       _namedPlaces = [
         NamedPlace(
           id: req.placeId!,
           ownerId: '',
-          name: (req.name ?? (isHistoryFocus ? 'Historial' : 'Lugar'))
+          name:
+              (req.name ?? (isHistoryFocus ? 'Historial' : 'Lugar'))
                   .trim()
                   .isEmpty
               ? (isHistoryFocus ? 'Historial' : 'Lugar')
@@ -778,10 +771,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (controller == null || !mounted) return;
     try {
       await controller.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(req.lat, req.lon),
-          _placeFocusZoom,
-        ),
+        CameraUpdate.newLatLngZoom(LatLng(req.lat, req.lon), _placeFocusZoom),
       );
     } catch (e) {
       debugPrint('focusSavedPlace camera: $e');
@@ -804,7 +794,8 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (permission == LocationPermission.denied && requestIfNeeded) {
       permission = await Geolocator.requestPermission();
     }
-    final granted = permission == LocationPermission.whileInUse ||
+    final granted =
+        permission == LocationPermission.whileInUse ||
         permission == LocationPermission.always;
     if (mounted && granted != _osLocationGranted) {
       setState(() => _osLocationGranted = granted);
@@ -829,8 +820,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   /// Fix en vivo = pin visible en MapLibre (GF-47: Earth para cualquier miembro).
-  MemberLocation? _liveFixForMember(String userId) =>
-      _locationsByUser[userId];
+  MemberLocation? _liveFixForMember(String userId) => _locationsByUser[userId];
 
   void _openMemberHistory({required String userId}) {
     final target = userId.trim().toLowerCase();
@@ -841,19 +831,15 @@ class _MapShellScreenState extends State<MapShellScreen>
         !_iAmGroupAdmin()) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(AppStrings.historyOtherMemberAdminOnly),
-        ),
+        const SnackBar(content: Text(AppStrings.historyOtherMemberAdminOnly)),
       );
       return;
     }
     final g = _selected;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => LocationHistoryScreen(
-          initialGroup: g,
-          initialUserId: userId,
-        ),
+        builder: (_) =>
+            LocationHistoryScreen(initialGroup: g, initialUserId: userId),
       ),
     );
   }
@@ -951,8 +937,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       case 'earth':
         await _openMemberInGoogleEarth(lat: lat, lon: lon);
       case 'maps':
-        final ok =
-            await ExternalMapLinks.openGoogleMaps(lat: lat, lng: lon);
+        final ok = await ExternalMapLinks.openGoogleMaps(lat: lat, lng: lon);
         if (!mounted) return;
         if (!ok) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -962,8 +947,10 @@ class _MapShellScreenState extends State<MapShellScreen>
           );
         }
       case 'osm':
-        final okOsm =
-            await ExternalMapLinks.openOpenStreetMap(lat: lat, lng: lon);
+        final okOsm = await ExternalMapLinks.openOpenStreetMap(
+          lat: lat,
+          lng: lon,
+        );
         if (!mounted) return;
         if (!okOsm) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1005,10 +992,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     final loc = _locationsByUser[userId];
     if (loc != null) {
       await c.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(loc.lat, loc.lon),
-          _memberFocusZoom,
-        ),
+        CameraUpdate.newLatLngZoom(LatLng(loc.lat, loc.lon), _memberFocusZoom),
       );
       return;
     }
@@ -1091,8 +1075,10 @@ class _MapShellScreenState extends State<MapShellScreen>
           notificationTitle: LocationKeepAlive.fgsTitle,
           notificationText: LocationKeepAlive.fgsBody,
           notificationChannelName: LocationKeepAlive.fgsChannel,
-          notificationIcon:
-              AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+          notificationIcon: AndroidResource(
+            name: 'ic_launcher',
+            defType: 'mipmap',
+          ),
           enableWakeLock: true,
           setOngoing: true,
         ),
@@ -1151,30 +1137,34 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (group == null) return;
 
     // Sin wizard: asegura consent RLS en background y publica si Android OK.
-    unawaited(_consent.acceptShareWithGroup(group.id).then((_) {
-      if (!mounted) return;
-      _myConsent = LocationConsent(
-        id: _myConsent?.id ?? 'local',
-        sharerId: _myUid,
-        scope: 'group',
-        status: 'active',
-        groupId: group.id,
-      );
-    }).catchError((_) {}));
+    unawaited(
+      _consent
+          .acceptShareWithGroup(group.id)
+          .then((_) {
+            if (!mounted) return;
+            _myConsent = LocationConsent(
+              id: _myConsent?.id ?? 'local',
+              sharerId: _myUid,
+              scope: 'group',
+              status: 'active',
+              groupId: group.id,
+            );
+          })
+          .catchError((_) {}),
+    );
 
-    unawaited(_ensureOsPermission(requestIfNeeded: false, showFeedback: false)
-        .then((granted) {
-      if (!granted || !mounted) return;
-      unawaited(LocationKeepAlive.startNativeKeepAlive());
-      unawaited(LocationKeepAlive.maybeRequestBatteryExemptionOnce());
-      _positionSub = Geolocator.getPositionStream(
-        locationSettings: _trackingSettings(),
-      ).listen(
-        _onPositionFix,
-        onError: (_) {},
-        cancelOnError: false,
-      );
-    }));
+    unawaited(
+      _ensureOsPermission(requestIfNeeded: false, showFeedback: false).then((
+        granted,
+      ) {
+        if (!granted || !mounted) return;
+        unawaited(LocationKeepAlive.startNativeKeepAlive());
+        unawaited(LocationKeepAlive.maybeRequestBatteryExemptionOnce());
+        _positionSub = Geolocator.getPositionStream(
+          locationSettings: _trackingSettings(),
+        ).listen(_onPositionFix, onError: (_) {}, cancelOnError: false);
+      }),
+    );
 
     unawaited(_publishFromFix(force: true));
     _publishTimer = Timer.periodic(_publishHeartbeat, (_) {
@@ -1243,10 +1233,12 @@ class _MapShellScreenState extends State<MapShellScreen>
     final acceptedAge = pos == null
         ? null
         : DateTime.now().toUtc().difference(
-              pos.timestamp.isUtc ? pos.timestamp : pos.timestamp.toUtc(),
-            );
-    final needsFresh = pos == null ||
-        (force && (acceptedAge == null || acceptedAge > const Duration(seconds: 15)));
+            pos.timestamp.isUtc ? pos.timestamp : pos.timestamp.toUtc(),
+          );
+    final needsFresh =
+        pos == null ||
+        (force &&
+            (acceptedAge == null || acceptedAge > const Duration(seconds: 15)));
 
     if (needsFresh) {
       try {
@@ -1333,9 +1325,9 @@ class _MapShellScreenState extends State<MapShellScreen>
               return;
             }
             setState(() {
-              _locationsByUser =
-                  Map<String, MemberLocation>.from(_locationsByUser)
-                    ..[loc.userId] = loc;
+              _locationsByUser = Map<String, MemberLocation>.from(
+                _locationsByUser,
+              )..[loc.userId] = loc;
             });
             unawaited(_syncMarkers());
           },
@@ -1344,9 +1336,9 @@ class _MapShellScreenState extends State<MapShellScreen>
             // No borrar el pin propio local por un DELETE remoto obsoleto.
             if (userId == _myUid && _lastAcceptedFix != null) return;
             setState(() {
-              _locationsByUser =
-                  Map<String, MemberLocation>.from(_locationsByUser)
-                    ..remove(userId);
+              _locationsByUser = Map<String, MemberLocation>.from(
+                _locationsByUser,
+              )..remove(userId);
             });
             unawaited(_syncMarkers());
           },
@@ -1438,8 +1430,9 @@ class _MapShellScreenState extends State<MapShellScreen>
       final myAcked = await _sos.listMyAckedSosIds(named.map((e) => e.id));
       if (!mounted || epoch != _sosRefreshEpoch) return;
 
-      var visible =
-          named.where((e) => _shouldShowSosEvent(e, myAcked)).toList();
+      var visible = named
+          .where((e) => _shouldShowSosEvent(e, myAcked))
+          .toList();
 
       SosAckProgress? progress;
       final own = visible.where(_isOwnSos).toList();
@@ -1453,14 +1446,14 @@ class _MapShellScreenState extends State<MapShellScreen>
             final again = await _sos.listActiveForGroup(group.id);
             if (!mounted || epoch != _sosRefreshEpoch) return;
             final namedAgain = _withMemberNames(again);
-            final acked2 =
-                await _sos.listMyAckedSosIds(namedAgain.map((e) => e.id));
+            final acked2 = await _sos.listMyAckedSosIds(
+              namedAgain.map((e) => e.id),
+            );
             if (!mounted || epoch != _sosRefreshEpoch) return;
             visible = namedAgain
                 .where((e) => _shouldShowSosEvent(e, acked2))
                 .toList();
-            progress =
-                visible.any(_isOwnSos) ? progress : null;
+            progress = visible.any(_isOwnSos) ? progress : null;
           }
         } catch (_) {
           progress = null;
@@ -1512,9 +1505,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   Future<void> _onSosPressed() async {
     final group = _selected;
     if (group == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.sosNeedGroup)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text(AppStrings.sosNeedGroup)));
       return;
     }
     if (_sosSending) return;
@@ -1530,9 +1522,7 @@ class _MapShellScreenState extends State<MapShellScreen>
             child: const Text(AppStrings.sosCancelAction),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.accentRed,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.accentRed),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text(AppStrings.sosConfirmAction),
           ),
@@ -1552,7 +1542,8 @@ class _MapShellScreenState extends State<MapShellScreen>
           showFeedback: false,
         );
         if (granted && await Geolocator.isLocationServiceEnabled()) {
-          final pos = _lastAcceptedFix ??
+          final pos =
+              _lastAcceptedFix ??
               await Geolocator.getCurrentPosition(
                 locationSettings: const LocationSettings(
                   accuracy: LocationAccuracy.high,
@@ -1573,23 +1564,22 @@ class _MapShellScreenState extends State<MapShellScreen>
       unawaited(_sos.tryResolveIfAllAcked(event.id));
       // Banner inmediato en este teléfono (sin esperar poll/Realtime).
       setState(() {
-        _activeSos = [
-          event,
-          ..._activeSos.where((e) => e.id != event.id),
-        ];
+        _activeSos = [event, ..._activeSos.where((e) => e.id != event.id)];
         _sosAckProgress = null;
       });
       // GF-31: micrófono mientras el SOS propio está activo.
-      unawaited(_sosAudio.startForSos(event.id).then((ok) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ok ? AppStrings.sosMicRecording : AppStrings.sosMicDenied,
+      unawaited(
+        _sosAudio.startForSos(event.id).then((ok) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                ok ? AppStrings.sosMicRecording : AppStrings.sosMicDenied,
+              ),
             ),
-          ),
-        );
-      }));
+          );
+        }),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('${AppStrings.sosSent} ${AppStrings.sosPeerHint}'),
@@ -1641,15 +1631,13 @@ class _MapShellScreenState extends State<MapShellScreen>
     try {
       await _sos.cancel(event.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.sosCancelled)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text(AppStrings.sosCancelled)));
       await _refreshActiveSos();
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(AppStrings.sosSendError)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text(AppStrings.sosSendError)));
     }
   }
 
@@ -1668,7 +1656,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   double _accuracyRadiusPx(MemberLocation loc) {
     final meters = (loc.accuracyM ?? 35).clamp(12.0, 120.0);
     final zoom = _mapController?.cameraPosition?.zoom ?? _myLocationZoom;
-    final mPerPx = 156543.03392 *
+    final mPerPx =
+        156543.03392 *
         math.cos(loc.lat * math.pi / 180).clamp(0.2, 1.0) /
         math.pow(2, zoom);
     return (meters / mPerPx).clamp(10.0, 90.0);
@@ -1784,7 +1773,8 @@ class _MapShellScreenState extends State<MapShellScreen>
           female: female,
           colorHex: color,
         );
-        final label = nameById[userId] ??
+        final label =
+            nameById[userId] ??
             (isSelf ? AppStrings.mapMarkerYou : AppStrings.mapMarkerMember);
         final accRadius = _accuracyRadiusPx(loc);
 
@@ -2161,18 +2151,17 @@ class _MapShellScreenState extends State<MapShellScreen>
                     ? label
                     : AppStrings.mapPinActionSheetTitle,
                 style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.deepBlue,
-                    ),
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.deepBlue,
+                ),
               ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
                 '${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}',
-                style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                      color: AppColors.midBlue,
-                    ),
+                style: Theme.of(ctx).textTheme.bodySmall
+                    ?.copyWith(color: AppColors.midBlue),
               ),
             ),
             ListTile(
@@ -2240,7 +2229,10 @@ class _MapShellScreenState extends State<MapShellScreen>
     final picker = ImagePicker();
     final groupIdForCats = _selected?.id;
 
-    Future<void> pickPhoto(ImageSource source, void Function(void Function()) setLocal) async {
+    Future<void> pickPhoto(
+      ImageSource source,
+      void Function(void Function()) setLocal,
+    ) async {
       try {
         final file = await picker.pickImage(
           source: source,
@@ -2257,7 +2249,9 @@ class _MapShellScreenState extends State<MapShellScreen>
       }
     }
 
-    Future<void> ensureCategories(void Function(void Function()) setLocal) async {
+    Future<void> ensureCategories(
+      void Function(void Function()) setLocal,
+    ) async {
       if (categoriesLoaded || groupIdForCats == null) return;
       try {
         final list = await _places.listCategories(groupIdForCats);
@@ -2367,9 +2361,8 @@ class _MapShellScreenState extends State<MapShellScreen>
               actionsPadding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
               title: Text(
                 AppStrings.mapSavePlaceTitle,
-                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                style: Theme.of(ctx).textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
               content: SingleChildScrollView(
                 child: Column(
@@ -2429,9 +2422,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                               Text(
                                 label,
                                 textAlign: TextAlign.center,
-                                style: Theme.of(ctx)
-                                    .textTheme
-                                    .labelLarge
+                                style: Theme.of(ctx).textTheme.labelLarge
                                     ?.copyWith(
                                       fontWeight: FontWeight.w600,
                                       color: AppColors.deepBlue,
@@ -2501,8 +2492,7 @@ class _MapShellScreenState extends State<MapShellScreen>
                             padding: EdgeInsets.zero,
                             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           ),
-                          onPressed: () =>
-                              setLocal(() => photoBytes = null),
+                          onPressed: () => setLocal(() => photoBytes = null),
                           child: const Text(AppStrings.mapSavePlacePhotoClear),
                         ),
                       ),
@@ -2588,20 +2578,18 @@ class _MapShellScreenState extends State<MapShellScreen>
                             : () async {
                                 final created =
                                     await _promptCreatePlaceCategory(
-                                  groupId: groupIdForCats,
-                                );
+                                      groupId: groupIdForCats,
+                                    );
                                 await _waitFrames(2);
                                 if (created == null || !ctx.mounted) {
                                   return;
                                 }
                                 setLocal(() {
-                                  categories = [
-                                    ...categories,
-                                    created,
-                                  ]..sort(
-                                      (a, b) => a.name
-                                          .toLowerCase()
-                                          .compareTo(b.name.toLowerCase()),
+                                  categories = [...categories, created]
+                                    ..sort(
+                                      (a, b) => a.name.toLowerCase().compareTo(
+                                        b.name.toLowerCase(),
+                                      ),
                                     );
                                   selectedCategoryId = created.id;
                                   categoriesLoaded = true;
@@ -2629,16 +2617,18 @@ class _MapShellScreenState extends State<MapShellScreen>
                       const SizedBox(width: 6),
                       Expanded(
                         child: actionPill(
-                          onPressed: () => Navigator.of(ctx, rootNavigator: true)
-                              .pop('wa'),
+                          onPressed: () =>
+                              Navigator.of(ctx, rootNavigator: true).pop('wa'),
                           label: AppStrings.mapSavePlaceWhatsApp,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: actionPill(
-                          onPressed: () => Navigator.of(ctx, rootNavigator: true)
-                              .pop('save'),
+                          onPressed: () => Navigator.of(
+                            ctx,
+                            rootNavigator: true,
+                          ).pop('save'),
                           label: AppStrings.mapSavePlaceSave,
                           primary: true,
                         ),
@@ -2754,12 +2744,13 @@ class _MapShellScreenState extends State<MapShellScreen>
     } catch (e, st) {
       debugPrint('named_places save ERROR: $e\n$st');
       final raw = e.toString().replaceFirst(RegExp(r'^Bad state:\s*'), '');
-      final msg = NamedPlacesService.looksLikeMissingRpc(e) ||
+      final msg =
+          NamedPlacesService.looksLikeMissingRpc(e) ||
               raw.contains('Falta APPLY SQL')
           ? raw
           : NamedPlacesService.looksLikeMissingTable(e)
-              ? AppStrings.mapSavePlaceApply
-              : '${AppStrings.mapSavePlaceError}\n$raw';
+          ? AppStrings.mapSavePlaceApply
+          : '${AppStrings.mapSavePlaceError}\n$raw';
       toast(msg, seconds: 12);
     } finally {
       _savingPlace = false;
@@ -2913,8 +2904,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       _sosRefreshEpoch++;
       _markSosDismissedLocally(event);
       setState(() {
-        _activeSos =
-            _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
+        _activeSos = _activeSos.where((e) => !_isSosHiddenLocally(e)).toList();
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2949,9 +2939,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       final msg = SosService.isConnectivityError(e)
           ? AppStrings.sosAckErrorNetwork
           : AppStrings.sosAckError;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -2964,8 +2952,9 @@ class _MapShellScreenState extends State<MapShellScreen>
     final event = visible.first;
     final isSelf = _isOwnSos(event);
     final senderName = _sosSenderLabel(event);
-    final progress =
-        isSelf && _sosAckProgress?.sosId == event.id ? _sosAckProgress : null;
+    final progress = isSelf && _sosAckProgress?.sosId == event.id
+        ? _sosAckProgress
+        : null;
     final pendingNames =
         progress?.pendingPeers.map((m) => m.displayName).toList() ?? const [];
     final acked = progress?.ackedCount ?? 0;
@@ -3003,12 +2992,12 @@ class _MapShellScreenState extends State<MapShellScreen>
                 expected == 0
                     ? AppStrings.sosAckNoPeers
                     : pendingNames.isEmpty
-                        ? AppStrings.sosAckWaitingResolve
-                        : AppStrings.sosAckPendingList(
-                            acked,
-                            expected,
-                            pendingNames,
-                          ),
+                    ? AppStrings.sosAckWaitingResolve
+                    : AppStrings.sosAckPendingList(
+                        acked,
+                        expected,
+                        pendingNames,
+                      ),
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 13,
@@ -3109,9 +3098,9 @@ class _MapShellScreenState extends State<MapShellScreen>
                   Text(
                     AppStrings.mapGroupSelector,
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: AppColors.onDeep,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      color: AppColors.onDeep,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -3120,12 +3109,11 @@ class _MapShellScreenState extends State<MapShellScreen>
                             AppStrings.mapNoGroup,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(
-                                  color:
-                                      AppColors.onDeep.withValues(alpha: 0.88),
+                                  color: AppColors.onDeep.withValues(
+                                    alpha: 0.88,
+                                  ),
                                 ),
                           )
                         : DropdownButtonHideUnderline(
@@ -3187,31 +3175,47 @@ class _MapShellScreenState extends State<MapShellScreen>
                     },
                     color: AppColors.onDeep,
                     icon: Icon(
-                      _mapExpanded
-                          ? Icons.fullscreen_exit
-                          : Icons.fullscreen,
+                      _mapExpanded ? Icons.fullscreen_exit : Icons.fullscreen,
                     ),
                   ),
-                  IconButton(
-                    tooltip: AppStrings.chatAction,
-                    color: AppColors.onDeep,
-                    onPressed: () {
-                      final group = _selected;
-                      if (group == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(AppStrings.chatNeedGroup),
-                          ),
-                        );
-                        return;
-                      }
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => GroupChatScreen(group: group),
+                  ListenableBuilder(
+                    listenable: ChatAlertService.instance,
+                    builder: (context, _) {
+                      final groupId = _selected?.id ?? '';
+                      final memberIds = _members.map((m) => m.userId);
+                      final toolbarUnread = groupId.isEmpty
+                          ? 0
+                          : ChatAlertService.instance
+                              .unreadCountForActiveGroupContext(
+                                groupId: groupId,
+                                memberUserIds: memberIds,
+                              );
+                      return IconButton(
+                        tooltip: AppStrings.chatAction,
+                        color: AppColors.onDeep,
+                        onPressed: () {
+                          final group = _selected;
+                          if (group == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(AppStrings.chatNeedGroup),
+                              ),
+                            );
+                            return;
+                          }
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => GroupChatScreen(group: group),
+                            ),
+                          );
+                        },
+                        icon: ChatIconUnreadBadge(
+                          count: toolbarUnread,
+                          anchor: ChatUnreadBadgeAnchor.mapToolbar,
+                          child: const Icon(Icons.chat_bubble_outline),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.chat_bubble_outline),
                   ),
                   IconButton(
                     tooltip: AppStrings.retry,
@@ -3224,10 +3228,7 @@ class _MapShellScreenState extends State<MapShellScreen>
             ),
           ),
         ),
-        Expanded(
-          flex: _mapExpanded ? 1 : 3,
-          child: _buildMapPane(context),
-        ),
+        Expanded(flex: _mapExpanded ? 1 : 3, child: _buildMapPane(context)),
         if (!_mapExpanded)
           Expanded(
             flex: 2,
@@ -3238,118 +3239,122 @@ class _MapShellScreenState extends State<MapShellScreen>
               child: _loading
                   ? const Center(child: CircularProgressIndicator())
                   : _error != null
-                      ? Center(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(16),
-                            child: Text(
-                              _error!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                            ),
+                  ? Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          _error!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
                           ),
-                        )
-                      : _members.isEmpty
-                          ? Center(
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Text(
-                                  AppStrings.mapMembersEmpty,
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                  textAlign: TextAlign.center,
-                                ),
+                        ),
+                      ),
+                    )
+                  : _members.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          AppStrings.mapMembersEmpty,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      itemCount: _members.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final m = _members[i];
+                        final isSelf =
+                            m.userId.trim().toLowerCase() == _myUid &&
+                            _myUid.isNotEmpty;
+                        final sharing = _isSharingForList(m);
+                        final pinHex = _pinColorFor(m.userId, isSelf: isSelf);
+                        final live = _liveFixForMember(m.userId);
+                        return ListenableBuilder(
+                          listenable: ChatAlertService.instance,
+                          builder: (context, _) {
+                            final dmUnread = ChatAlertService.instance
+                                .unreadCountForDmPeer(m.userId);
+                            return MemberCard(
+                              dmUnreadCount: dmUnread,
+                              name: m.label,
+                              photoUrl: m.photoUrl,
+                              isSelf: isSelf,
+                              shareStatusLabel: _shareFor(m),
+                              mapPinColor: sharing
+                                  ? _colorFromHex(pinHex)
+                                  : null,
+                              female: PersonMarkerGender.isFemale(
+                                gender: m.gender,
+                                displayName: m.label,
                               ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              itemCount: _members.length,
-                              separatorBuilder: (_, _) =>
-                                  const Divider(height: 1),
-                              itemBuilder: (context, i) {
-                                final m = _members[i];
-                                final isSelf =
-                                    m.userId.trim().toLowerCase() == _myUid &&
-                                        _myUid.isNotEmpty;
-                                final sharing = _isSharingForList(m);
-                                final pinHex = _pinColorFor(
-                                  m.userId,
-                                  isSelf: isSelf,
-                                );
-                                final live = _liveFixForMember(m.userId);
-                                return MemberCard(
-                                  name: m.label,
-                                  photoUrl: m.photoUrl,
-                                  isSelf: isSelf,
-                                  shareStatusLabel: _shareFor(m),
-                                  mapPinColor: sharing
-                                      ? _colorFromHex(pinHex)
-                                      : null,
-                                  female: PersonMarkerGender.isFemale(
-                                    gender: m.gender,
-                                    displayName: m.label,
-                                  ),
-                                  trailingExtra: _adminMemberHistoryButton(
-                                    member: m,
+                              trailingExtra: _adminMemberHistoryButton(
+                                member: m,
+                                isSelf: isSelf,
+                              ),
+                              onOpenExternalMap: live == null
+                                  ? null
+                                  : () {
+                                      unawaited(
+                                        _runPinActionSheetAt(
+                                          lat: live.lat,
+                                          lon: live.lon,
+                                          locationLabel: m.label,
+                                        ),
+                                      );
+                                    },
+                              onFigurineTap: live == null
+                                  ? null
+                                  : () {
+                                      unawaited(
+                                        _runPinActionSheetAt(
+                                          lat: live.lat,
+                                          lon: live.lon,
+                                          locationLabel: m.label,
+                                        ),
+                                      );
+                                    },
+                              onLongPress: live == null
+                                  ? null
+                                  : () {
+                                      unawaited(
+                                        _runPinActionSheetAt(
+                                          lat: live.lat,
+                                          lon: live.lon,
+                                          locationLabel: m.label,
+                                        ),
+                                      );
+                                    },
+                              onTap: () {
+                                unawaited(
+                                  _focusMemberOnMap(
+                                    userId: m.userId,
                                     isSelf: isSelf,
                                   ),
-                                  onOpenExternalMap: live == null
-                                      ? null
-                                      : () {
-                                          unawaited(
-                                            _runPinActionSheetAt(
-                                              lat: live.lat,
-                                              lon: live.lon,
-                                              locationLabel: m.label,
-                                            ),
-                                          );
-                                        },
-                                  onFigurineTap: live == null
-                                      ? null
-                                      : () {
-                                          unawaited(
-                                            _runPinActionSheetAt(
-                                              lat: live.lat,
-                                              lon: live.lon,
-                                              locationLabel: m.label,
-                                            ),
-                                          );
-                                        },
-                                  onLongPress: live == null
-                                      ? null
-                                      : () {
-                                          unawaited(
-                                            _runPinActionSheetAt(
-                                              lat: live.lat,
-                                              lon: live.lon,
-                                              locationLabel: m.label,
-                                            ),
-                                          );
-                                        },
-                                  onTap: () {
-                                    unawaited(
-                                      _focusMemberOnMap(
-                                        userId: m.userId,
-                                        isSelf: isSelf,
-                                      ),
-                                    );
-                                  },
-                                  onMessage: isSelf
-                                      ? null
-                                      : () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute<void>(
-                                              builder: (_) => DirectChatScreen(
-                                                peerUserId: m.userId,
-                                                peerName: m.label,
-                                                peerPhotoUrl: m.photoUrl,
-                                              ),
-                                            ),
-                                          );
-                                        },
                                 );
                               },
-                            ),
+                              onMessage: isSelf
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => DirectChatScreen(
+                                            peerUserId: m.userId,
+                                            peerName: m.label,
+                                            peerPhotoUrl: m.photoUrl,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                            );
+                          },
+                        );
+                      },
+                    ),
             ),
           ),
       ],
