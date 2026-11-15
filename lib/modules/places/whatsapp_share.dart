@@ -6,21 +6,15 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../core/l10n/app_strings.dart';
 import 'external_map_links.dart';
 
 /// Comparte un lugar (hoja de compartir de Android; WhatsApp si el usuario elige).
+/// GF-64: texto = título/detalle opcional + enlace **solo** Google Maps (pin exacto).
 class WhatsAppShare {
   WhatsAppShare._();
 
   static String mapsUrl({required double lat, required double lon}) =>
       ExternalMapLinks.googleMapsSearchUrl(lat: lat, lng: lon);
-
-  static String earthUrl({required double lat, required double lon}) =>
-      ExternalMapLinks.googleEarthWebUrl(lat: lat, lng: lon);
-
-  static String osmUrl({required double lat, required double lon}) =>
-      ExternalMapLinks.openStreetMapWebUrl(lat: lat, lng: lon);
 
   static String message({
     required String name,
@@ -32,15 +26,7 @@ class WhatsAppShare {
     final lines = <String>[n];
     final d = detail?.trim();
     if (d != null && d.isNotEmpty) lines.add(d);
-    lines.add(earthUrl(lat: lat, lon: lon));
     lines.add(mapsUrl(lat: lat, lon: lon));
-    lines.add(AppStrings.shareOptionalAlternativesHeader);
-    lines.add('${AppStrings.shareOsmLinePrefix} ${osmUrl(lat: lat, lon: lon)}');
-    lines.add(
-      '${AppStrings.shareGeoLinePrefix} '
-      '${ExternalMapLinks.geoUri(lat: lat, lng: lon, label: n)}',
-    );
-    lines.add(AppStrings.shareGeoOrganicNote);
     return lines.join('\n');
   }
 

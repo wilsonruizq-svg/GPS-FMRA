@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// URLs y apertura en mapas externos (Google Earth/Maps, OSM, geo:) —
+/// URLs y apertura en mapas externos (Google Maps primario; Earth/OSM/geo alternativas) —
 /// solo por acción explícita del usuario.
 class ExternalMapLinks {
   ExternalMapLinks._();

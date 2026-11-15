@@ -89,7 +89,7 @@ abstract final class AppStrings {
 
   static const mapSavePlaceTooltip = 'Guardar lugar';
   static const mapPinActionSheetTitle = 'Ubicación';
-  static const mapPinActionEarthHint = 'Recomendado';
+  static const mapPinActionRecommendedHint = 'Recomendado';
   static const mapPinActionOrganicMaps = 'Organic Maps';
   static const mapSavePlaceTitle = 'Guardar este lugar';
   static const mapSavePlaceNameLabel = 'Título';
@@ -270,7 +270,7 @@ abstract final class AppStrings {
   static const shareGeoLinePrefix = 'geo (Organic / app de mapas):';
   static const shareGeoOrganicNote =
       'Enlace geo: selector de Android → Organic Maps si está instalada.';
-  static const memberExternalMapIconTooltip = 'Ver en Google Earth (3D)';
+  static const memberExternalMapIconTooltip = 'Abrir en Google Maps';
 
   static const inviteAction = 'Invitar';
   static const inviteTitle = 'Código listo para compartir';

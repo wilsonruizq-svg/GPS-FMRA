@@ -23,8 +23,7 @@ import '../../chat/widgets/chat_unread_badge.dart';
 import '../../groups/groups_service.dart';
 import '../../groups/widgets/member_card.dart';
 import '../../location/consent_service.dart';
-import '../../location/location_fix_filter.dart';
-import '../../location/location_keep_alive.dart';
+import '../../location/location_share_session.dart';
 import '../../location/location_share_service.dart';
 import '../../location/screens/location_history_screen.dart';
 import '../../places/external_map_links.dart';
@@ -61,10 +60,6 @@ class _MapShellScreenState extends State<MapShellScreen>
   static const _memberFocusZoom = 17.0;
   static const _placeFocusZoom = 16.5;
 
-  /// Heartbeat de publicación (documentado): cada 8 s como máximo de espera
-  /// aunque el dispositivo esté quieto. El stream también publica al moverse
-  /// ≥8 m, con piso de 5 s entre upserts.
-  static const _publishHeartbeat = Duration(seconds: 8);
   static const _pollInterval = Duration(seconds: 15);
   static const _sosPollInterval = Duration(seconds: 5);
   static const _consentCacheTtl = Duration(seconds: 45);
@@ -78,7 +73,6 @@ class _MapShellScreenState extends State<MapShellScreen>
   final _sosPeerPlayer = AudioPlayer();
   StreamSubscription<PlayerState>? _sosPeerPlayerSub;
   final _places = NamedPlacesService();
-  final _fixFilter = const LocationFixFilter();
   bool _sosAudioBusy = false;
   bool _sosAudioPlaying = false;
   String? _sosAudioPlayingSosId;
@@ -118,13 +112,10 @@ class _MapShellScreenState extends State<MapShellScreen>
   /// false = mapa + integrantes; true = mapa ampliado (franja + nav abajo).
   bool _mapExpanded = false;
 
-  Timer? _publishTimer;
   Timer? _pollTimer;
   Timer? _sosPollTimer;
-  StreamSubscription<Position>? _positionSub;
   RealtimeChannel? _realtimeChannel;
   RealtimeChannel? _sosChannel;
-  bool _publishing = false;
   bool _syncingMarkers = false;
   bool _markersDirty = false;
   bool _didFitMembers = false;
@@ -141,15 +132,14 @@ class _MapShellScreenState extends State<MapShellScreen>
   int _sosRefreshEpoch = 0;
 
   Position? _lastAcceptedFix;
-  Position? _lastPublishedFix;
-  DateTime? _lastPublishedAt;
-  bool? _cachedCanPublish;
-  DateTime? _cachedCanPublishAt;
+  VoidCallback? _selfFixListener;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _selfFixListener = _onShareSessionSelfFix;
+    LocationShareSession.instance.selfFix.addListener(_selfFixListener!);
     _sosPeerPlayerSub = _sosPeerPlayer.playerStateStream.listen((state) {
       if (state.processingState == ProcessingState.completed) {
         if (!mounted) return;
@@ -167,7 +157,11 @@ class _MapShellScreenState extends State<MapShellScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _highlightClearTimer?.cancel();
-    _stopSharingLoop();
+    final listener = _selfFixListener;
+    if (listener != null) {
+      LocationShareSession.instance.selfFix.removeListener(listener);
+    }
+    _stopMapRefreshLoops();
     _unsubscribeRealtime();
     unawaited(_sosPeerPlayerSub?.cancel());
     unawaited(_sosAudio.dispose());
@@ -242,13 +236,31 @@ class _MapShellScreenState extends State<MapShellScreen>
     unawaited(_sosAudio.startForSos(own.first.id));
   }
 
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _cachedCanPublish = null;
-      _cachedCanPublishAt = null;
-      unawaited(_publishFromFix(force: true));
-    }
+  void _onShareSessionSelfFix() {
+    final loc = LocationShareSession.instance.selfFix.value;
+    if (loc == null || !mounted) return;
+  if (loc.userId != _myUid) return;
+    _lastAcceptedFix = Position(
+      longitude: loc.lon,
+      latitude: loc.lat,
+      timestamp: loc.recordedAt,
+      accuracy: loc.accuracyM ?? 0,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
+    setState(() {
+      _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
+        ..[loc.userId] = loc;
+    });
+    unawaited(_syncMarkers());
+  }
+
+  void _syncShareSessionGroup() {
+    LocationShareSession.instance.setActiveGroup(_selected?.id);
   }
 
   /// Fija [initialCameraPosition] con GPS si ya hay permiso (GF-30: no pide
@@ -337,7 +349,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       await _syncMarkers();
       await _loadNamedPlaces();
       await _consumePendingPlaceFocus();
-      _restartSharingLoop();
+      _syncShareSessionGroup();
       _restartRealtimeAndPoll();
     } catch (e) {
       if (!mounted) return;
@@ -371,7 +383,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       });
       _maybeAutoCenter();
       await _syncMarkers();
-      _restartSharingLoop();
+      _syncShareSessionGroup();
       _restartRealtimeAndPoll();
     } catch (e) {
       if (!mounted) return;
@@ -635,6 +647,9 @@ class _MapShellScreenState extends State<MapShellScreen>
         : 'Mi ubicación';
 
     switch (action) {
+      case 'maps':
+        await _openMemberInGoogleMaps(lat: lat, lon: lon);
+        return;
       case 'earth':
         final ok = await ExternalMapLinks.openGoogleEarth(lat: lat, lng: lon);
         if (!mounted) return;
@@ -819,7 +834,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     _openMemberHistory(userId: _myUid);
   }
 
-  /// Fix en vivo = pin visible en MapLibre (GF-47: Earth para cualquier miembro).
+  /// Fix en vivo = pin visible en MapLibre (GF-64: Maps externo para cualquier miembro).
   MemberLocation? _liveFixForMember(String userId) => _locationsByUser[userId];
 
   void _openMemberHistory({required String userId}) {
@@ -856,6 +871,19 @@ class _MapShellScreenState extends State<MapShellScreen>
       color: AppColors.deepBlue,
       onPressed: () => _openMemberHistory(userId: member.userId),
     );
+  }
+
+  Future<void> _openMemberInGoogleMaps({
+    required double lat,
+    required double lon,
+  }) async {
+    final ok = await ExternalMapLinks.openGoogleMaps(lat: lat, lng: lon);
+    if (!mounted) return;
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text(AppStrings.memberExternalMapOpenError)),
+      );
+    }
   }
 
   Future<void> _openMemberInGoogleEarth({
@@ -902,14 +930,16 @@ class _MapShellScreenState extends State<MapShellScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: const Icon(Icons.satellite_alt_outlined),
-              title: const Text(AppStrings.memberOpenGoogleEarth),
-              onTap: () => Navigator.pop(ctx, 'earth'),
-            ),
-            ListTile(
               leading: const Icon(Icons.map_outlined),
               title: const Text(AppStrings.memberOpenExternalMap),
+              subtitle: const Text(AppStrings.mapPinActionRecommendedHint),
               onTap: () => Navigator.pop(ctx, 'maps'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.satellite_alt_outlined),
+              title: const Text(AppStrings.memberOpenGoogleEarth),
+              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
+              onTap: () => Navigator.pop(ctx, 'earth'),
             ),
             ListTile(
               leading: const Icon(Icons.terrain_outlined),
@@ -937,15 +967,7 @@ class _MapShellScreenState extends State<MapShellScreen>
       case 'earth':
         await _openMemberInGoogleEarth(lat: lat, lon: lon);
       case 'maps':
-        final ok = await ExternalMapLinks.openGoogleMaps(lat: lat, lng: lon);
-        if (!mounted) return;
-        if (!ok) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(AppStrings.memberExternalMapOpenError),
-            ),
-          );
-        }
+        await _openMemberInGoogleMaps(lat: lat, lon: lon);
       case 'osm':
         final okOsm = await ExternalMapLinks.openOpenStreetMap(
           lat: lat,
@@ -2165,9 +2187,15 @@ class _MapShellScreenState extends State<MapShellScreen>
               ),
             ),
             ListTile(
+              leading: const Icon(Icons.map_outlined),
+              title: const Text(AppStrings.memberOpenExternalMap),
+              subtitle: const Text(AppStrings.mapPinActionRecommendedHint),
+              onTap: () => Navigator.pop(ctx, 'maps'),
+            ),
+            ListTile(
               leading: const Icon(Icons.satellite_alt_outlined),
               title: const Text(AppStrings.memberOpenGoogleEarth),
-              subtitle: const Text(AppStrings.mapPinActionEarthHint),
+              subtitle: const Text(AppStrings.memberExternalMapSecondaryHint),
               onTap: () => Navigator.pop(ctx, 'earth'),
             ),
             ListTile(
@@ -3300,10 +3328,9 @@ class _MapShellScreenState extends State<MapShellScreen>
                                   ? null
                                   : () {
                                       unawaited(
-                                        _runPinActionSheetAt(
+                                        _openMemberInGoogleMaps(
                                           lat: live.lat,
                                           lon: live.lon,
-                                          locationLabel: m.label,
                                         ),
                                       );
                                     },

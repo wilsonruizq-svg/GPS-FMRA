@@ -39,7 +39,7 @@ class MemberCard extends StatelessWidget {
   final VoidCallback? onLongPress;
   final VoidCallback? onMessage;
 
-  /// Icono discreto (p. ej. Earth) cuando hay lat/lng en vivo.
+  /// Icono discreto (Google Maps externo) cuando hay lat/lng en vivo.
   final VoidCallback? onOpenExternalMap;
 
   /// Tap en la figurita de color (misma acción que el muñeco del mapa).
@@ -139,7 +139,7 @@ class MemberCard extends StatelessWidget {
                 IconButton(
                   tooltip: AppStrings.memberExternalMapIconTooltip,
                   onPressed: onOpenExternalMap,
-                  icon: const Icon(Icons.satellite_alt_outlined),
+                  icon: const Icon(Icons.map_outlined),
                   color: scheme.onSurfaceVariant,
                 ),
               if (trailingExtra != null) trailingExtra!,
