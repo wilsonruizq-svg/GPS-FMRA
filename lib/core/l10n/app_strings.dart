@@ -83,13 +83,13 @@ abstract final class AppStrings {
       'Sign In / Providers → Email → desactiva “Confirm email” → Save '
       '(así el registro no manda email y entra al instante).';
 
-  // GF-72 — licencia demo / bloqueo
-  static const licenseAdminPhone = '0989067887';
+  // GF-72 / GF-73 — licencia demo / bloqueo
+  static const licenseAdminPhone = '+593 0989067887';
   static const licenseExpiredTitle = 'Demo vencida';
   static const licenseExpiredBody =
       'Tu período de prueba de 2 días terminó. '
       'Contacta al administrador para activar tu licencia: '
-      '0989067887.';
+      '+593 0989067887.';
   static const licenseEmailTitle = 'Confirma tu correo';
   static const licenseEmailBody =
       'Debes validar tu correo electrónico antes de usar GPS-FMRA. '
@@ -98,7 +98,7 @@ abstract final class AppStrings {
   static const licenseUnavailableBody =
       'No se pudo verificar la licencia. '
       'Si el problema continúa, contacta al administrador: '
-      '0989067887.';
+      '+593 0989067887.';
   static const licenseSignOut = 'Cerrar sesión';
 
   static const mapTitle = 'Mapa';
@@ -354,9 +354,12 @@ abstract final class AppStrings {
   static const settingsSignOut = 'Cerrar sesión';
   static const settingsAbout = 'Acerca de GPS-FMRA';
   static const settingsVersion = 'Versión 1.0.0 — Fase 1';
+  /// Prefijo ES para caducidad / fin demo bajo la versión (GF-73).
+  static const settingsLicenseExpiresPrefix = 'Caduca:';
+  static const settingsLicenseNoExpiry = 'Sin caducidad';
   static const settingsAboutCreditLabel = 'Desarrollador:';
   static const settingsAboutCreditName = 'Wilson Ruiz Quezada';
-  static const settingsAboutCreditPhone = '0989067887';
+  static const settingsAboutCreditPhone = '+593 0989067887';
   static const settingsSectionAccount = 'Tu cuenta';
   static const settingsSectionPrivacy = 'Privacidad';
   /// Sección neutra (sin delatar GPS).

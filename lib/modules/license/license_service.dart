@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/l10n/app_strings.dart';
 import '../../core/supabase/supabase_bootstrap.dart';
 
 /// Resultado de [LicenseService.ensureAccess] (GF-72).
@@ -29,6 +30,52 @@ class LicenseAccess {
 
   bool get isExpired => !allowed && reason == 'expired';
   bool get needsEmailConfirm => !allowed && reason == 'email_unconfirmed';
+
+  /// Fecha de caducidad para UI: [validUntil] o [demoStartedAt]+2d (GF-73).
+  /// Admin sin [validUntil] → null (UI muestra «Sin caducidad»).
+  DateTime? get expiryForDisplay {
+    if (validUntil != null) return validUntil!.toLocal();
+    if (isAdmin) return null;
+    if (demoStartedAt != null) {
+      return demoStartedAt!.toLocal().add(const Duration(days: 2));
+    }
+    if (demoEndsAt != null) return demoEndsAt!.toLocal();
+    return null;
+  }
+
+  /// Etiqueta ES bajo la versión en Acerca de (GF-73).
+  String? get expiryLabelEs {
+    final at = expiryForDisplay;
+    if (at != null) {
+      return '${AppStrings.settingsLicenseExpiresPrefix} ${_formatEsDate(at)}';
+    }
+    if (isAdmin) return AppStrings.settingsLicenseNoExpiry;
+    return null;
+  }
+
+  static const _monthsEs = <String>[
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+  ];
+
+  static String _formatEsDate(DateTime local) {
+    final d = local.day;
+    final m = _monthsEs[local.month - 1];
+    final y = local.year;
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    return '$d de $m de $y, $hh:$mm';
+  }
 
   factory LicenseAccess.fromJson(Map<String, dynamic> map) {
     return LicenseAccess(

@@ -7,6 +7,7 @@ import '../../auth/biometric_unlock_service.dart';
 import '../../auth/screens/login_shell_screen.dart';
 import '../../groups/exit_pin_service.dart';
 import '../../groups/widgets/exit_pin_dialog.dart';
+import '../../license/license_service.dart';
 import '../../profiles/profile_service.dart';
 import '../../profiles/screens/edit_profile_screen.dart';
 import '../../sos/screens/sos_emergency_audio_history_screen.dart';
@@ -22,8 +23,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _profiles = ProfileService();
   final _auth = AuthService();
   final _exitPin = ExitPinService();
+  final _license = LicenseService();
 
   Profile? _profile;
+  LicenseAccess? _licenseAccess;
   bool _loading = true;
   bool _signingOut = false;
 
@@ -35,20 +38,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    Profile? profile;
+    LicenseAccess? license;
     try {
-      final p = await _profiles.ensureOwnProfile();
-      if (!mounted) return;
-      setState(() {
-        _profile = p;
-        _loading = false;
-      });
+      profile = await _profiles.ensureOwnProfile();
     } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _profile = null;
-        _loading = false;
-      });
+      profile = null;
     }
+    try {
+      license = await _license.ensureAccess();
+    } catch (_) {
+      license = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _profile = profile;
+      _licenseAccess = license;
+      _loading = false;
+    });
   }
 
   Future<void> _openEditProfile() async {
@@ -109,6 +116,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   bool get _hasPhoto =>
       _profile?.photoUrl != null && _profile!.photoUrl!.isNotEmpty;
+
+  /// Caducidad / fin demo bajo la versión (GF-73).
+  String? get _licenseExpiryLabel => _licenseAccess?.expiryLabelEs;
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +216,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (_licenseExpiryLabel != null)
+                    Text(
+                      _licenseExpiryLabel!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   Text(
                     AppStrings.settingsAboutCreditLabel,
                     style: theme.textTheme.bodyMedium?.copyWith(
