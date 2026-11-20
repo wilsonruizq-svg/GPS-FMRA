@@ -74,6 +74,10 @@ Las migraciones están en `supabase/migrations/`. **No incluyen secretos.**
       RPC `ensure_my_license_access`. Sin esto la app bloquea el acceso
       (fail-closed). Éxito: `license_demo_2d_ok = true`.
       Admin permanente: `wilsonruizq@gmail.com`.)
+   18. `supabase/migrations/20261119100000_location_consent_on_membership.sql`
+      (**APPLY GF-74 — obligatorio si el pin en vivo solo actualiza el grupo
+      que creaste y no el unido:** backfill de `location_consents` faltantes
+      + trigger al activar membresía. Éxito: `gf74_consent_trigger_ok = true`.)
 4. Verifica en **Table Editor** que existan:
    `profiles`, `family_groups`, `group_memberships`, `invitations`,
    `location_consents`, `location_updates`, `user_settings`, `sos_events`,

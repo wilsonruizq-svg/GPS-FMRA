@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/supabase/supabase_bootstrap.dart';
 import '../location/consent_service.dart';
+import '../location/location_share_session.dart';
 import 'invite_token.dart';
 
 class FamilyGroup {
@@ -207,6 +208,8 @@ class GroupsService {
       try {
         await ConsentService().acceptShareWithGroup(group.id);
       } catch (_) {}
+      // GF-74: refresca consents de todas las membresías (creados + unidos).
+      LocationShareSession.instance.notifyMembershipsChanged();
       return group;
     } catch (e) {
       final raw = e.toString();
@@ -414,13 +417,14 @@ class GroupsService {
       if (raw is Map) {
         final result =
             AcceptInviteResult.fromJson(Map<String, dynamic>.from(raw));
-        // GF-67: share activo en el grupo unido (RLS pines), sin wizard.
+        // GF-67/74: share activo en el grupo unido + refresco all-groups.
         try {
           final gid = result.groupId.trim();
           if (gid.isNotEmpty) {
             await ConsentService().acceptShareWithGroup(gid);
           }
         } catch (_) {}
+        LocationShareSession.instance.notifyMembershipsChanged();
         return result;
       }
       throw StateError('Respuesta inesperada al aceptar la invitación.');

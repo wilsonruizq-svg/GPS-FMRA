@@ -88,6 +88,18 @@ class LocationShareSession {
     unawaited(publishFromFix(force: true));
   }
 
+  /// GF-74: tras crear/unirse a un grupo, refresca consents de **todas**
+  /// las membresías (el dropdown del mapa no debe ser el único camino).
+  void notifyMembershipsChanged() {
+    _cachedCanPublish = null;
+    _cachedCanPublishAt = null;
+    if (!_sessionActive) return;
+    unawaited(_refreshAllGroupConsents());
+    if (_activeGroupId != null) {
+      unawaited(publishFromFix(force: true));
+    }
+  }
+
   void stopLoop() {
     _publishTimer?.cancel();
     _publishTimer = null;
@@ -207,9 +219,11 @@ class LocationShareSession {
       return _cachedCanPublish!;
     }
     try {
+      // GF-74: si el lote all-groups tarda/falla, aún intenta el grupo del
+      // mapa para no cortar la publicación live.
       final allowed = await _locationShare
-          .ensurePublishForAllMemberships()
-          .timeout(const Duration(seconds: 12), onTimeout: () => false);
+          .canPublishForGroup(_activeGroupId ?? '')
+          .timeout(const Duration(seconds: 15), onTimeout: () => false);
       _cachedCanPublish = allowed;
       _cachedCanPublishAt = now;
       return allowed;

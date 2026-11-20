@@ -134,31 +134,62 @@ class LocationShareService {
   }
 
   /// True si puede publicar: sin pausa global en Ajustes.
-  /// GF-67: activa consentimiento en **todos** los grupos con membresía activa
-  /// (no solo el seleccionado en el mapa). Sin wizard (GF-38).
+  /// GF-67/GF-74: activa consentimiento en **todos** los grupos con membresía
+  /// activa (creados y unidos), no solo el del dropdown del mapa.
+  /// Sin wizard (GF-38). Un fallo en un grupo no bloquea los demás.
   Future<bool> ensurePublishForAllMemberships({
     GroupsService? groups,
   }) async {
     final paused = await _consent.isGloballyPaused();
     if (paused) return false;
+
+    final ids = await _activeMembershipGroupIds(groups: groups);
+    if (ids.isEmpty) return false;
+
     try {
-      final list = await (groups ?? GroupsService()).listMyGroups();
-      if (list.isEmpty) return false;
-      await _consent.acceptForAllMyGroups(
-        list.map((g) => g.id).toList(),
-      );
+      await _consent.acceptForAllMyGroups(ids);
     } catch (_) {
-      // Si falla RLS/red, el upsert live fallará igual; no tumbar el check.
+      // Best-effort: acceptForAllMyGroups ya aísla por grupo.
     }
+    // Publicar live sigue OK (1 fila / user_id); la visibilidad peer depende
+    // de location_consents que acabamos de intentar activar en todos.
     return true;
   }
 
-  /// True si puede publicar. Asegura consent del [groupId] y, GF-67, de todos
-  /// los demás grupos con membresía (RLS peers / `can_view_location`).
+  /// IDs de grupos con membresía activa (fuente primaria: memberships).
+  /// Fallback a [GroupsService.listMyGroups] si el select directo falla.
+  Future<List<String>> _activeMembershipGroupIds({
+    GroupsService? groups,
+  }) async {
+    try {
+      final memberships = await _sb
+          .from('group_memberships')
+          .select('group_id')
+          .eq('user_id', _uid)
+          .eq('status', 'active');
+      final ids = (memberships as List)
+          .map((e) => ((e as Map)['group_id'] as String?)?.trim() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      if (ids.isNotEmpty) return ids;
+    } catch (_) {
+      // Fallback abajo.
+    }
+    try {
+      final list = await (groups ?? GroupsService()).listMyGroups();
+      return list.map((g) => g.id).where((id) => id.trim().isNotEmpty).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// True si puede publicar. Asegura consent del [groupId] y, GF-67/74, de
+  /// todos los demás grupos con membresía (RLS peers / `can_view_location`).
   Future<bool> canPublishForGroup(String groupId) async {
     final ok = await ensurePublishForAllMemberships();
     if (ok) return true;
-    // Fallback: al menos el grupo pedido (p. ej. listMyGroups vacío por red).
+    // Fallback: al menos el grupo pedido (p. ej. memberships vacío por red).
     final paused = await _consent.isGloballyPaused();
     if (paused) return false;
     try {

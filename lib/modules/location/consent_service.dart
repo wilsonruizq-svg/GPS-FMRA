@@ -93,13 +93,21 @@ class ConsentService {
   }
 
   /// Activa consentimiento de alcance grupo (upsert por índice único).
-  Future<void> acceptShareWithGroup(String groupId) async {
+  ///
+  /// [clearGlobalPause]: si false, no toca `user_settings` (útil en lote).
+  Future<void> acceptShareWithGroup(
+    String groupId, {
+    bool clearGlobalPause = true,
+  }) async {
+    final gid = groupId.trim();
+    if (gid.isEmpty) return;
+
     final existing = await _sb
         .from('location_consents')
         .select('id')
         .eq('sharer_id', _uid)
         .eq('scope', 'group')
-        .eq('group_id', groupId)
+        .eq('group_id', gid)
         .maybeSingle();
 
     if (existing != null) {
@@ -109,15 +117,34 @@ class ConsentService {
         'valid_until': null,
       }).eq('id', existing['id'] as String);
     } else {
-      await _sb.from('location_consents').insert({
-        'sharer_id': _uid,
-        'scope': 'group',
-        'group_id': groupId,
-        'status': 'active',
-      });
+      try {
+        await _sb.from('location_consents').insert({
+          'sharer_id': _uid,
+          'scope': 'group',
+          'group_id': gid,
+          'status': 'active',
+        });
+      } catch (_) {
+        // Carrera con otro accept / trigger SQL: reintenta como update.
+        final raced = await _sb
+            .from('location_consents')
+            .select('id')
+            .eq('sharer_id', _uid)
+            .eq('scope', 'group')
+            .eq('group_id', gid)
+            .maybeSingle();
+        if (raced == null) rethrow;
+        await _sb.from('location_consents').update({
+          'status': 'active',
+          'valid_from': DateTime.now().toUtc().toIso8601String(),
+          'valid_until': null,
+        }).eq('id', raced['id'] as String);
+      }
     }
 
-    await setGloballyPaused(false);
+    if (clearGlobalPause) {
+      await setGloballyPaused(false);
+    }
   }
 
   Future<void> pauseShareWithGroup(String groupId) async {
@@ -139,12 +166,28 @@ class ConsentService {
     await setGloballyPaused(true);
   }
 
-  /// Aceptar: activa consentimiento en todos los grupos activos del usuario.
+  /// Aceptar: activa consentimiento en todos los grupos dados.
+  /// GF-74: un fallo en un grupo **no** aborta el resto (creado vs unido).
   Future<int> acceptForAllMyGroups(List<String> groupIds) async {
-    for (final id in groupIds) {
-      await acceptShareWithGroup(id);
+    final unique = <String>{};
+    for (final raw in groupIds) {
+      final id = raw.trim();
+      if (id.isNotEmpty) unique.add(id);
     }
+    if (unique.isEmpty) return 0;
+
+    final results = await Future.wait(
+      unique.map((id) async {
+        try {
+          await acceptShareWithGroup(id, clearGlobalPause: false);
+          return true;
+        } catch (_) {
+          // Best-effort por grupo: el trigger SQL / siguiente refresh cubre.
+          return false;
+        }
+      }),
+    );
     await setGloballyPaused(false);
-    return groupIds.length;
+    return results.where((v) => v).length;
   }
 }
