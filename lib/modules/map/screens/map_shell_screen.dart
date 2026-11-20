@@ -60,7 +60,9 @@ class _MapShellScreenState extends State<MapShellScreen>
   static const _memberFocusZoom = 17.0;
   static const _placeFocusZoom = 16.5;
 
-  static const _pollInterval = Duration(seconds: 15);
+  /// GF-74: poll corto para pines ajenos si Realtime falla o RLS tarda.
+  /// (El dropdown solo hace fetch al cambiar; sin esto el pin queda stale.)
+  static const _pollInterval = Duration(seconds: 5);
   static const _sosPollInterval = Duration(seconds: 5);
 
   final _groups = GroupsService();
@@ -238,7 +240,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   void _onShareSessionSelfFix() {
     final loc = LocationShareSession.instance.selfFix.value;
     if (loc == null || !mounted) return;
-    if (loc.userId != _myUid) return;
+    final uid = _normUid(loc.userId);
+    if (uid.isEmpty || uid != _myUid) return;
     _lastAcceptedFix = Position(
       longitude: loc.lon,
       latitude: loc.lat,
@@ -254,7 +257,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     );
     setState(() {
       _locationsByUser = Map<String, MemberLocation>.from(_locationsByUser)
-        ..[loc.userId] = loc;
+        ..[uid] = loc;
     });
     unawaited(_syncMarkers());
   }
@@ -403,7 +406,9 @@ class _MapShellScreenState extends State<MapShellScreen>
             groupId: gid,
             memberIds: ids,
           );
-    return {for (final loc in list) loc.userId: loc};
+    return {
+      for (final loc in list) _normUid(loc.userId): loc,
+    }..removeWhere((k, _) => k.isEmpty);
   }
 
   String get _myUid =>
@@ -551,7 +556,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
     if (c == null) return AppStrings.memberShareUnknown;
     if (c.isActive) {
-      return _locationsByUser.containsKey(m.userId)
+      return _locationsByUser.containsKey(_normUid(m.userId))
           ? AppStrings.memberShareActive
           : AppStrings.memberShareActiveNoFix;
     }
@@ -607,7 +612,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (_savingPlace || !mounted) return;
     final userId = _userIdForMemberSymbol(symbol);
     if (userId == null) return;
-    final loc = _locationsByUser[userId];
+    final loc = _locationsByUser[_normUid(userId)];
     if (loc == null) return;
     await _runPinActionSheetAt(
       lat: loc.lat,
@@ -620,7 +625,7 @@ class _MapShellScreenState extends State<MapShellScreen>
     if (_savingPlace || !mounted) return;
     final userId = _userIdForMemberCircle(circle);
     if (userId == null) return;
-    final loc = _locationsByUser[userId];
+    final loc = _locationsByUser[_normUid(userId)];
     if (loc == null) return;
     await _runPinActionSheetAt(
       lat: loc.lat,
@@ -823,7 +828,8 @@ class _MapShellScreenState extends State<MapShellScreen>
   }
 
   /// Fix en vivo = pin visible en MapLibre (GF-64: Maps externo para cualquier miembro).
-  MemberLocation? _liveFixForMember(String userId) => _locationsByUser[userId];
+  MemberLocation? _liveFixForMember(String userId) =>
+      _locationsByUser[_normUid(userId)];
 
   void _openMemberHistory({required String userId}) {
     final target = userId.trim().toLowerCase();
@@ -940,7 +946,7 @@ class _MapShellScreenState extends State<MapShellScreen>
   }) async {
     final c = _mapController;
     if (c == null) return;
-    final loc = _locationsByUser[userId];
+    final loc = _locationsByUser[_normUid(userId)];
     if (loc != null) {
       await c.animateCamera(
         CameraUpdate.newLatLngZoom(LatLng(loc.lat, loc.lon), _memberFocusZoom),
@@ -1034,16 +1040,46 @@ class _MapShellScreenState extends State<MapShellScreen>
     }
   }
 
+  String _normUid(String id) => id.trim().toLowerCase();
+
+  /// Fusiona fixes entrantes con claves de userId normalizadas.
   void _mergeIncomingLocations(Map<String, MemberLocation> incoming) {
-    final merged = Map<String, MemberLocation>.from(_locationsByUser);
+    final merged = <String, MemberLocation>{
+      for (final e in _locationsByUser.entries) _normUid(e.key): e.value,
+    };
     for (final e in incoming.entries) {
-      final existing = merged[e.key];
+      final key = _normUid(e.key);
+      if (key.isEmpty) continue;
+      final existing = merged[key];
       if (existing == null ||
           !e.value.recordedAt.isBefore(existing.recordedAt)) {
-        merged[e.key] = e.value;
+        merged[key] = e.value;
       }
     }
     _locationsByUser = merged;
+  }
+
+  /// Poll: reconcilia el grupo seleccionado (no deja pines stale de un fetch
+  /// al cambiar de dropdown). Preserva selfFix local si es más reciente.
+  void _reconcileGroupLocations(Map<String, MemberLocation> incoming) {
+    final memberKeys = {
+      for (final m in _members) _normUid(m.userId),
+    }..removeWhere((k) => k.isEmpty);
+    final next = <String, MemberLocation>{};
+    for (final e in incoming.entries) {
+      final key = _normUid(e.key);
+      if (memberKeys.contains(key)) next[key] = e.value;
+    }
+    final selfKey = _myUid;
+    if (selfKey.isNotEmpty) {
+      final local = _locationsByUser[selfKey];
+      final server = next[selfKey];
+      if (local != null &&
+          (server == null || local.recordedAt.isAfter(server.recordedAt))) {
+        next[selfKey] = local;
+      }
+    }
+    _locationsByUser = next;
   }
 
   void _restartRealtimeAndPoll() {
@@ -1065,9 +1101,12 @@ class _MapShellScreenState extends State<MapShellScreen>
         _realtimeChannel = _locationShare.subscribeLocationUpdates(
           onChange: (loc) {
             if (!mounted) return;
-            final memberIds = _members.map((m) => m.userId).toSet();
-            if (!memberIds.contains(loc.userId)) return;
-            final existing = _locationsByUser[loc.userId];
+            final uid = _normUid(loc.userId);
+            final memberIds = {
+              for (final m in _members) _normUid(m.userId),
+            };
+            if (!memberIds.contains(uid)) return;
+            final existing = _locationsByUser[uid];
             if (existing != null &&
                 loc.recordedAt.isBefore(existing.recordedAt)) {
               return;
@@ -1075,18 +1114,19 @@ class _MapShellScreenState extends State<MapShellScreen>
             setState(() {
               _locationsByUser = Map<String, MemberLocation>.from(
                 _locationsByUser,
-              )..[loc.userId] = loc;
+              )..[uid] = loc;
             });
             unawaited(_syncMarkers());
           },
           onDelete: (userId) {
             if (!mounted) return;
+            final uid = _normUid(userId);
             // No borrar el pin propio local por un DELETE remoto obsoleto.
-            if (userId == _myUid && _lastAcceptedFix != null) return;
+            if (uid == _myUid && _lastAcceptedFix != null) return;
             setState(() {
               _locationsByUser = Map<String, MemberLocation>.from(
                 _locationsByUser,
-              )..remove(userId);
+              )..remove(uid);
             });
             unawaited(_syncMarkers());
           },
@@ -1391,10 +1431,13 @@ class _MapShellScreenState extends State<MapShellScreen>
 
   Future<void> _refreshMemberLocations() async {
     if (_members.isEmpty) return;
+    final gid = _selected?.id;
     try {
-      final locations = await _fetchLocationsMap(_members);
+      final locations = await _fetchLocationsMap(_members, groupId: gid);
       if (!mounted) return;
-      setState(() => _mergeIncomingLocations(locations));
+      // GF-74: reconciliar (no solo merge) para que el pin ajeno avance sin
+      // tener que volver a tocar el dropdown del grupo.
+      setState(() => _reconcileGroupLocations(locations));
       await _syncMarkers();
     } catch (_) {
       // Silencioso en poll.
@@ -1501,16 +1544,20 @@ class _MapShellScreenState extends State<MapShellScreen>
         }
       }
 
-      final memberById = {for (final m in _members) m.userId: m};
-      final nameById = {for (final m in _members) m.userId: m.label};
+      final memberById = {
+        for (final m in _members) _normUid(m.userId): m,
+      };
+      final nameById = {
+        for (final m in _members) _normUid(m.userId): m.label,
+      };
 
       for (final entry in desired.entries) {
-        final userId = entry.key;
+        final userId = _normUid(entry.key);
+        if (userId.isEmpty) continue;
         final loc = entry.value;
         final realGeometry = LatLng(loc.lat, loc.lon);
         final pinGeometry = display[userId] ?? realGeometry;
-        final isSelf =
-            userId.trim().toLowerCase() == _myUid && _myUid.isNotEmpty;
+        final isSelf = userId == _myUid && _myUid.isNotEmpty;
         final color = _pinColorFor(userId, isSelf: isSelf);
         final member = memberById[userId];
         final female = PersonMarkerGender.isFemale(

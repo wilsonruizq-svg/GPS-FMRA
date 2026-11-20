@@ -23,7 +23,10 @@ class LocationShareSession {
   static final LocationShareSession instance = LocationShareSession._();
 
   static const _publishHeartbeat = Duration(seconds: 8);
-  static const _consentCacheTtl = Duration(seconds: 45);
+  /// GF-74: cache corto; el timer de consents cubre Grupo W aunque el
+  /// dropdown del mapa se quede en el grupo creado (Grupo M).
+  static const _consentCacheTtl = Duration(seconds: 20);
+  static const _consentRefreshInterval = Duration(seconds: 20);
 
   final _locationShare = LocationShareService();
   final _fixFilter = const LocationFixFilter();
@@ -34,6 +37,7 @@ class LocationShareSession {
   /// Grupo seleccionado en el mapa (UI). No limita a qué grupos se publica.
   String? _activeGroupId;
   Timer? _publishTimer;
+  Timer? _consentTimer;
   StreamSubscription<Position>? _positionSub;
   bool _publishing = false;
   Position? _lastAcceptedFix;
@@ -103,6 +107,8 @@ class LocationShareSession {
   void stopLoop() {
     _publishTimer?.cancel();
     _publishTimer = null;
+    _consentTimer?.cancel();
+    _consentTimer = null;
     unawaited(_positionSub?.cancel());
     _positionSub = null;
   }
@@ -118,7 +124,7 @@ class LocationShareSession {
     final groupId = _activeGroupId;
     if (!_sessionActive || groupId == null) return;
 
-    // GF-67: consent en todos los grupos con membresía, no solo [groupId].
+    // GF-67/74: consent en todos los grupos con membresía, no solo [groupId].
     unawaited(_refreshAllGroupConsents());
 
     unawaited(
@@ -139,6 +145,11 @@ class LocationShareSession {
     unawaited(publishFromFix(force: true));
     _publishTimer = Timer.periodic(_publishHeartbeat, (_) {
       unawaited(publishFromFix(force: true));
+    });
+    // Independiente del dropdown: mantiene location_consents en Grupo W
+    // aunque el mapa del sharer se quede en Grupo M.
+    _consentTimer = Timer.periodic(_consentRefreshInterval, (_) {
+      unawaited(_refreshAllGroupConsents());
     });
   }
 
